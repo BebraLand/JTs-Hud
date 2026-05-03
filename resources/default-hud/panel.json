@@ -1,0 +1,48 @@
+[
+  {
+    "label": "Display settings",
+    "name": "display_settings",
+    "inputs": [
+      {
+        "type": "text",
+        "name": "tournament_name",
+        "label": "Tournament name"
+      },
+      {
+        "type": "text",
+        "name": "tournament_stage",
+        "label": "Tournament Stage"
+      },
+      {
+        "type": "text",
+        "name": "ct_color",
+        "label": "CT color (hex)"
+      },
+      {
+        "type": "text",
+        "name": "t_color",
+        "label": "T color (hex)"
+      },
+      {
+        "type": "checkbox",
+        "name": "use_advertisement",
+        "label": "Use advertisement Gap (under observed player)"
+      },
+      {
+        "type": "checkbox",
+        "name": "sharp_corners",
+        "label": "Sharp corners"
+      },
+      {
+        "type": "checkbox",
+        "name": "disable_compact_matchbar",
+        "label": "Disable compact matchbar"
+      },
+      {
+        "type": "checkbox",
+        "name": "disable_team_models",
+        "label": "Disable team models"
+      }
+    ]
+  }
+]
