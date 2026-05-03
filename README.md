@@ -1,6 +1,6 @@
-# JTs Hud Manager (Originally OpenHud)
+# JTs Hud Manager (Formally OpenHud)
 
-A Simple open-source Counter-Strike 2 Custom Hud and Hud manager. Manage overlays, players, teams, and matches. This project is passively updated, and community PRs are much appreciated!
+A simple open-source Counter-Strike 2 Custom Hud and Hud manager. Manage overlays, players, teams, and matches. This project is passively updated, and community PRs are much appreciated!
 
 - Tech: Electron, Vue, Typescript, NodeJS/Express, Socketio, SQLite3
 
