@@ -1,6 +1,6 @@
 {
   "name": "jts-hud",
-  "version": "5.2.26",
+  "version": "6.26.26",
   "description": "A simple counter-strike hud management application built with Electron and Vite.",
   "main": "./out/main/index.js",
   "author": "John Timmermann",
@@ -55,7 +55,7 @@
     "@types/node": "^22.19.1",
     "@types/sqlite3": "^3.1.11",
     "@vitejs/plugin-vue": "^6.0.2",
-    "electron": "^39.2.6",
+    "electron": "^39.8.10",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "prettier": "^3.7.4",

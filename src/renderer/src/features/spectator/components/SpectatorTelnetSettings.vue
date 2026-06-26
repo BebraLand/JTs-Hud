@@ -64,7 +64,7 @@ const emit = defineEmits<{
       </span>
     </div>
     <p class="text-xs text-zinc-600 mt-3">
-      Launch CS2 with <code class="text-zinc-400">-netcon_port 2020</code> in your Steam launch options to enable telnet.
+      Launch CS2 with <code class="text-zinc-400">-netconport 2020</code> in your Steam launch options to enable telnet.
     </p>
   </div>
 </template>

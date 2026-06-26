@@ -192,7 +192,7 @@ export function useSpectator() {
     } catch (err: any) {
       applyResult.value = {
         ok: false,
-        message: (err.message ?? 'Telnet failed') + '. Is CS2 running with -netcon_port 2020?'
+        message: (err.message ?? 'Telnet failed') + '. Is CS2 running with -netconport 2020?'
       }
     } finally {
       applying.value = false
@@ -237,7 +237,7 @@ export function useSpectator() {
     } catch (err: any) {
       applyResult.value = {
         ok: false,
-        message: (err.message ?? 'Telnet failed') + '. Is CS2 running with -netcon_port 2020?'
+        message: (err.message ?? 'Telnet failed') + '. Is CS2 running with -netconport 2020?'
       }
     } finally {
       clearing.value = false

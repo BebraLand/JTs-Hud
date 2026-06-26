@@ -67,7 +67,7 @@ defineEmits<{
           <section>
             <h3 class="text-text-main font-semibold mb-1">CS2 launch option</h3>
             <p>Add the following to your CS2 launch options in Steam:</p>
-            <pre class="bg-zinc-950 border border-border rounded-lg px-3 py-2 font-mono text-xs text-zinc-400 mt-1">-netcon_port 2020</pre>
+            <pre class="bg-zinc-950 border border-border rounded-lg px-3 py-2 font-mono text-xs text-zinc-400 mt-1">-netconport 2020</pre>
             <p class="text-zinc-500 text-xs mt-1">The port can be changed in the Telnet settings panel on this page.</p>
           </section>
         </div>
