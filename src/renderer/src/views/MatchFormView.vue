@@ -21,7 +21,7 @@ const isSaving = ref(false);
 
 const CS2_MAPS = [
   'de_ancient', 'de_anubis', 'de_dust2', 'de_inferno',
-  'de_mirage', 'de_nuke', 'de_overpass', 'de_train', 'de_vertigo'
+  'de_mirage', 'de_nuke', 'de_overpass', 'de_train', 'de_vertigo', 'de_cache'
 ];
 const VETO_TYPES = ['ban', 'pick', 'decider'] as const;
 const SIDES = ['CT', 'T', 'NO'] as const;
