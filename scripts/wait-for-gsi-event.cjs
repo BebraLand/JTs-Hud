@@ -1,6 +1,8 @@
 const { io } = require('socket.io-client')
+const fs = require('node:fs')
 
 const url = process.argv[2]
+const readyFile = process.argv[3]
 if (!url) throw new Error('Usage: node wait-for-gsi-event.cjs <JTs-Hud URL>')
 
 const socket = io(url, { transports: ['websocket'], timeout: 3000 })
@@ -15,6 +17,10 @@ socket.on('connect_error', (error) => {
   socket.close()
   console.error(`Could not connect to the JTs-Hud socket: ${error.message}`)
   process.exit(1)
+})
+
+socket.on('connect', () => {
+  if (readyFile) fs.writeFileSync(readyFile, 'ready')
 })
 
 socket.on('update', (payload) => {

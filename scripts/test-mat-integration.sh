@@ -68,6 +68,13 @@ fi
 curl -fsS "http://127.0.0.1:$HUD_PORT/api/teams" \
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const v=JSON.parse(s);if(v.length!==2||v[0].shortName!=='BEBRA'||v[0].country!=='LT')throw new Error(JSON.stringify(v))})"
 
+logo_redirect="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' \
+  "http://127.0.0.1:$HUD_PORT/api/teams/logo/team-a")"
+if [[ "$logo_redirect" != "302 http://127.0.0.1:$MOCK_MAT_PORT/assets/bebra.webp" ]]; then
+  echo "Default HUD logo endpoint did not redirect to the MAT asset: $logo_redirect" >&2
+  exit 1
+fi
+
 curl -fsS "http://127.0.0.1:$HUD_PORT/api/players?steamids=76561198000000001" \
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const v=JSON.parse(s);if(v[0]?.username!=='aurum'||v[0]?.firstName!=='Aurimas'||!v[0]?.avatar.endsWith('aurum.webp'))throw new Error(JSON.stringify(v))})"
 
@@ -77,9 +84,18 @@ curl -fsS "http://127.0.0.1:$HUD_PORT/api/match/current" \
 curl -fsS "http://127.0.0.1:$HUD_PORT/api/settings" \
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const v=JSON.parse(s);if('matTokenEncrypted' in v||'token' in v)throw new Error('MAT token leaked from settings response')})"
 
-node "$ROOT/scripts/wait-for-gsi-event.cjs" "http://127.0.0.1:$HUD_PORT" &
+GSI_READY_FILE="$TMP_DIR/gsi-socket-ready"
+node "$ROOT/scripts/wait-for-gsi-event.cjs" \
+  "http://127.0.0.1:$HUD_PORT" "$GSI_READY_FILE" &
 GSI_LISTENER_PID=$!
-sleep 0.5
+for _ in $(seq 1 40); do
+  [[ -f "$GSI_READY_FILE" ]] && break
+  sleep 0.1
+done
+if [[ ! -f "$GSI_READY_FILE" ]]; then
+  echo 'JTs-Hud GSI test socket did not become ready' >&2
+  exit 1
+fi
 curl -fsS -X POST "http://127.0.0.1:$((HUD_PORT + 1))/cs2/input" \
   -H 'Content-Type: application/json' \
   --data-binary "@$ROOT/scripts/fixtures/gsi-live.json" >/dev/null

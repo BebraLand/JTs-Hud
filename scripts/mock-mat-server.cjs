@@ -10,7 +10,7 @@ const player = {
   firstName: 'Aurimas',
   lastName: 'Operator',
   avatarUrl: null,
-  photoUrl: 'http://127.0.0.1:18491/assets/aurum.webp',
+  photoUrl: `http://127.0.0.1:${port}/assets/aurum.webp`,
   countryCode: 'LT',
   teamId: 'team-a'
 }
@@ -19,7 +19,7 @@ const team1 = {
   name: 'Bebra Team',
   tag: 'BEBRA',
   countryCode: 'LT',
-  logoUrl: 'http://127.0.0.1:18491/assets/bebra.webp',
+  logoUrl: `http://127.0.0.1:${port}/assets/bebra.webp`,
   players: [player]
 }
 const team2 = {
@@ -89,7 +89,8 @@ let delayNextProjectionMs = 0
 http
   .createServer(async (req, res) => {
     if (req.url?.startsWith('/__delay-next')) {
-      delayNextProjectionMs = Number(new URL(req.url, `http://127.0.0.1:${port}`).searchParams.get('ms')) || 0
+      delayNextProjectionMs =
+        Number(new URL(req.url, `http://127.0.0.1:${port}`).searchParams.get('ms')) || 0
       res.writeHead(204)
       return res.end()
     }

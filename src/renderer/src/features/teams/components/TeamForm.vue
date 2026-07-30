@@ -5,7 +5,10 @@ import BaseInput from '@renderer/components/base/BaseInput.vue';
 import BaseSelect from '@renderer/components/base/BaseSelect.vue';
 import BaseButton from '@renderer/components/base/BaseButton.vue';
 import { countryOptions } from '@renderer/utils/countries';
+import { resolveAssetUrl } from '@renderer/utils/assetUrl';
+import { API_URL } from '@renderer/index';
 
+const assetBaseUrl = API_URL.replace(/\/api$/, '');
 const props = defineProps<{ initialData: any; isEditing: boolean; }>();
 const emit = defineEmits(['submit']);
 const form = ref({ ...props.initialData });
@@ -42,7 +45,7 @@ const onFileChange = (e: Event) => {
       <div class="flex flex-col items-center gap-2 shrink-0">
         <div class="w-36 h-36 rounded-xl overflow-hidden border-2 border-zinc-700 bg-surface flex items-center justify-center p-3">
           <img v-if="logoPreview" :src="logoPreview" class="w-full h-full object-contain" />
-          <img v-else-if="form.logo" :src="`http://localhost:1349${form.logo}`" class="w-full h-full object-contain" />
+          <img v-else-if="form.logo" :src="resolveAssetUrl(form.logo, assetBaseUrl)" class="w-full h-full object-contain" />
           <span v-else class="text-zinc-600 text-6xl font-black select-none">T</span>
         </div>
         <BaseButton @click="fileInputRef?.click()" class="w-full justify-center">

@@ -6,7 +6,10 @@ import BaseSelect from '@renderer/components/base/BaseSelect.vue';
 import BaseCheckbox from '@renderer/components/base/BaseCheckbox.vue';
 import BaseButton from '@renderer/components/base/BaseButton.vue';
 import { countryOptions } from '@renderer/utils/countries';
+import { resolveAssetUrl } from '@renderer/utils/assetUrl';
+import { API_URL } from '@renderer/index';
 
+const assetBaseUrl = API_URL.replace(/\/api$/, '');
 const props = defineProps<{
   initialData: any;
   teams: any[];
@@ -55,7 +58,7 @@ const handleSubmit = () => { emit('submit', form.value, avatarFile.value); };
       <div class="flex flex-col items-center gap-2 shrink-0">
         <div class="w-36 h-36 rounded-xl overflow-hidden border-2 border-zinc-700 bg-surface flex items-center justify-center">
           <img v-if="avatarPreview" :src="avatarPreview" class="w-full h-full object-cover" />
-          <img v-else-if="form.avatar" :src="`http://localhost:1349${form.avatar}`" class="w-full h-full object-cover" />
+          <img v-else-if="form.avatar" :src="resolveAssetUrl(form.avatar, assetBaseUrl)" class="w-full h-full object-cover" />
           <span v-else class="text-zinc-600 text-6xl select-none">?</span>
         </div>
         <BaseButton @click="fileInputRef?.click()" class="w-full justify-center ">

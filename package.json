@@ -1,6 +1,6 @@
 {
   "name": "jts-hud",
-  "version": "7.13.26-mat.1",
+  "version": "7.13.26-mat.2",
   "description": "A simple counter-strike hud management application built with Electron and Vite.",
   "main": "./out/main/index.js",
   "author": "John Timmermann",

@@ -20,6 +20,8 @@ export class TeamService {
   }
 
   async getTeamLogoPath(id: string): Promise<string | null> {
+    const matTeam = matIntegrationService.getTeamById(id)
+    if (matTeam) return matTeam.logo || null
     if (matIntegrationService.isActive()) return null
     const team = await this.repo.getTeamById(id)
     if (!team || !team.logo) return null
