@@ -58,6 +58,7 @@ jobs:
           function Wait-MatConnected([string]$url) {
             for ($i = 0; $i -lt 30; $i++) {
               $status = Invoke-RestMethod -Uri $url -TimeoutSec 2
+              Write-Host "MAT status: $($status.state), $($status.message)"
               if ($status.state -eq 'connected') { return $status }
               Start-Sleep -Seconds 1
             }
@@ -78,9 +79,22 @@ jobs:
           $mock = $null
           $app = $null
           try {
-            $mockCommand = "set MAT_HUD_TOKEN=$token&& set MOCK_MAT_PORT=$mockPort&& node scripts\mock-mat-server.cjs"
-            $mock = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/c', $mockCommand -PassThru
-            Start-Sleep -Seconds 1
+            $mock = Start-Process -FilePath 'node' `
+              -ArgumentList 'scripts\mock-mat-server.cjs' `
+              -Environment @{ MAT_HUD_TOKEN = $token; MOCK_MAT_PORT = "$mockPort" } `
+              -PassThru -NoNewWindow
+            $mockProjectionUrl = "http://127.0.0.1:$mockPort/api/integrations/jts-hud/v1/current"
+            for ($i = 0; $i -lt 30; $i++) {
+              try {
+                $mockProjection = Invoke-RestMethod -Uri $mockProjectionUrl `
+                  -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 2
+                if ($mockProjection.contract -eq 'bebraland-mat-hud') { break }
+              }
+              catch { Start-Sleep -Seconds 1 }
+            }
+            if ($mockProjection.contract -ne 'bebraland-mat-hud') {
+              throw 'Mock MAT did not become ready.'
+            }
 
             $app = Start-Process -FilePath $exe -ArgumentList '--disable-gpu' -PassThru
             $settingsUrl = "http://127.0.0.1:$hudPort/api/settings"
