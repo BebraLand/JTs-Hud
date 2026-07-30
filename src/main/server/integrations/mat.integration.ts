@@ -212,6 +212,7 @@ class MatIntegrationService {
   }
 
   async testConnection(input?: { url?: string; token?: string }): Promise<MatIntegrationStatus> {
+    await this.settingsUpdateQueue
     const stored = await this.readStoredSettings()
     const url = input?.url?.trim() ? normalizeMatUrl(input.url) : stored.url
     const suppliedToken = input?.token?.trim()
@@ -280,9 +281,10 @@ class MatIntegrationService {
 
     this.status = { ...this.status, state: 'connecting', message: 'Connecting to MAT…' }
     this.emitStatus()
-    await this.refreshNow().catch(() => undefined)
+    await this.refreshNowUnfenced().catch(() => undefined)
     if (generation !== this.refreshGeneration || !this.enabled) return
     const token = await this.getToken()
+    if (generation !== this.refreshGeneration || !this.enabled) return
     this.matSocket = createSocket(`${settings.url}/jts-hud`, {
       auth: { token },
       transports: ['websocket'],
@@ -306,6 +308,11 @@ class MatIntegrationService {
   }
 
   async refreshNow(): Promise<void> {
+    await this.settingsUpdateQueue
+    return this.refreshNowUnfenced()
+  }
+
+  private async refreshNowUnfenced(): Promise<void> {
     if (this.refreshInFlight) return this.refreshInFlight
     const generation = this.refreshGeneration
     const refresh = this.performRefresh(generation)
