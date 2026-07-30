@@ -141,8 +141,6 @@ jobs:
             if (-not $stored.matTokenConfigured) { throw 'MAT token did not survive packaged app restart.' }
             if ($storedJson.Contains($token)) { throw 'MAT token leaked after packaged app restart.' }
             Wait-MatConnected $statusUrl | Out-Null
-            Stop-AppGracefully $app
-            $app = $null
             Write-Host 'Packaged Windows runtime smoke test passed.'
           }
           finally {
