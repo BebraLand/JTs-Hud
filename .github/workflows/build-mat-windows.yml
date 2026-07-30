@@ -35,6 +35,88 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      - name: Smoke-test packaged Windows runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $token = 'workflow-smoke-token'
+          $mockPort = 19891
+          $hudPort = 18891
+          $env:HUD_PORT = "$hudPort"
+          $env:GSI_PORT = '18892'
+          $exe = Join-Path $PWD 'dist\win-unpacked\JTs Hud Manager.exe'
+          if (-not (Test-Path $exe)) { throw "Packaged executable not found: $exe" }
+
+          function Wait-Json([string]$url) {
+            for ($i = 0; $i -lt 60; $i++) {
+              try { return Invoke-RestMethod -Uri $url -TimeoutSec 2 }
+              catch { Start-Sleep -Seconds 1 }
+            }
+            throw "Timed out waiting for $url"
+          }
+
+          function Wait-MatConnected([string]$url) {
+            for ($i = 0; $i -lt 30; $i++) {
+              $status = Invoke-RestMethod -Uri $url -TimeoutSec 2
+              if ($status.state -eq 'connected') { return $status }
+              Start-Sleep -Seconds 1
+            }
+            throw 'Packaged app did not connect to mock MAT.'
+          }
+
+          function Stop-Tree($process) {
+            if ($null -ne $process -and -not $process.HasExited) {
+              & taskkill.exe /PID $process.Id /T /F | Out-Null
+            }
+            Get-CimInstance Win32_Process | Where-Object {
+              $_.ExecutablePath -eq $exe
+            } | ForEach-Object {
+              Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          $mock = $null
+          $app = $null
+          try {
+            $mockCommand = "set MAT_HUD_TOKEN=$token&& set MOCK_MAT_PORT=$mockPort&& node scripts\mock-mat-server.cjs"
+            $mock = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/c', $mockCommand -PassThru
+            Start-Sleep -Seconds 1
+
+            $app = Start-Process -FilePath $exe -ArgumentList '--disable-gpu' -PassThru
+            $settingsUrl = "http://127.0.0.1:$hudPort/api/settings"
+            $matSettingsUrl = "$settingsUrl/mat"
+            $statusUrl = "$matSettingsUrl/status"
+            Wait-Json $settingsUrl | Out-Null
+
+            $body = @{
+              enabled = $true
+              url = "http://127.0.0.1:$mockPort"
+              token = $token
+              pollIntervalSeconds = 2
+            } | ConvertTo-Json
+            $saved = Invoke-RestMethod -Uri $matSettingsUrl -Method Put -ContentType 'application/json' -Body $body
+            $savedJson = $saved | ConvertTo-Json -Depth 10
+            if (-not $saved.tokenConfigured) { throw 'Packaged app did not persist the MAT token.' }
+            if ($savedJson.Contains($token)) { throw 'MAT token leaked from the packaged settings response.' }
+            Wait-MatConnected $statusUrl | Out-Null
+
+            Stop-Tree $app
+            $app = $null
+            Start-Sleep -Seconds 2
+
+            $app = Start-Process -FilePath $exe -ArgumentList '--disable-gpu' -PassThru
+            $stored = Wait-Json $settingsUrl
+            $storedJson = $stored | ConvertTo-Json -Depth 10
+            if (-not $stored.matTokenConfigured) { throw 'MAT token did not survive packaged app restart.' }
+            if ($storedJson.Contains($token)) { throw 'MAT token leaked after packaged app restart.' }
+            Wait-MatConnected $statusUrl | Out-Null
+            Write-Host 'Packaged Windows runtime smoke test passed.'
+          }
+          finally {
+            Stop-Tree $app
+            Stop-Tree $mock
+          }
+
       - name: Create portable ZIP
         shell: pwsh
         run: |
