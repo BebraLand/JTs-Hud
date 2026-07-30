@@ -31,7 +31,7 @@ jobs:
         run: npm run typecheck
 
       - name: Build Windows installer
-        run: npm run build:win
+        run: npm run build:win -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
