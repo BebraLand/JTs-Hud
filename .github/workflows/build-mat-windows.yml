@@ -76,6 +76,23 @@ jobs:
             }
           }
 
+          function Stop-AppGracefully($process) {
+            if ($null -eq $process -or $process.HasExited) { return }
+            if (-not $process.CloseMainWindow()) {
+              throw 'Packaged app did not accept a graceful window close.'
+            }
+            if (-not $process.WaitForExit(15000)) {
+              throw 'Packaged app did not exit gracefully within 15 seconds.'
+            }
+            Start-Sleep -Seconds 1
+            $remaining = @(Get-CimInstance Win32_Process | Where-Object {
+              $_.ExecutablePath -eq $exe
+            })
+            if ($remaining.Count -ne 0) {
+              throw 'Packaged Electron child processes remained after graceful shutdown.'
+            }
+          }
+
           $mock = $null
           $app = $null
           try {
@@ -114,7 +131,7 @@ jobs:
             if ($savedJson.Contains($token)) { throw 'MAT token leaked from the packaged settings response.' }
             Wait-MatConnected $statusUrl | Out-Null
 
-            Stop-Tree $app
+            Stop-AppGracefully $app
             $app = $null
             Start-Sleep -Seconds 2
 
@@ -124,6 +141,8 @@ jobs:
             if (-not $stored.matTokenConfigured) { throw 'MAT token did not survive packaged app restart.' }
             if ($storedJson.Contains($token)) { throw 'MAT token leaked after packaged app restart.' }
             Wait-MatConnected $statusUrl | Out-Null
+            Stop-AppGracefully $app
+            $app = $null
             Write-Host 'Packaged Windows runtime smoke test passed.'
           }
           finally {
