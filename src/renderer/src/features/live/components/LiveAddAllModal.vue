@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import BaseButton from '@renderer/components/base/BaseButton.vue';
 import BaseInput from '@renderer/components/base/BaseInput.vue';
 import { API_URL } from '../../../index';
+import { resolveAssetUrl } from '../../../utils/assetUrl';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -74,7 +75,7 @@ const filteredTeams = computed(() => {
                 : 'border-zinc-700 bg-surface text-zinc-300 hover:border-zinc-500'
             ]"
           >
-            <img v-if="team.logo" :src="`${baseUrl}${team.logo}`" class="w-8 h-8 rounded object-contain bg-zinc-800" />
+            <img v-if="team.logo" :src="resolveAssetUrl(team.logo, baseUrl)" class="w-8 h-8 rounded object-contain bg-zinc-800" />
             <div v-else class="w-8 h-8 rounded bg-zinc-700 flex items-center justify-center text-zinc-400 text-xs font-bold">?</div>
             <span class="font-semibold">{{ team.name }}</span>
             <svg v-if="selectedTeamId === team._id" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-auto text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -6,6 +6,7 @@ import { TeamService } from '../domains/teams/team.service'
 import { PlayerRepository } from '../domains/players/player.repository'
 import { getSettings } from '../domains/settings/settings.routes'
 import { RoundData } from '../domains/matches/match.types'
+import { matIntegrationService } from './mat.integration'
 
 const matchService = new MatchService()
 const teamService = new TeamService()
@@ -108,6 +109,10 @@ export const setupGSI = (io: Server) => {
   // Overtime intermissions should not always flip sides
   GSI.on('intermissionEnd', async () => {
     try {
+      if (matIntegrationService.isActive()) {
+        await syncGSITeams()
+        return
+      }
       const settings = await getSettings()
       if (!settings.autoSwitchSides) {
         console.log('[GSI] autoSwitchSides disabled — skipping halftime flip')
@@ -148,6 +153,12 @@ export const setupGSI = (io: Server) => {
   // Map end logic: record final score, winner, mapEnd flag, and increment series wins
   GSI.on('matchEnd', async (score: Score) => {
     try {
+      if (matIntegrationService.isActive()) {
+        await matIntegrationService.refreshNow()
+        await syncGSITeams()
+        io.emit('match')
+        return
+      }
       const match = await matchService.getCurrentMatch()
       if (!match) return
 
@@ -207,6 +218,7 @@ export const setupGSI = (io: Server) => {
   // Round end logic: record per-round player stats and win type into the active veto
   GSI.on('roundEnd', async (score: Score) => {
     try {
+      if (matIntegrationService.isActive()) return
       if (!GSI.current) return
 
       const getWinType = (outcome: string): RoundData['win_type'] => {

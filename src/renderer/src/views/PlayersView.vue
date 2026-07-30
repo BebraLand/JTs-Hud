@@ -7,6 +7,7 @@ import PlayersPageHeader from '../features/players/components/PlayersPageHeader.
 import PlayersBulkBar from '../features/players/components/PlayersBulkBar.vue';
 import { usePlayersView } from '../features/players/composables/usePlayersView';
 import { API_URL } from '../index';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 const {
   players, availableTeams, isPlayersLoading, sortedPlayers, teamMap, tableHeaders,
@@ -50,7 +51,7 @@ const baseUrl = API_URL.replace('/api', '');
     >
       <template #cell-avatar="{ item }">
         <div class="size-14">
-          <img v-if="item.avatar" :src="`${baseUrl}${item.avatar}`" class="size-12 object-cover" />
+          <img v-if="item.avatar" :src="resolveAssetUrl(item.avatar, baseUrl)" class="size-12 object-cover" />
         </div>
       </template>
 
@@ -65,7 +66,7 @@ const baseUrl = API_URL.replace('/api', '');
       <template #cell-team="{ item }">
         <div v-if="teamMap[item.team]" class="flex items-center gap-2.5">
           <div class="size-10 flex items-center justify-center overflow-hidden shrink-0">
-            <img v-if="teamMap[item.team].logo" :src="`${baseUrl}${teamMap[item.team].logo}`" class="w-full h-full object-contain" />
+            <img v-if="teamMap[item.team].logo" :src="resolveAssetUrl(teamMap[item.team].logo, baseUrl)" class="w-full h-full object-contain" />
             <span v-else class="text-xs font-bold text-zinc-500">{{ teamMap[item.team].shortName }}</span>
           </div>
         </div>

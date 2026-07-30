@@ -45,5 +45,5 @@ appImage:
 npmRebuild: false
 publish:
   provider: github
-  owner: JohnTimmermann
-  repo: JTs-Hud-Manager
+  owner: auuruum
+  repo: JTs-Hud

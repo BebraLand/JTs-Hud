@@ -33,14 +33,14 @@ onUnmounted(() => {
 });
 
 function openReleasesPage() {
-  window.api.openExternal('https://github.com/JohnTimmermann/JTs-Hud-Manager/releases/latest')
+  window.api.openExternal('https://github.com/auuruum/JTs-Hud/releases/latest')
 }
 
 function openDiscord() {
   window.api.openExternal('https://discord.gg/XPYdZ8KNWn')
 }
 function openGithub() {
-  window.api.openExternal('https://github.com/JohnTimmermann/JTs-Hud-Manager')
+  window.api.openExternal('https://github.com/auuruum/JTs-Hud')
 }
 function openTwitch() {
   window.api.openExternal('https://twitch.tv/jtmythic')

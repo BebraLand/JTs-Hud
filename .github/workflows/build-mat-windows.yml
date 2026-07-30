@@ -1,0 +1,70 @@
+name: Build JTs-Hud with MAT integration (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/mat-integration
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build Windows installer
+        run: npm run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $source = Join-Path $PWD 'dist\win-unpacked\*'
+          $destination = Join-Path $PWD "dist\JTs-Hud-$version-windows-portable.zip"
+          Compress-Archive -Path $source -DestinationPath $destination -Force
+
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $artifacts = @(Get-ChildItem dist -File | Where-Object {
+            $_.Name -like '*-setup.exe' -or $_.Name -like '*-windows-portable.zip'
+          })
+          if ($artifacts.Count -lt 2) {
+            throw 'Expected both installer and portable ZIP before checksum generation.'
+          }
+          $lines = $artifacts | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          Set-Content -Path 'dist\SHA256SUMS.txt' -Value $lines -Encoding ascii
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: JTs-Hud-MAT-Windows
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/*-setup.exe
+            dist/*-windows-portable.zip
+            dist/SHA256SUMS.txt

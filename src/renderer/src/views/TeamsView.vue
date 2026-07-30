@@ -6,6 +6,7 @@ import TeamsPageHeader from '../features/teams/components/TeamsPageHeader.vue';
 import TeamsBulkBar from '../features/teams/components/TeamsBulkBar.vue';
 import { useTeamsView } from '../features/teams/composables/useTeamsView';
 import { API_URL } from '../index';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 const {
   teams, isLoading, sortedTeams, tableHeaders,
@@ -49,7 +50,7 @@ const baseUrl = API_URL.replace('/api', '');
     >
       <template #cell-logo="{ item }">
         <div class="size-12 flex items-center justify-center">
-          <img v-if="item.logo" :src="`${baseUrl}${item.logo}`" class="w-full h-full object-contain" />
+          <img v-if="item.logo" :src="resolveAssetUrl(item.logo, baseUrl)" class="w-full h-full object-contain" />
           <span v-else class="text-xs font-bold text-zinc-500">{{ item.shortName }}</span>
         </div>
       </template>

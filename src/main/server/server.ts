@@ -19,6 +19,7 @@ import spectatorRoutes from './domains/spectator/spectator.routes'
 import { uploadsPath } from './utils/multer'
 import { getHudsDir, getBuiltinHudDir } from '../paths'
 import { signedHudMiddleware } from './middleware/signedHudMiddleware'
+import { matIntegrationService } from './integrations/mat.integration'
 
 // Track the currently active HUD id so the socket register handler can look up correct HUD
 let activeHudId: string | null = null
@@ -66,8 +67,8 @@ gsiApp.use(express.json())
 gsiApp.use(cors({ origin: '*' }))
 gsiApp.use('/cs2', setupGSI(io)) // This is what the gsi cfg file sends data to
 
-const HUD_PORT = process.env.HUD_PORT || 1349
-const GSI_PORT = process.env.GSI_PORT || 23415
+const HUD_PORT = Number(process.env.HUD_PORT || 1349)
+const GSI_PORT = Number(process.env.GSI_PORT || 23415)
 
 let serversRunning = false
 
@@ -83,11 +84,14 @@ export function startServers(): void {
       console.error('[HUD Server] Server error:', err)
     }
   })
-  httpServer.listen(HUD_PORT, () => {
+  httpServer.listen(HUD_PORT, '127.0.0.1', () => {
     console.log(`HUD Server and WebSockets listening on port ${HUD_PORT}`)
+    void matIntegrationService.start(io).catch((error) => {
+      console.error('[MAT] Failed to start integration:', error)
+    })
   })
 
-  const gsiServer = gsiApp.listen(GSI_PORT, () => {
+  const gsiServer = gsiApp.listen(GSI_PORT, '127.0.0.1', () => {
     console.log(`CS2 GSI Listener running on port ${GSI_PORT}`)
   })
   gsiServer.on('error', (err: NodeJS.ErrnoException) => {
@@ -108,6 +112,7 @@ let activeGsiServer: ReturnType<typeof gsiApp.listen> | null = null
 export function stopServers(): Promise<void> {
   if (!serversRunning) return Promise.resolve()
   serversRunning = false
+  void matIntegrationService.stop()
   return new Promise((resolve) => {
     const done = () => {
       activeGsiServer = null

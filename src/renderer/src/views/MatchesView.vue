@@ -5,6 +5,7 @@ import MatchesPageHeader from '../features/matches/components/MatchesPageHeader.
 import { useMatchesView } from '../features/matches/composables/useMatchesView';
 import { API_URL } from '../index';
 import BaseButton from '@renderer/components/base/BaseButton.vue';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 const {
   matches, isLoading, tableHeaders,
@@ -50,11 +51,11 @@ const baseUrl = API_URL.replace('/api', '');
       <template #cell-matchup="{ item }">
         <div class="flex items-center gap-3">
           <div class="size-10 flex items-center justify-center shrink-0">
-            <img v-if="getTeamLogo(item.left.id)" :src="`${baseUrl}${getTeamLogo(item.left.id)}`" class="w-full h-full object-contain" />
+            <img v-if="getTeamLogo(item.left.id)" :src="resolveAssetUrl(getTeamLogo(item.left.id), baseUrl)" class="w-full h-full object-contain" />
           </div>
           <span class="text-zinc-400 text-lg">vs</span>
           <div class="size-10 flex items-center justify-center shrink-0">
-            <img v-if="getTeamLogo(item.right.id)" :src="`${baseUrl}${getTeamLogo(item.right.id)}`" class="w-full h-full object-contain" />
+            <img v-if="getTeamLogo(item.right.id)" :src="resolveAssetUrl(getTeamLogo(item.right.id), baseUrl)" class="w-full h-full object-contain" />
           </div>
         </div>
       </template>

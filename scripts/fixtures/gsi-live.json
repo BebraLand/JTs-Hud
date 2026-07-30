@@ -1,0 +1,42 @@
+{
+  "provider": {
+    "name": "MAT GSI fixture",
+    "appid": 730,
+    "version": 14000,
+    "steamid": "76561198000000001",
+    "timestamp": 1785435000
+  },
+  "map": {
+    "mode": "competitive",
+    "name": "de_cache",
+    "phase": "live",
+    "round": 5,
+    "team_ct": { "score": 3, "consecutive_round_losses": 0, "timeouts_remaining": 1, "matches_won_this_series": 0 },
+    "team_t": { "score": 2, "consecutive_round_losses": 1, "timeouts_remaining": 1, "matches_won_this_series": 0 },
+    "num_matches_to_win_series": 2,
+    "current_spectators": 1,
+    "souvenirs_total": 0
+  },
+  "round": { "phase": "live" },
+  "player": {
+    "steamid": "76561198000000001",
+    "name": "alpha",
+    "observer_slot": 0,
+    "team": "CT",
+    "activity": "playing",
+    "state": { "health": 87, "armor": 100, "helmet": true, "flashed": 0, "smoked": 0, "burning": 0, "money": 4200, "round_kills": 1, "round_killhs": 1, "round_totaldmg": 112 },
+    "match_stats": { "kills": 8, "assists": 2, "deaths": 4, "mvps": 1, "score": 18 }
+  },
+  "allplayers": {
+    "76561198000000001": {
+      "name": "alpha",
+      "observer_slot": 0,
+      "team": "CT",
+      "position": "0, 0, 0",
+      "forward": "1, 0, 0",
+      "state": { "health": 87, "armor": 100, "helmet": true, "flashed": 0, "smoked": 0, "burning": 0, "money": 4200, "round_kills": 1, "round_killhs": 1, "round_totaldmg": 112 },
+      "match_stats": { "kills": 8, "assists": 2, "deaths": 4, "mvps": 1, "score": 18 },
+      "weapons": {}
+    }
+  }
+}
