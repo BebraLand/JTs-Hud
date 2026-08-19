@@ -21,6 +21,7 @@ export type ScoreFactorKey =
   | 'mlAdvisory'
   | 'death'
   | 'flashPenalty'
+  | 'orientationPenalty'
 
 export interface ScoreFactor {
   key: ScoreFactorKey
@@ -68,7 +69,10 @@ export interface AutoDirectorProfile {
   combatSoftLockMs: number
   postKillHoldMs: number
   weights: Record<
-    Exclude<ScoreFactorKey, 'death' | 'flashPenalty' | 'geometryAdvisory' | 'mlAdvisory'>,
+    Exclude<
+      ScoreFactorKey,
+      'death' | 'flashPenalty' | 'orientationPenalty' | 'geometryAdvisory' | 'mlAdvisory'
+    >,
     number
   >
 }

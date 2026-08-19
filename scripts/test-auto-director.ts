@@ -97,6 +97,22 @@ assert.equal(sniperSetup?.value, 14)
 assert.match(sniperSetup?.detail ?? '', /sniper sightline proxy/i)
 assert.ok(sniperScore.total > rifleScore.total)
 
+const orientationCheck = new AutoDirectorEngine().evaluate(
+  snapshot({
+    allplayers: {
+      nearbyLookingAway: player('Nearby looking away', 'CT', 1, '0, 0, 0', '-1, 0, 0'),
+      focused: player('Focused defender', 'CT', 2, '0, 500, 0', '1, -0.2, 0'),
+      target: player('Push target', 'T', 6, '800, 0, 0', '-1, 0, 0')
+    }
+  }),
+  settings,
+  800
+)
+const lookingAwayScore = orientationCheck.scores.find(
+  (score) => score.steamId === 'nearbyLookingAway'
+)!
+assert.equal(lookingAwayScore.factors.some((factor) => factor.key === 'orientationPenalty'), true)
+
 const engine = new AutoDirectorEngine()
 const initialPayload = snapshot()
 const initial = engine.evaluate(initialPayload, settings, 1_000)

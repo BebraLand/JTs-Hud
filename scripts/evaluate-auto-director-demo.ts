@@ -82,6 +82,7 @@ interface HybridConfig {
   geometry: GeometryMap | null
   geometryEnabled: boolean
   mlEnabled: boolean
+  geometryCache: WeakMap<GsiLikePayload, ReturnType<typeof computeGeometryFeatures>>
 }
 
 const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?: HybridConfig) => {
@@ -105,12 +106,17 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
       roundStartedAt = frame.atMs
     }
     const players = hybrid ? normalizePlayers(frame.payload) : []
-    const geometryFeatures = hybrid?.geometry
-      ? computeGeometryFeatures(
+    let geometryFeatures: ReturnType<typeof computeGeometryFeatures> | null = null
+    if (hybrid?.geometry && hybrid.geometryEnabled) {
+      geometryFeatures = hybrid.geometryCache.get(frame.payload) ?? null
+      if (!geometryFeatures) {
+        geometryFeatures = computeGeometryFeatures(
           players.filter((player) => player.alive),
           hybrid.geometry
         )
-      : null
+        hybrid.geometryCache.set(frame.payload, geometryFeatures)
+      }
+    }
     const advisory: ScoreAdvisory | undefined = hybrid
       ? (player, score, allPlayers) => {
           const results = []
@@ -121,11 +127,13 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
               (playerGeometry.nearestEnemyHasLineOfSight ? 6 : 0) +
               playerGeometry.peekPotentialEnemyCount * 1.5 +
               (playerGeometry.nearestEnemyHasPeekPotential ? 2 : 0) +
+              Math.min(6, Math.max(0, playerGeometry.forwardEnemyCount - 1) * 2) +
+              playerGeometry.forwardEnemyAlignment * 3 +
               playerGeometry.bestVisibleAimAlignment * 4
             results.push({
               key: 'geometryAdvisory' as const,
               value: Math.tanh(geometryValue / 8) * 10,
-              detail: `LOS ${playerGeometry.visibleEnemyCount} visible; peek ${playerGeometry.peekPotentialEnemyCount}`
+              detail: `LOS ${playerGeometry.visibleEnemyCount} visible; forward ${playerGeometry.forwardEnemyCount}; peek ${playerGeometry.peekPotentialEnemyCount}`
             })
           }
           if (hybrid.mlEnabled && hybrid.ranker) {
@@ -136,7 +144,7 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
                 allPlayers,
                 frame.atMs - roundStartedAt,
                 playerGeometry,
-                hybrid.geometry !== null
+                geometryFeatures !== null
               )
             )
             results.push({
@@ -239,7 +247,13 @@ const modelPath = process.argv[4]
 let hybrid: HybridConfig | undefined
 if (geometryDirectory && modelPath) {
   const geometry = new GeometryRegistry(path.resolve(geometryDirectory)).load(timeline.metadata.map)
-  hybrid = { geometry, ranker: loadLightGbmRanker(path.resolve(modelPath)), geometryEnabled: true, mlEnabled: true }
+  hybrid = {
+    geometry,
+    ranker: loadLightGbmRanker(path.resolve(modelPath)),
+    geometryEnabled: true,
+    mlEnabled: true,
+    geometryCache: new WeakMap()
+  }
 }
 
 const report = {

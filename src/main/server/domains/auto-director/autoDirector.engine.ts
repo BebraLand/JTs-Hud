@@ -34,7 +34,8 @@ const FACTOR_LABELS: Record<ScoreFactor['key'], string> = {
   geometryAdvisory: 'Geometry LOS advisory',
   mlAdvisory: 'ML advisory',
   death: 'Dead',
-  flashPenalty: 'Flash penalty'
+  flashPenalty: 'Flash penalty',
+  orientationPenalty: 'Looking away from nearest threat'
 }
 
 const parseVector = (value: unknown): [number, number, number] | null => {
@@ -216,6 +217,7 @@ export class AutoDirectorEngine {
           player.forward,
           nearestEnemy?.position ?? null
         )
+        const directionFocus = Math.max(0, Math.min(1, (alignment - 0.5) * 2))
         const proximityIntensity =
           nearestDistance === null ? 0 : Math.max(0, Math.min(1, 1 - nearestDistance / 1800))
         const activeCombat =
@@ -281,6 +283,20 @@ export class AutoDirectorEngine {
               'proximity',
               profile.weights.proximity * proximityIntensity,
               `Nearest enemy ${Math.round(nearestDistance!)} units away`
+            )
+          }
+          if (
+            nearestEnemy &&
+            nearestDistance !== null &&
+            nearestDistance < 1500 &&
+            directionFocus < 0.25 &&
+            signal.shotUntil <= at &&
+            signal.damageUntil <= at
+          ) {
+            add(
+              'orientationPenalty',
+              -Math.min(10, (0.25 - directionFocus) * 40),
+              `Looking away from nearest threat (${Math.round(directionFocus * 100)}% directional focus)`
             )
           }
           if (alignment > 0.5 && nearestEnemy) {
