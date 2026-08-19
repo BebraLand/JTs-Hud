@@ -71,6 +71,17 @@ try {
     cwd: root,
     encoding: 'utf8'
   })
+  const requiredEntries = [
+    '/resources/auto-director/models/auto-director-lightgbm.json',
+    '/resources/auto-director/geometry/de_mirage.jgeo.json.gz',
+    '/resources/auto-director/geometry/de_inferno.jgeo.json.gz',
+    '/resources/auto-director/geometry/de_cache.jgeo.json.gz'
+  ]
+  for (const entry of requiredEntries) {
+    if (!listing.split('\n').some((line) => line === entry)) {
+      throw new Error(`Auto Director asset missing from app.asar: ${entry}`)
+    }
+  }
   const forbiddenEntries = [
     '/docs',
     '/e2e',

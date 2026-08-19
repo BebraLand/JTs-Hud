@@ -35,3 +35,12 @@ export const getBuiltinHudDir = (): string => {
   // Fallback to development path if none exist (will error at runtime if actually needed)
   return path.join(__dirname, '../../resources/default-hud')
 }
+
+export const getAutoDirectorResourceDir = (): string => {
+  const candidates = [
+    path.join(app.getAppPath(), 'resources/auto-director'),
+    path.join(process.execPath, '../resources/auto-director'),
+    path.join(__dirname, '../../resources/auto-director')
+  ]
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[2]
+}

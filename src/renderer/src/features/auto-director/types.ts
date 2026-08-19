@@ -25,6 +25,9 @@ export interface AutoDirectorSettings {
   paused: boolean
   mode: AutoDirectorMode
   autoFallback: boolean
+  rulesEnabled: boolean
+  geometryAdvisoryEnabled: boolean
+  mlAdvisoryEnabled: boolean
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Record<string, number>
@@ -78,4 +81,15 @@ export interface AutoDirectorStatus {
   lastCommand: CameraCommandResult | null
   transportHealth: Record<'telnet' | 'keyboard', TransportHealth>
   history: DirectorHistoryEntry[]
+  ml: {
+    enabled: boolean
+    modelLoaded: boolean
+    modelMessage: string
+    geometry: {
+      mapName: string | null
+      state: 'missing' | 'loaded' | 'error'
+      triangleCount: number
+      message: string
+    }
+  }
 }

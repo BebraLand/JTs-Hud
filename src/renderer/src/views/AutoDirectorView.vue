@@ -322,6 +322,67 @@ const healthClass = (state: string) =>
             <h2 class="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
               Camera Transport
             </h2>
+            <div class="mb-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold text-zinc-200">Advisory inputs</p>
+                  <p class="mt-1 text-[10px] text-zinc-500">
+                    Ranking advice only. Dwell, locks, hysteresis and Telnet safety rules remain in
+                    control.
+                  </p>
+                </div>
+                <span
+                  :class="status.ml.modelLoaded ? 'text-emerald-300' : 'text-amber-300'"
+                  class="text-[9px] font-bold uppercase"
+                >
+                  {{ status.ml.modelLoaded ? 'loaded' : 'fallback' }}
+                </span>
+              </div>
+              <label class="mt-3 flex items-center gap-2 text-[10px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  :checked="status.settings.rulesEnabled"
+                  @change="
+                    updateSettings({
+                      rulesEnabled: ($event.target as HTMLInputElement).checked
+                    })
+                  "
+                  class="accent-amber-400"
+                />
+                Enable Rules scoring
+              </label>
+              <label class="mt-2 flex items-center gap-2 text-[10px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  :checked="status.settings.geometryAdvisoryEnabled"
+                  :disabled="status.ml.geometry.state !== 'loaded'"
+                  @change="
+                    updateSettings({
+                      geometryAdvisoryEnabled: ($event.target as HTMLInputElement).checked
+                    })
+                  "
+                  class="accent-cyan-400"
+                />
+                Enable Geometry LOS advisory
+              </label>
+              <label class="mt-2 flex items-center gap-2 text-[10px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  :checked="status.settings.mlAdvisoryEnabled"
+                  :disabled="!status.ml.modelLoaded"
+                  @change="
+                    updateSettings({
+                      mlAdvisoryEnabled: ($event.target as HTMLInputElement).checked
+                    })
+                  "
+                  class="accent-violet-400"
+                />
+                Enable ML advisory ranking
+              </label>
+              <p class="mt-2 text-[10px] text-zinc-600">
+                {{ status.ml.modelMessage }} · {{ status.ml.geometry.message }}
+              </p>
+            </div>
             <div class="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
               <p class="text-xs font-semibold text-zinc-200">Telnet</p>
               <p class="mt-1 text-[10px] text-zinc-500">

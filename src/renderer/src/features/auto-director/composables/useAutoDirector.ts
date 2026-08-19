@@ -9,6 +9,9 @@ const emptyStatus = (): AutoDirectorStatus => ({
     paused: false,
     mode: 'balanced',
     autoFallback: false,
+    rulesEnabled: true,
+    geometryAdvisoryEnabled: true,
+    mlAdvisoryEnabled: true,
     scoringIntervalMs: 100,
     manualOverrideSteamId: null,
     customWeights: {}
@@ -32,7 +35,18 @@ const emptyStatus = (): AutoDirectorStatus => ({
       consecutiveFailures: 0
     }
   },
-  history: []
+  history: [],
+  ml: {
+    enabled: true,
+    modelLoaded: false,
+    modelMessage: 'Loading model',
+    geometry: {
+      mapName: null,
+      state: 'missing',
+      triangleCount: 0,
+      message: 'No map requested'
+    }
+  }
 })
 
 export function useAutoDirector() {

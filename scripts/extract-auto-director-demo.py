@@ -7,6 +7,7 @@ Requires: python -m pip install demoparser2
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import math
@@ -271,15 +272,19 @@ def main() -> None:
                 }
             )
 
-    kills = [
-        {
-            "tick": integer(event["tick"]),
-            "atMs": round(integer(event["tick"]) * 1000 / TICK_RATE),
-            "attackerSteamId": event_steam_id(event, "attacker"),
-            "victimSteamId": event_steam_id(event, "user"),
-        }
-        for event in safe_event(parser, "player_death")
-    ]
+    kills = []
+    for event in safe_event(parser, "player_death"):
+        event_tick = integer(event["tick"])
+        if not any(start_tick <= event_tick <= end_tick for _, start_tick, end_tick in rounds):
+            continue
+        kills.append(
+            {
+                "tick": event_tick,
+                "atMs": round(event_tick * 1000 / TICK_RATE),
+                "attackerSteamId": event_steam_id(event, "attacker"),
+                "victimSteamId": event_steam_id(event, "user"),
+            }
+        )
 
     digest = hashlib.sha256(args.demo.read_bytes()).hexdigest()
     output = {
@@ -300,7 +305,12 @@ def main() -> None:
         "kills": kills,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(output, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    encoded = json.dumps(output, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if args.output.suffix == ".gz":
+        with gzip.GzipFile(filename=str(args.output), mode="wb", compresslevel=9, mtime=0) as target:
+            target.write(encoded)
+    else:
+        args.output.write_bytes(encoded)
     print(
         f"Extracted {len(frames)} frames, {len(kills)} kills and {len(rounds)} rounds to {args.output}"
     )

@@ -12,6 +12,14 @@ playwright-report/
 # Local CS2 demos and generated auto-director evaluation data
 fixtures/demos/
 
+# Local ML datasets, trained checkpoints and raw/decompiled CS2 map assets
+fixtures/auto-director-datasets/
+fixtures/map-sources/
+artifacts/auto-director-training/
+resources/auto-director/geometry/*.jgeo.json.gz
+.venv-demo/
+.venv-ml/
+
 # Local env files
 .env
 .env.local
@@ -19,3 +27,4 @@ fixtures/demos/
 .env.test
 
 todo.txt
+resources/auto-director/models/*.json

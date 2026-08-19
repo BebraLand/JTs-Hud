@@ -17,6 +17,8 @@ export type ScoreFactorKey =
   | 'bombCarrier'
   | 'lowHealthDrama'
   | 'continuity'
+  | 'geometryAdvisory'
+  | 'mlAdvisory'
   | 'death'
   | 'flashPenalty'
 
@@ -65,7 +67,10 @@ export interface AutoDirectorProfile {
   switchMargin: number
   combatSoftLockMs: number
   postKillHoldMs: number
-  weights: Record<Exclude<ScoreFactorKey, 'death' | 'flashPenalty'>, number>
+  weights: Record<
+    Exclude<ScoreFactorKey, 'death' | 'flashPenalty' | 'geometryAdvisory' | 'mlAdvisory'>,
+    number
+  >
 }
 
 export interface AutoDirectorSettings {
@@ -73,6 +78,9 @@ export interface AutoDirectorSettings {
   paused: boolean
   mode: AutoDirectorMode
   autoFallback: boolean
+  rulesEnabled: boolean
+  geometryAdvisoryEnabled: boolean
+  mlAdvisoryEnabled: boolean
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Partial<AutoDirectorProfile['weights']>
@@ -138,6 +146,17 @@ export interface AutoDirectorStatus {
   lastCommand: CameraCommandResult | null
   transportHealth: Record<CameraTransport, TransportHealth>
   history: DirectorHistoryEntry[]
+  ml: {
+    enabled: boolean
+    modelLoaded: boolean
+    modelMessage: string
+    geometry: {
+      mapName: string | null
+      state: 'missing' | 'loaded' | 'error'
+      triangleCount: number
+      message: string
+    }
+  }
 }
 
 export interface GsiLikePayload {
@@ -165,6 +184,7 @@ export interface GsiLikePayload {
     phase_ends_in?: string | number
   }
   map?: {
+    name?: string
     phase?: string
     round?: number
     team_ct?: { score?: number }

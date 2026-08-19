@@ -1,7 +1,20 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { AutoDirectorEngine } from '../src/main/server/domains/auto-director/autoDirector.engine'
+import { gunzipSync } from 'node:zlib'
+import {
+  AutoDirectorEngine,
+  normalizePlayers,
+  type ScoreAdvisory
+} from '../src/main/server/domains/auto-director/autoDirector.engine'
 import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from '../src/main/server/domains/auto-director/autoDirector.config'
+import { buildAutoDirectorMlFeatures } from '../src/main/server/domains/auto-director/autoDirector.mlFeatures'
+import {
+  LightGbmRanker,
+  loadLightGbmRanker
+} from '../src/main/server/domains/auto-director/autoDirector.ml'
+import { GeometryRegistry } from '../src/main/server/domains/auto-director/geometry/geometryRegistry'
+import type { GeometryMap } from '../src/main/server/domains/auto-director/geometry/geometryMap'
+import { computeGeometryFeatures } from '../src/main/server/domains/auto-director/geometry/geometryFeatures'
 import type {
   AutoDirectorMode,
   AutoDirectorSettings,
@@ -64,19 +77,78 @@ const sampleAt = (samples: CameraSample[], atMs: number): CameraSample | undefin
   return result
 }
 
-const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode) => {
+interface HybridConfig {
+  ranker: LightGbmRanker | null
+  geometry: GeometryMap | null
+  geometryEnabled: boolean
+  mlEnabled: boolean
+}
+
+const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?: HybridConfig) => {
   const engine = new AutoDirectorEngine()
   const settings: AutoDirectorSettings = {
     ...DEFAULT_AUTO_DIRECTOR_SETTINGS,
     enabled: true,
-    mode
+    mode,
+    geometryAdvisoryEnabled: hybrid?.geometryEnabled ?? false,
+    mlAdvisoryEnabled: hybrid?.mlEnabled ?? false
   }
   const samples: CameraSample[] = []
   const switches: Array<{ atMs: number; round: number }> = []
   let targetSteamId: string | null = null
+  let roundStartedAt = 0
+  let lastRound = -1
 
   for (const frame of timeline.frames) {
-    const decision = engine.evaluate(frame.payload, settings, frame.atMs)
+    if (frame.round !== lastRound) {
+      lastRound = frame.round
+      roundStartedAt = frame.atMs
+    }
+    const players = hybrid ? normalizePlayers(frame.payload) : []
+    const geometryFeatures = hybrid?.geometry
+      ? computeGeometryFeatures(
+          players.filter((player) => player.alive),
+          hybrid.geometry
+        )
+      : null
+    const advisory: ScoreAdvisory | undefined = hybrid
+      ? (player, score, allPlayers) => {
+          const results = []
+          const playerGeometry = geometryFeatures?.get(player.steamId) ?? null
+          if (hybrid.geometryEnabled && playerGeometry) {
+            const geometryValue =
+              playerGeometry.visibleEnemyCount * 2.5 +
+              (playerGeometry.nearestEnemyHasLineOfSight ? 6 : 0) +
+              playerGeometry.peekPotentialEnemyCount * 1.5 +
+              (playerGeometry.nearestEnemyHasPeekPotential ? 2 : 0) +
+              playerGeometry.bestVisibleAimAlignment * 4
+            results.push({
+              key: 'geometryAdvisory' as const,
+              value: Math.tanh(geometryValue / 8) * 10,
+              detail: `LOS ${playerGeometry.visibleEnemyCount} visible; peek ${playerGeometry.peekPotentialEnemyCount}`
+            })
+          }
+          if (hybrid.mlEnabled && hybrid.ranker) {
+            const raw = hybrid.ranker.predict(
+              buildAutoDirectorMlFeatures(
+                player,
+                score,
+                allPlayers,
+                frame.atMs - roundStartedAt,
+                playerGeometry,
+                hybrid.geometry !== null
+              )
+            )
+            results.push({
+              key: 'mlAdvisory' as const,
+              value: Math.tanh(raw) * 8,
+              detail: `ML ${raw >= 0 ? '+' : ''}${raw.toFixed(2)}`
+            })
+          }
+          return results
+        }
+      : undefined
+    const decision = engine.evaluate(frame.payload, settings, frame.atMs, advisory)
     if (decision.shouldSwitch && decision.candidateSteamId) {
       targetSteamId = decision.candidateSteamId
       engine.confirmSwitch(targetSteamId, frame.atMs)
@@ -154,9 +226,20 @@ if (!input) {
   process.exit(1)
 }
 
-const timeline = JSON.parse(fs.readFileSync(input, 'utf8')) as ReplayTimeline
+const inputBytes = fs.readFileSync(input)
+const timeline = JSON.parse(
+  (input.endsWith('.gz') ? gunzipSync(inputBytes) : inputBytes).toString('utf8')
+) as ReplayTimeline
 if (!timeline.frames.length) {
   throw new Error('Timeline contains no frames')
+}
+
+const geometryDirectory = process.argv[3]
+const modelPath = process.argv[4]
+let hybrid: HybridConfig | undefined
+if (geometryDirectory && modelPath) {
+  const geometry = new GeometryRegistry(path.resolve(geometryDirectory)).load(timeline.metadata.map)
+  hybrid = { geometry, ranker: loadLightGbmRanker(path.resolve(modelPath)), geometryEnabled: true, mlEnabled: true }
 }
 
 const report = {
@@ -166,10 +249,23 @@ const report = {
     map: timeline.metadata.map,
     sampleIntervalMs: timeline.metadata.sampleIntervalMs
   },
-  modes: (['balanced', 'reactive', 'calm'] as const).map((mode) => evaluateMode(timeline, mode))
+  modes: (['balanced', 'reactive', 'calm'] as const).map((mode) => evaluateMode(timeline, mode)),
+  ...(hybrid
+    ? {
+        geometryModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
+          evaluateMode(timeline, mode, { ...hybrid!, mlEnabled: false })
+        ),
+        mlModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
+          evaluateMode(timeline, mode, { ...hybrid!, geometryEnabled: false })
+        ),
+        hybridModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
+          evaluateMode(timeline, mode, hybrid)
+        )
+      }
+    : {})
 }
 
-const output = `${input.replace(/\.timeline\.json$/i, '')}.evaluation.json`
+const output = `${input.replace(/\.timeline\.json(?:\.gz)?$/i, '')}.evaluation.json`
 fs.writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`)
 console.log(JSON.stringify(report, null, 2))
 console.log(`Evaluation written to ${path.resolve(output)}`)

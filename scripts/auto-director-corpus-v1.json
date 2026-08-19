@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "name": "auto-director-pro-corpus-v1",
+  "repository": "skkwowee/chimera-cs2",
+  "repositoryType": "dataset",
+  "revision": "2fb9aa50bad67536c04a5b8f6aa2f4b6f908ad71",
+  "licenseDeclaredByRepository": "mit",
+  "sampleTicks": 8,
+  "entries": [
+    { "split": "train", "path": "demos/2367842/mouz-vs-faze-m1-mirage.dem", "size": 257346652, "sha256": "7d74d900c088644de659cf778a4198b3c16bb4080cda62abba95f5b88f84b041" },
+    { "split": "train", "path": "demos/2395993/alliance-vs-wildcard-m1-inferno.dem", "size": 312336756, "sha256": "0b361ceb5d2abe7b69ce492d7394d385f8b0dd4df14276c787dc20438d3c853d" },
+    { "split": "train", "path": "demos/2367847/faze-vs-ence-m1-nuke.dem", "size": 146468236, "sha256": "465a7bdc9d5d3d91cf4bdedbe667bc540716aee1d70171081d133fcd81716421" },
+    { "split": "train", "path": "demos/2394900/natus-vincere-vs-spirit-m1-dust2.dem", "size": 331960514, "sha256": "00bdd0bfd427775a3cd1844a726c84353dad37517b89a887597a895ba4fc88ff" },
+    { "split": "train", "path": "demos/2368328/mouz-vs-complexity-m3-ancient.dem", "size": 201026894, "sha256": "7a552b2e8e8d240f07f937704689ddefba989f2a46142b615d6b8f3865ac061b" },
+    { "split": "train", "path": "demos/2367847/faze-vs-ence-m3-anubis.dem", "size": 114158032, "sha256": "567cd55c21faf44c762a28696a19cac864508fac16b824902f3246086224a8dd" },
+    { "split": "train", "path": "demos/2368328/mouz-vs-complexity-m1-overpass.dem", "size": 179803534, "sha256": "74fc46eddea86cfa0c3528361a871025dd1245c9035870c0d1ed49a3f13462db" },
+    { "split": "train", "path": "demos/2367606/faze-vs-mouz-m1-vertigo.dem", "size": 146801165, "sha256": "062e4c581edbd5f3b0178f97ac4d7bcb3274b90761ea1f4eb1baf86894e52f45" },
+
+    { "split": "validation", "path": "demos/2367848/mouz-vs-faze-m1-mirage.dem", "size": 110742752, "sha256": "58f7255329bbb33f46a5008db5d4a41d9c04cee4a039246b91bbfd2c4f5c9d17" },
+    { "split": "validation", "path": "demos/2367244/natus-vincere-vs-mouz-m2-inferno.dem", "size": 182134574, "sha256": "e9fb731d6923fd5e67b28a4fffab7adab7f98d22b61923e31f6d0195c1f7f2b3" },
+    { "split": "validation", "path": "demos/2372338/g2-vs-mouz-m2-nuke.dem", "size": 185581305, "sha256": "9a8b4ed539d17c6a9522c3f050c152954228bf1971348813f718c629ebd8c523" },
+    { "split": "validation", "path": "demos/2375424/natus-vincere-vs-spirit-m1-dust2.dem", "size": 246470586, "sha256": "dc1fc2c734b587ee69aaa5a969eec69d8d650f154574303994ed793781a0a03e" },
+
+    { "split": "test", "path": "demos/2375777/g2-vs-natus-vincere-m3-mirage.dem", "size": 268605922, "sha256": "de404a3c04391869939bbc6e325fdf52a703bd2d5a3c377106dc3abba8cc2a4a" },
+    { "split": "test", "path": "demos/2368527/faze-vs-vitality-m1-inferno.dem", "size": 212693503, "sha256": "b228a8f5166e25e3edaa5db173d88b00a938dc49329edc53f2f034d2bc81bf81" },
+    { "split": "test", "path": "demos/2372350/g2-vs-vitality-m3-nuke.dem", "size": 199566552, "sha256": "f44fb28084516f90f7d586b681663a1da52e02232f0c0b441129ea2ab0d12f46" },
+    { "split": "test", "path": "demos/2372330/g2-vs-vitality-m1-dust2.dem", "size": 220947542, "sha256": "bd243851a109512ba1486f44f95ed7d12e3c1fb216f79fa5303e6abef4d334d6" },
+    { "split": "test", "path": "demos/2367258/g2-vs-ence-m1-ancient.dem", "size": 201257202, "sha256": "ab539a4d8024a420a9e38da0175bc8d60df3e691261da3eaae786358cd2ac3d6" },
+    { "split": "test", "path": "demos/2375775/vitality-vs-g2-m1-anubis.dem", "size": 248600937, "sha256": "d6dc4c711b138931ae2d71f6e0f2660bc312f209428b05986af4f7fd3e7981d0" },
+    { "split": "test", "path": "demos/2368525/faze-vs-mouz-m2-overpass.dem", "size": 251895530, "sha256": "f2aa6a67d3880ba179a03a36ab9dd34404054b57d9a2edeeabbc72554bd071a3" },
+    { "split": "test", "path": "demos/2368041/vitality-vs-faze-m1-vertigo.dem", "size": 147165570, "sha256": "f078fa26c7e926f6839aa1778d8e946b783b38076e54d99e8f3686815a12de26" },
+
+    { "split": "train", "path": "demos/2376506/vitality-vs-mouz-m1-mirage.dem", "size": 535607967, "sha256": "69ac3fe3cd39bb5a8ebfdaf23415cbc8401f20ee6bddec17fafe2d6864b8d3ac" },
+    { "split": "train", "path": "demos/2376506/vitality-vs-mouz-m2-nuke.dem", "size": 695253908, "sha256": "7fa7e275f04dd2b59981ce0cf4d6102d4cdb6c03ed1a5174139bd25e182b752e" },
+    { "split": "train", "path": "demos/2376506/vitality-vs-mouz-m3-inferno.dem", "size": 793622214, "sha256": "a089b9ada2992c935380c09ab5abc6f92dffe1993b11f968cca0d9e8188c4831" },
+    { "split": "train", "path": "demos/2380067/g2-vs-natus-vincere-m1-mirage.dem", "size": 621472303, "sha256": "b4e30748cdf6b565855a1a2a09061af171253f2fd68eddefc3ac3b4b48be907d" },
+    { "split": "train", "path": "demos/2380067/g2-vs-natus-vincere-m2-ancient.dem", "size": 459986373, "sha256": "9d3e6bb1f57c979e02b78eeb9807b331afb611277f7805a0a79b7d20d3ea1ff7" },
+    { "split": "train", "path": "demos/2375770/natus-vincere-vs-g2-m1-dust2.dem", "size": 268103125, "sha256": "aeffee2c53e09cb62d85694f9196a36cc72e45b860d433ec894bcb1748b287c0" },
+    { "split": "train", "path": "demos/2375770/natus-vincere-vs-g2-m2-ancient.dem", "size": 242590856, "sha256": "ffa01af55f82a1bed65abda846d8f18c3aa09469264287ffb66ec26c199c03b3" },
+    { "split": "train", "path": "demos/2372739/spirit-vs-g2-m1-ancient.dem", "size": 569537191, "sha256": "9baee0ea2fbeb8d958e1fa8505b71927a7ca6441031aefa9754073e011d536e1" },
+    { "split": "train", "path": "demos/2372739/spirit-vs-g2-m2-dust2.dem", "size": 550900817, "sha256": "46fda6c1f3d5e12ba863226cf9deac900ac72922d60abe6b48de752578565481" },
+    { "split": "train", "path": "demos/2372739/spirit-vs-g2-m3-anubis.dem", "size": 458691211, "sha256": "37dbd5c1d4bf6ae102d57ad2eacac9f707fb5cd03ae07c28ba59302021b7c0cd" }
+  ]
+}

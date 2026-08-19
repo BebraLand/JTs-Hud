@@ -31,6 +31,8 @@ const FACTOR_LABELS: Record<ScoreFactor['key'], string> = {
   bombCarrier: 'Bomb carrier',
   lowHealthDrama: 'Low-HP pressure',
   continuity: 'Story continuity',
+  geometryAdvisory: 'Geometry LOS advisory',
+  mlAdvisory: 'ML advisory',
   death: 'Dead',
   flashPenalty: 'Flash penalty'
 }
@@ -106,6 +108,18 @@ export const normalizePlayers = (payload: GsiLikePayload): DirectorPlayer[] =>
     }
   })
 
+export type ScoreAdvisoryResult = {
+  key: 'geometryAdvisory' | 'mlAdvisory'
+  value: number
+  detail: string
+}
+
+export type ScoreAdvisory = (
+  player: DirectorPlayer,
+  score: PlayerScore,
+  players: DirectorPlayer[]
+) => ScoreAdvisoryResult[]
+
 export class AutoDirectorEngine {
   private previousPlayers = new Map<string, DirectorPlayer>()
   private signals = new Map<string, TemporalSignals>()
@@ -136,7 +150,8 @@ export class AutoDirectorEngine {
   evaluate(
     payload: GsiLikePayload,
     settings: AutoDirectorSettings,
-    at = Date.now()
+    at = Date.now(),
+    advisory?: ScoreAdvisory
   ): AutoDirectorDecision {
     const profile = getProfile(settings)
     const players = normalizePlayers(payload)
@@ -242,7 +257,7 @@ export class AutoDirectorEngine {
 
         if (!player.alive) {
           add('death', -1000, 'Player is dead')
-        } else {
+        } else if (settings.rulesEnabled) {
           add('base', profile.weights.base, 'Alive first-person candidate')
           if (objectiveSteamId === player.steamId) {
             add('objective', profile.weights.objective, `${bombState} in progress`)
@@ -318,7 +333,7 @@ export class AutoDirectorEngine {
           }
         }
 
-        return {
+        const score: PlayerScore = {
           steamId: player.steamId,
           name: player.name,
           team: player.team,
@@ -329,6 +344,22 @@ export class AutoDirectorEngine {
           nearestEnemyDistance: nearestDistance === null ? null : Math.round(nearestDistance),
           switchEligible: player.alive && player.observerSlot >= 0 && player.observerSlot <= 9
         }
+        const advisoryResults = player.alive ? advisory?.(player, score, players) ?? [] : []
+        for (const advisoryResult of advisoryResults) {
+          if (!Number.isFinite(advisoryResult.value)) continue
+          const value = Math.max(-18, Math.min(18, advisoryResult.value))
+          if (Math.abs(value) >= 0.05) {
+            score.factors.push({
+              key: advisoryResult.key,
+              label: FACTOR_LABELS[advisoryResult.key],
+              value: Math.round(value * 10) / 10,
+              detail: advisoryResult.detail
+            })
+            score.total = Math.round((score.total + value) * 10) / 10
+            score.factors.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+          }
+        }
+        return score
       })
       .sort(
         (a, b) =>
@@ -336,7 +367,8 @@ export class AutoDirectorEngine {
       )
 
     const currentScore = scores.find((score) => score.steamId === this.currentSteamId) ?? null
-    const ranked = scores.filter((score) => score.switchEligible)
+    const ranked =
+      settings.rulesEnabled || advisory ? scores.filter((score) => score.switchEligible) : []
     const requestedOverride = settings.manualOverrideSteamId
       ? (ranked.find((score) => score.steamId === settings.manualOverrideSteamId) ?? null)
       : null

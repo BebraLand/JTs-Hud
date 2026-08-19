@@ -84,6 +84,9 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   paused: false,
   mode: 'balanced',
   autoFallback: false,
+  rulesEnabled: true,
+  geometryAdvisoryEnabled: true,
+  mlAdvisoryEnabled: true,
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}
