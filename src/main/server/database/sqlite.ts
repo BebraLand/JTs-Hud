@@ -14,13 +14,22 @@ if (!fs.existsSync(dbDir)) {
 
 const dbPath = path.join(dbDir, 'jts-hud-manager.sqlite')
 
+let resolveDatabaseReady: () => void
+let rejectDatabaseReady: (error: Error) => void
+
+export const databaseReady = new Promise<void>((resolve, reject) => {
+  resolveDatabaseReady = resolve
+  rejectDatabaseReady = reject
+})
+
 // Initialize SQLite Database
 export const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening SQLite database:', err.message)
+    rejectDatabaseReady(err)
   } else {
     console.log('Connected to the SQLite database at:', dbPath)
-    initializeTables()
+    void initializeTables().then(resolveDatabaseReady).catch(rejectDatabaseReady)
   }
 })
 
@@ -175,5 +184,6 @@ async function initializeTables() {
     console.log('SQLite tables initialized successfully.')
   } catch (error) {
     console.error('Failed to initialize SQLite tables:', error)
+    throw error
   }
 }

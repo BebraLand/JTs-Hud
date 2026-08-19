@@ -16,10 +16,13 @@ import teamRoutes from './domains/teams/team.routes'
 import createHudRouter from './domains/huds/hud.routes'
 import settingsRoutes from './domains/settings/settings.routes'
 import spectatorRoutes from './domains/spectator/spectator.routes'
+import autoDirectorRoutes from './domains/auto-director/autoDirector.routes'
+import { autoDirectorService } from './domains/auto-director/autoDirector.service'
 import { uploadsPath } from './utils/multer'
 import { getHudsDir, getBuiltinHudDir } from '../paths'
 import { signedHudMiddleware } from './middleware/signedHudMiddleware'
 import { matIntegrationService } from './integrations/mat.integration'
+import { databaseReady } from './database/sqlite'
 
 // Track the currently active HUD id so the socket register handler can look up correct HUD
 let activeHudId: string | null = null
@@ -58,6 +61,7 @@ app.use('/api/players', playerRoutes)
 app.use('/api/match', createMatchRouter(io))
 app.use('/api/settings', settingsRoutes)
 app.use('/api/spectator', spectatorRoutes)
+app.use('/api/auto-director', autoDirectorRoutes)
 
 setupSockets(io)
 
@@ -86,9 +90,14 @@ export function startServers(): void {
   })
   httpServer.listen(HUD_PORT, '127.0.0.1', () => {
     console.log(`HUD Server and WebSockets listening on port ${HUD_PORT}`)
-    void matIntegrationService.start(io).catch((error) => {
-      console.error('[MAT] Failed to start integration:', error)
-    })
+    void databaseReady
+      .then(async () => {
+        await autoDirectorService.initialize(io)
+        await matIntegrationService.start(io)
+      })
+      .catch((error) => {
+        console.error('[Server] Failed to initialize database-backed services:', error)
+      })
   })
 
   const gsiServer = gsiApp.listen(GSI_PORT, '127.0.0.1', () => {

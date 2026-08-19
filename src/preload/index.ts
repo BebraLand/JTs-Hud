@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
+  getControlToken: (): Promise<string> => ipcRenderer.invoke('get-control-token'),
+
   // Open a URL in the system browser
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open-external', url),
 

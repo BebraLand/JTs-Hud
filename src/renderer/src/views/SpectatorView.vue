@@ -1,32 +1,26 @@
 <script setup lang="ts">
-import { useSpectator } from '../features/spectator/composables/useSpectator';
-import SpectatorInfoModal from '../features/spectator/components/SpectatorInfoModal.vue';
-import SpectatorTelnetSettings from '../features/spectator/components/SpectatorTelnetSettings.vue';
-import SpectatorSlotGrid from '../features/spectator/components/SpectatorSlotGrid.vue';
-import SpectatorLivePlayers from '../features/spectator/components/SpectatorLivePlayers.vue';
-import SpectatorCommandPreview from '../features/spectator/components/SpectatorCommandPreview.vue';
-import WarningIcon from '@renderer/assets/icons/WarningIcon.vue';
-import InfoIcon from '@renderer/assets/icons/InfoIcon.vue';
-import SettingsIcon from '@renderer/assets/icons/SettingsIcon.vue';
-import CloseIcon from '@renderer/assets/icons/CloseIcon.vue';
-import RefreshIcon from '@renderer/assets/icons/RefreshIcon.vue';
-import BaseButton from '@renderer/components/base/BaseButton.vue';
-import BaseBadge from '@renderer/components/base/BaseBadge.vue';
-import BaseInput from '@renderer/components/base/BaseInput.vue';
+import { useSpectator } from '../features/spectator/composables/useSpectator'
+import SpectatorInfoModal from '../features/spectator/components/SpectatorInfoModal.vue'
+import SpectatorSlotGrid from '../features/spectator/components/SpectatorSlotGrid.vue'
+import SpectatorLivePlayers from '../features/spectator/components/SpectatorLivePlayers.vue'
+import SpectatorCommandPreview from '../features/spectator/components/SpectatorCommandPreview.vue'
+import WarningIcon from '@renderer/assets/icons/WarningIcon.vue'
+import InfoIcon from '@renderer/assets/icons/InfoIcon.vue'
+
+import CloseIcon from '@renderer/assets/icons/CloseIcon.vue'
+import RefreshIcon from '@renderer/assets/icons/RefreshIcon.vue'
+import BaseButton from '@renderer/components/base/BaseButton.vue'
+import BaseBadge from '@renderer/components/base/BaseBadge.vue'
+import BaseInput from '@renderer/components/base/BaseInput.vue'
 
 const {
   gameState,
   slots,
-  telnetHost,
-  telnetPort,
-  settingsOpen,
   showInfo,
-  settingsSaving,
   applying,
   applyResult,
   clearing,
-  testing,
-  testResult,
+
   livePlayers,
   ctPlayers,
   tPlayers,
@@ -35,8 +29,7 @@ const {
   preCommand,
   previewCommand,
   numericNameWarnings,
-  saveSettings,
-  testConnection,
+
   applyBinds,
   clearBinds,
   quickAssign,
@@ -44,7 +37,7 @@ const {
   fillFromCS2,
   SLOT_KEYS,
   buildCommand
-} = useSpectator();
+} = useSpectator()
 </script>
 
 <template>
@@ -57,13 +50,8 @@ const {
       <div>
         <h1 class="text-2xl font-bold text-text-main flex items-center gap-2">
           Spectator Binds
-          <BaseButton
-            @click="showInfo = true"
-            variant="ghost"
-            size="sm"
-            title="How it works"
-          >
-            <InfoIcon/>
+          <BaseButton @click="showInfo = true" variant="ghost" size="sm" title="How it works">
+            <InfoIcon />
           </BaseButton>
         </h1>
         <p class="text-zinc-400 text-sm mt-1">
@@ -75,14 +63,6 @@ const {
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <!-- CS2 telnet settings toggle -->
-        <BaseButton
-          @click="settingsOpen = !settingsOpen"
-        >
-          <SettingsIcon/>
-          Telnet
-        </BaseButton>
-
         <!-- Clear binds button -->
         <BaseButton
           @click="clearBinds"
@@ -95,35 +75,21 @@ const {
         </BaseButton>
 
         <!-- Apply button -->
-        <BaseButton
-          @click="applyBinds"
-          :disabled="applying"
-          variant="primary"
-        >
+        <BaseButton @click="applyBinds" :disabled="applying" variant="primary">
           {{ applying ? 'Applying…' : 'Apply Binds to CS2' }}
         </BaseButton>
       </div>
     </div>
 
-    <!-- Telnet settings panel -->
-    <SpectatorTelnetSettings
-      v-if="settingsOpen"
-      v-model:host="telnetHost"
-      v-model:port="telnetPort"
-      :testing="testing"
-      :test-result="testResult"
-      :saving="settingsSaving"
-      @test="testConnection"
-      @save="saveSettings"
-    />
-
     <!-- Apply result toast -->
     <div
       v-if="applyResult"
       class="mb-5 px-4 py-3 rounded-lg text-sm font-medium border"
-      :class="applyResult.ok
-        ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-300'
-        : 'bg-red-900/30 border-red-700/50 text-red-300'"
+      :class="
+        applyResult.ok
+          ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-300'
+          : 'bg-red-900/30 border-red-700/50 text-red-300'
+      "
     >
       {{ applyResult.message }}
     </div>
@@ -133,11 +99,15 @@ const {
       v-if="numericNameWarnings.length"
       class="mb-5 flex items-start gap-3 px-4 py-3 rounded-lg border bg-red-900/20 border-red-700/40 text-red-300 text-sm"
     >
-      <WarningIcon/>
+      <WarningIcon />
       <span>
-        <span class="font-semibold">Binds will not work</span> for players whose name starts with a number (Limitation of CS2).
-        <br>
-        <span>Affected: <span class="font-mono">{{ numericNameWarnings.join(', ') }}</span>.</span>
+        <span class="font-semibold">Binds will not work</span> for players whose name starts with a
+        number (Limitation of CS2).
+        <br />
+        <span
+          >Affected: <span class="font-mono">{{ numericNameWarnings.join(', ') }}</span
+          >.</span
+        >
       </span>
     </div>
 
@@ -170,20 +140,17 @@ const {
               Pre-bind command <span class="text-zinc-500 font-normal">(optional)</span>
             </label>
             <p class="text-xs text-zinc-500 mt-0.5">
-              Alias or command to run before each player bind, e.g. <code class="text-zinc-400">reset_cams</code> for HLAE camera cleanup.
+              Alias or command to run before each player bind, e.g.
+              <code class="text-zinc-400">reset_cams</code> for HLAE camera cleanup.
             </p>
           </div>
-          <BaseInput
-            v-model="preCommand"
-            placeholder="e.g. reset_cams"
-            size="md"
-          />
+          <BaseInput v-model="preCommand" placeholder="e.g. reset_cams" size="md" />
         </div>
       </div>
 
       <!-- Command Preview -->
       <SpectatorCommandPreview
-        v-if="Object.values(slots).some(v => v)"
+        v-if="Object.values(slots).some((v) => v)"
         :preview-command="previewCommand"
         :build-command="buildCommand"
       />

@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useSettings } from '../../features/settings/composables/useSettings'
 import BaseButton from './BaseButton.vue'
 import BaseCheckbox from './BaseCheckbox.vue'
+import SpectatorTelnetSettings from '../../features/spectator/components/SpectatorTelnetSettings.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -25,6 +26,10 @@ const matEnabled = ref(false)
 const matUrl = ref('')
 const matToken = ref('')
 const matPollIntervalSeconds = ref(5)
+const telnetHost = ref('127.0.0.1')
+const telnetPort = ref(2020)
+const telnetTesting = ref(false)
+const telnetTestResult = ref<{ ok: boolean; message: string } | null>(null)
 
 watch(
   () => props.open,
@@ -35,10 +40,40 @@ watch(
     matUrl.value = settings.value.matUrl
     matPollIntervalSeconds.value = settings.value.matPollIntervalSeconds
     matToken.value = ''
+    telnetHost.value = settings.value.telnetHost
+    telnetPort.value = settings.value.telnetPort
   }
 )
 
 const persistAutoSwitch = () => saveSettings({ autoSwitchSides: settings.value.autoSwitchSides })
+
+const saveTelnet = async () => {
+  const saved = await saveSettings({ telnetHost: telnetHost.value, telnetPort: telnetPort.value })
+  telnetHost.value = settings.value.telnetHost
+  telnetPort.value = settings.value.telnetPort
+  return saved
+}
+
+const testTelnet = async () => {
+  telnetTesting.value = true
+  telnetTestResult.value = null
+  try {
+    if (!(await saveTelnet())) {
+      throw new Error(error.value || 'Could not save the Telnet settings')
+    }
+    await window.electron.ipcRenderer.invoke('send-telnet', {
+      command: 'echo JtsHudManager_ping'
+    })
+    telnetTestResult.value = { ok: true, message: 'Connected to CS2 Telnet.' }
+  } catch (err) {
+    telnetTestResult.value = {
+      ok: false,
+      message: err instanceof Error ? err.message : 'Connection failed'
+    }
+  } finally {
+    telnetTesting.value = false
+  }
+}
 
 const saveMat = async () => {
   const saved = await saveMatSettings({
@@ -115,21 +150,41 @@ const installGsiCfg = async () => {
 
           <template v-else>
             <div>
-              <p class="text-xs font-semibold capitalize text-zinc-500 mb-3">Match Automation</p>
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-sm font-medium text-zinc-200">Auto Switch Sides</p>
-                  <p class="text-xs text-zinc-500 mt-0.5">
-                    Automatically flip team sides at halftime in standalone mode
-                  </p>
+              <p class="mb-1 text-xs font-semibold capitalize text-zinc-500">
+                Global CS2 Telnet Connection
+              </p>
+              <p class="mb-3 text-xs text-zinc-500">
+                Shared by Spectator Binds, Auto Director, and all other CS2 console controls.
+              </p>
+              <SpectatorTelnetSettings
+                v-model:host="telnetHost"
+                v-model:port="telnetPort"
+                :testing="telnetTesting"
+                :test-result="telnetTestResult"
+                :saving="isSaving"
+                @test="testTelnet"
+                @save="saveTelnet"
+              />
+            </div>
+
+            <div class="border-t border-border pt-4">
+              <div>
+                <p class="text-xs font-semibold capitalize text-zinc-500 mb-3">Match Automation</p>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-zinc-200">Auto Switch Sides</p>
+                    <p class="text-xs text-zinc-500 mt-0.5">
+                      Automatically flip team sides at halftime in standalone mode
+                    </p>
+                  </div>
+                  <BaseCheckbox
+                    v-model="settings.autoSwitchSides"
+                    :disabled="isSaving"
+                    size="md"
+                    class="text-primary"
+                    @update:model-value="persistAutoSwitch"
+                  />
                 </div>
-                <BaseCheckbox
-                  v-model="settings.autoSwitchSides"
-                  :disabled="isSaving"
-                  size="md"
-                  class="text-primary"
-                  @update:model-value="persistAutoSwitch"
-                />
               </div>
             </div>
 

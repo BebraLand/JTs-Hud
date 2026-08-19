@@ -3,6 +3,8 @@ import { API_URL } from '../../../index'
 
 export interface AppSettings {
   autoSwitchSides: boolean
+  telnetHost: string
+  telnetPort: number
   matEnabled: boolean
   matUrl: string
   matTokenConfigured: boolean
@@ -20,6 +22,8 @@ export interface MatStatus {
 export function useSettings() {
   const settings = ref<AppSettings>({
     autoSwitchSides: true,
+    telnetHost: '127.0.0.1',
+    telnetPort: 2020,
     matEnabled: false,
     matUrl: '',
     matTokenConfigured: false,
@@ -64,8 +68,10 @@ export function useSettings() {
       })
       if (!res.ok) throw new Error(await readError(res))
       settings.value = await res.json()
+      return true
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to save settings'
+      return false
     } finally {
       isSaving.value = false
     }

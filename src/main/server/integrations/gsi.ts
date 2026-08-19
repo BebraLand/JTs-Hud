@@ -7,6 +7,9 @@ import { PlayerRepository } from '../domains/players/player.repository'
 import { getSettings } from '../domains/settings/settings.routes'
 import { RoundData } from '../domains/matches/match.types'
 import { matIntegrationService } from './mat.integration'
+import { autoDirectorService } from '../domains/auto-director/autoDirector.service'
+import { databaseReady } from '../database/sqlite'
+import { normalizeObserverSlot } from './observerSlot'
 
 const matchService = new MatchService()
 const teamService = new TeamService()
@@ -311,13 +314,11 @@ export const setupGSI = (io: Server) => {
           }
         }
       }
-      // Fix player observer_slot: CS2 raw data sends 0–10 but HUDs expect 1–10 with 10 wrapping to 0
+      // CS2 raw observer slots are 0–9; the UI uses keys 1–9 and 0.
       if (req.body?.allplayers) {
         for (const key of Object.keys(req.body.allplayers)) {
           const player = req.body.allplayers[key]
-          if (typeof player?.observer_slot === 'number') {
-            player.observer_slot = player.observer_slot + 1 === 10 ? 0 : player.observer_slot + 1
-          }
+          if (player) player.observer_slot = normalizeObserverSlot(player.observer_slot)
         }
       }
 
@@ -361,6 +362,8 @@ export const setupGSI = (io: Server) => {
         hudPayload = { ...req.body, allplayers: remapped }
       }
 
+      autoDirectorService.processGsi(hudPayload)
+
       // Feed raw payload into CSGOGSI so backend listeners fire
       GSI.digest(req.body)
 
@@ -378,8 +381,13 @@ export const setupGSI = (io: Server) => {
   })
 
   // Populate coach filter and Sync team data on startup
-  syncGSITeams()
-  syncCoaches()
+  void databaseReady
+    .then(async () => {
+      await Promise.all([syncGSITeams(), syncCoaches()])
+    })
+    .catch((error) => {
+      console.error('[GSI] Database initialization failed:', error)
+    })
 
   return router
 }

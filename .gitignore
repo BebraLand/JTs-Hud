@@ -9,6 +9,9 @@ out
 test-results/
 playwright-report/
 
+# Local CS2 demos and generated auto-director evaluation data
+fixtures/demos/
+
 # Local env files
 .env
 .env.local

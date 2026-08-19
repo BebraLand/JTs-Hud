@@ -5,7 +5,11 @@ directories:
 files:
   - '**/*'
   - '!**/.vscode/*'
-  - '!src/*'
+  - '!src/**/*'
+  - '!{docs,e2e,fixtures,scripts,test-results}/**/*'
+  - '!out/tests/**/*'
+  - '!playwright.config.ts'
+  - '!package-lock.json'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,knowledgebase.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
@@ -23,6 +27,8 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+portable:
+  artifactName: ${name}-${version}-auto-director-experimental-portable.${ext}
 mac:
   entitlementsInherit: entitlements.mac.plist
   extendInfo:

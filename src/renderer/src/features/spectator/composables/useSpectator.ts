@@ -34,17 +34,11 @@ export function useSpectator() {
 
   const preCommand = ref(localStorage.getItem(PRE_COMMAND_KEY) ?? '')
 
-  const telnetHost = ref('127.0.0.1')
-  const telnetPort = ref(2020)
-  const settingsOpen = ref(false)
   const showInfo = ref(false)
-  const settingsSaving = ref(false)
 
   const applying = ref(false)
   const applyResult = ref<{ ok: boolean; message: string } | null>(null)
   const clearing = ref(false)
-  const testing = ref(false)
-  const testResult = ref<{ ok: boolean; message: string } | null>(null)
 
   const pushSlots = async () => {
     try {
@@ -104,53 +98,6 @@ export function useSpectator() {
     return p?.side ?? null
   }
 
-  const loadSettings = async () => {
-    try {
-      const res = await fetch(`${API_URL}/settings`)
-      if (res.ok) {
-        const s = await res.json()
-        if (s.telnetHost) telnetHost.value = s.telnetHost
-        if (s.telnetPort) telnetPort.value = Number(s.telnetPort)
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const saveSettings = async () => {
-    settingsSaving.value = true
-    try {
-      await fetch(`${API_URL}/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telnetHost: telnetHost.value, telnetPort: telnetPort.value })
-      })
-    } finally {
-      settingsSaving.value = false
-      settingsOpen.value = false
-    }
-  }
-
-  const testConnection = async () => {
-    testing.value = true
-    testResult.value = null
-    try {
-      await (window as any).electron.ipcRenderer.invoke('send-telnet', {
-        command: 'echo JtsHudManager_ping',
-        host: telnetHost.value,
-        port: telnetPort.value
-      })
-      testResult.value = { ok: true, message: 'Connected to CS2 telnet!' }
-    } catch (err: any) {
-      testResult.value = { ok: false, message: err.message ?? 'Connection failed' }
-    } finally {
-      testing.value = false
-      setTimeout(() => {
-        testResult.value = null
-      }, 3000)
-    }
-  }
-
   const buildCommand = (): string => {
     const lines: string[] = ['spec_usenumberkeys_nobinds false']
     const pre = preCommand.value.trim()
@@ -184,15 +131,13 @@ export function useSpectator() {
     applyResult.value = null
     try {
       await (window as any).electron.ipcRenderer.invoke('send-telnet', {
-        command,
-        host: telnetHost.value,
-        port: telnetPort.value
+        command
       })
       applyResult.value = { ok: true, message: 'Binds applied to CS2!' }
     } catch (err: any) {
       applyResult.value = {
         ok: false,
-        message: (err.message ?? 'Telnet failed') + '. Is CS2 running with -netconport 2020?'
+        message: (err.message ?? 'Telnet failed') + '. Check the global Telnet settings.'
       }
     } finally {
       applying.value = false
@@ -229,15 +174,13 @@ export function useSpectator() {
     applyResult.value = null
     try {
       await (window as any).electron.ipcRenderer.invoke('send-telnet', {
-        command: lines.join('\n'),
-        host: telnetHost.value,
-        port: telnetPort.value
+        command: lines.join('\n')
       })
       applyResult.value = { ok: true, message: 'All slots cleared and binds removed from CS2.' }
     } catch (err: any) {
       applyResult.value = {
         ok: false,
-        message: (err.message ?? 'Telnet failed') + '. Is CS2 running with -netconport 2020?'
+        message: (err.message ?? 'Telnet failed') + '. Check the global Telnet settings.'
       }
     } finally {
       clearing.value = false
@@ -261,9 +204,7 @@ export function useSpectator() {
     const key = SLOT_KEYS[slot]
     try {
       await (window as any).electron.ipcRenderer.invoke('send-telnet', {
-        command: [`unbind ${key}`, `bind "${key}" "slot${slot}"`].join('\n'),
-        host: telnetHost.value,
-        port: telnetPort.value
+        command: [`unbind ${key}`, `bind "${key}" "slot${slot}"`].join('\n')
       })
     } catch {
       /* ignore */
@@ -290,7 +231,6 @@ export function useSpectator() {
 
   onMounted(async () => {
     loadSlots()
-    await loadSettings()
     await pushSlots()
     socket.on('update', onUpdate)
   })
@@ -302,16 +242,10 @@ export function useSpectator() {
   return {
     gameState,
     slots,
-    telnetHost,
-    telnetPort,
-    settingsOpen,
     showInfo,
-    settingsSaving,
     applying,
     applyResult,
     clearing,
-    testing,
-    testResult,
     livePlayers,
     ctPlayers,
     tPlayers,
@@ -320,8 +254,7 @@ export function useSpectator() {
     preCommand,
     previewCommand,
     numericNameWarnings,
-    saveSettings,
-    testConnection,
+
     applyBinds,
     clearBinds,
     quickAssign,
