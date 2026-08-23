@@ -29,7 +29,11 @@
     "demo:extract": "python3 scripts/extract-auto-director-demo.py",
     "demo:evaluate": "esbuild scripts/evaluate-auto-director-demo.ts --bundle --platform=node --format=cjs --outfile=out/tests/evaluate-auto-director-demo.js && node out/tests/evaluate-auto-director-demo.js",
     "geometry:evaluate": "esbuild scripts/evaluate-auto-director-geometry.ts --bundle --platform=node --format=cjs --outfile=out/tests/evaluate-auto-director-geometry.js && node out/tests/evaluate-auto-director-geometry.js",
-    "ml:dataset": "esbuild scripts/export-auto-director-training-data.ts --bundle --platform=node --format=cjs --outfile=out/tests/export-auto-director-training-data.js && node out/tests/export-auto-director-training-data.js"
+    "ml:dataset": "esbuild scripts/export-auto-director-training-data.ts --bundle --platform=node --format=cjs --outfile=out/tests/export-auto-director-training-data.js && node out/tests/export-auto-director-training-data.js",
+    "aerial:app": "electron tools/aerial-capture/app/main.cjs",
+    "build:aerial:win:portable": "electron-builder --config tools/aerial-capture/electron-builder.yml --win portable",
+    "aerial:capture": "esbuild tools/aerial-capture/src/index.ts --bundle --platform=node --format=cjs --outfile=out/tools/aerial-capture.js && node out/tools/aerial-capture.js",
+    "test:aerial-capture": "esbuild scripts/test-aerial-capture.ts --bundle --platform=node --format=cjs --outfile=out/tests/test-aerial-capture.js && node --test out/tests/test-aerial-capture.js"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

@@ -15,6 +15,9 @@ import {
 import { GeometryRegistry } from '../src/main/server/domains/auto-director/geometry/geometryRegistry'
 import type { GeometryMap } from '../src/main/server/domains/auto-director/geometry/geometryMap'
 import { computeGeometryFeatures } from '../src/main/server/domains/auto-director/geometry/geometryFeatures'
+import { TopologyRegistry } from '../src/main/server/domains/auto-director/topology/topologyRegistry'
+import type { TopologyMap } from '../src/main/server/domains/auto-director/topology/topologyMap'
+import { computeTopologyFeatures } from '../src/main/server/domains/auto-director/topology/topologyFeatures'
 import type {
   AutoDirectorMode,
   AutoDirectorSettings,
@@ -80,9 +83,17 @@ const sampleAt = (samples: CameraSample[], atMs: number): CameraSample | undefin
 interface HybridConfig {
   ranker: LightGbmRanker | null
   geometry: GeometryMap | null
+  topology: TopologyMap | null
   geometryEnabled: boolean
   mlEnabled: boolean
   geometryCache: WeakMap<GsiLikePayload, ReturnType<typeof computeGeometryFeatures>>
+  topologyCache: WeakMap<
+    GsiLikePayload,
+    {
+      withGeometry: ReturnType<typeof computeTopologyFeatures> | null
+      withoutGeometry: ReturnType<typeof computeTopologyFeatures> | null
+    }
+  >
 }
 
 const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?: HybridConfig) => {
@@ -99,6 +110,7 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
   let targetSteamId: string | null = null
   let roundStartedAt = 0
   let lastRound = -1
+  let previousPlayers = new Map<string, ReturnType<typeof normalizePlayers>[number]>()
 
   for (const frame of timeline.frames) {
     if (frame.round !== lastRound) {
@@ -115,6 +127,25 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
           hybrid.geometry
         )
         hybrid.geometryCache.set(frame.payload, geometryFeatures)
+      }
+    }
+    let topologyFeatures: ReturnType<typeof computeTopologyFeatures> | undefined
+    if (hybrid?.topology) {
+      const cached = hybrid.topologyCache.get(frame.payload) ?? {
+        withGeometry: null,
+        withoutGeometry: null
+      }
+      const cacheKey = geometryFeatures ? 'withGeometry' : 'withoutGeometry'
+      topologyFeatures = cached[cacheKey] ?? undefined
+      if (!topologyFeatures) {
+        topologyFeatures = computeTopologyFeatures(
+          players.filter((player) => player.alive),
+          hybrid.topology,
+          geometryFeatures ? hybrid.geometry : null,
+          previousPlayers
+        )
+        cached[cacheKey] = topologyFeatures
+        hybrid.topologyCache.set(frame.payload, cached)
       }
     }
     const advisory: ScoreAdvisory | undefined = hybrid
@@ -156,7 +187,14 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
           return results
         }
       : undefined
-    const decision = engine.evaluate(frame.payload, settings, frame.atMs, advisory)
+    const decision = engine.evaluate(
+      frame.payload,
+      settings,
+      frame.atMs,
+      advisory,
+      geometryFeatures ?? undefined,
+      topologyFeatures
+    )
     if (decision.shouldSwitch && decision.candidateSteamId) {
       targetSteamId = decision.candidateSteamId
       engine.confirmSwitch(targetSteamId, frame.atMs)
@@ -164,6 +202,7 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
     } else {
       targetSteamId = decision.currentSteamId
     }
+    previousPlayers = new Map(players.map((player) => [player.steamId, player]))
 
     const target = decision.scores.find((score) => score.steamId === targetSteamId)
     const objectiveState = frame.payload.bomb?.state
@@ -247,12 +286,17 @@ const modelPath = process.argv[4]
 let hybrid: HybridConfig | undefined
 if (geometryDirectory && modelPath) {
   const geometry = new GeometryRegistry(path.resolve(geometryDirectory)).load(timeline.metadata.map)
+  const topology = new TopologyRegistry(path.resolve('resources/auto-director/topology')).load(
+    timeline.metadata.map
+  )
   hybrid = {
     geometry,
+    topology,
     ranker: loadLightGbmRanker(path.resolve(modelPath)),
     geometryEnabled: true,
     mlEnabled: true,
-    geometryCache: new WeakMap()
+    geometryCache: new WeakMap(),
+    topologyCache: new WeakMap()
   }
 }
 

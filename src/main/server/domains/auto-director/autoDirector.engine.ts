@@ -7,6 +7,9 @@ import type {
   PlayerScore,
   ScoreFactor
 } from './autoDirector.types'
+import { analyzeScenes, type SceneAnalysis, type SceneSummary } from './autoDirector.scene'
+import type { PlayerGeometryFeatures } from './geometry/geometryFeatures'
+import type { PlayerTopologyFeatures } from './topology/topologyFeatures'
 
 type TemporalSignals = {
   shotUntil: number
@@ -35,7 +38,17 @@ const FACTOR_LABELS: Record<ScoreFactor['key'], string> = {
   mlAdvisory: 'ML advisory',
   death: 'Dead',
   flashPenalty: 'Flash penalty',
-  orientationPenalty: 'Looking away from nearest threat'
+  orientationPenalty: 'Looking away from nearest threat',
+  sceneRelevance: 'Dominant scene relevance',
+  groupCoverage: 'Enemy group coverage',
+  routeEntry: 'Likely group entry',
+  contactImminence: 'Contact imminence',
+  incomingGroupPressure: 'Incoming group pressure',
+  scenePovQuality: 'Scene POV quality',
+  portalControl: 'Portal control',
+  fightPrediction: 'Predicted fight window',
+  crossfire: 'Crossfire potential',
+  isolationPenalty: 'Isolated no-action penalty'
 }
 
 const parseVector = (value: unknown): [number, number, number] | null => {
@@ -126,6 +139,9 @@ export class AutoDirectorEngine {
   private signals = new Map<string, TemporalSignals>()
   private currentSteamId: string | null = null
   private switchedAt = 0
+  private trackedSceneMembers = new Set<string>()
+  private routeEntryStreaks = new Map<string, number>()
+  private actionableRouteStreaks = new Map<string, number>()
 
   confirmSwitch(steamId: string, at: number): void {
     this.currentSteamId = steamId
@@ -146,17 +162,68 @@ export class AutoDirectorEngine {
     this.signals.clear()
     this.currentSteamId = null
     this.switchedAt = 0
+    this.trackedSceneMembers.clear()
+    this.routeEntryStreaks.clear()
+    this.actionableRouteStreaks.clear()
+  }
+
+  private trackScene(analysis: SceneAnalysis): SceneSummary | null {
+    const challenger = analysis.scenes[0] ?? null
+    if (!challenger) {
+      this.trackedSceneMembers.clear()
+      return null
+    }
+    const tracked = analysis.scenes.find((scene) => {
+      if (this.trackedSceneMembers.size === 0) return false
+      const overlap = scene.members.filter((member) =>
+        this.trackedSceneMembers.has(member.steamId)
+      ).length
+      return (
+        overlap >=
+        Math.max(1, Math.ceil(Math.min(scene.members.length, this.trackedSceneMembers.size) * 0.5))
+      )
+    })
+    const selected =
+      !tracked ||
+      tracked.key === challenger.key ||
+      challenger.score >= tracked.score + 10 ||
+      tracked.members.length <= 1
+        ? challenger
+        : tracked
+    this.trackedSceneMembers = new Set(selected.members.map((member) => member.steamId))
+    return selected
   }
 
   evaluate(
     payload: GsiLikePayload,
     settings: AutoDirectorSettings,
     at = Date.now(),
-    advisory?: ScoreAdvisory
+    advisory?: ScoreAdvisory,
+    geometryFeatures?: ReadonlyMap<string, PlayerGeometryFeatures>,
+    topologyFeatures?: ReadonlyMap<string, PlayerTopologyFeatures>
   ): AutoDirectorDecision {
     const profile = getProfile(settings)
     const players = normalizePlayers(payload)
     const playersById = new Map(players.map((player) => [player.steamId, player]))
+    const sceneAnalysis: SceneAnalysis = settings.sceneAdvisoryEnabled
+      ? analyzeScenes(players, this.previousPlayers, geometryFeatures, topologyFeatures)
+      : { scenes: [], dominantScene: null, playerFeatures: new Map() }
+    const trackedScene = settings.sceneAdvisoryEnabled ? this.trackScene(sceneAnalysis) : null
+    for (const scene of sceneAnalysis.playerFeatures.values()) {
+      scene.dominantScene = Boolean(trackedScene && scene.sceneKey === trackedScene.key)
+      scene.dominantSceneScore = trackedScene?.score ?? 0
+      scene.sceneRelevance =
+        !trackedScene || trackedScene.score <= 0
+          ? 0
+          : Math.max(0, Math.min(1, scene.sceneScore / trackedScene.score))
+    }
+    const highConfidenceDominantScene = Boolean(
+      trackedScene &&
+      trackedScene.hasOpposition &&
+      trackedScene.members.length >= 4 &&
+      trackedScene.score >= 24 &&
+      trackedScene.confidence >= 0.55
+    )
     const aliveByTeam = new Map<string, number>()
     for (const player of players.filter((candidate) => candidate.alive)) {
       aliveByTeam.set(player.team, (aliveByTeam.get(player.team) ?? 0) + 1)
@@ -170,7 +237,13 @@ export class AutoDirectorEngine {
         killUntil: 0,
         damageDelta: 0
       }
+      const canFireProjectile =
+        !/grenade|c4|knife|taser/i.test(player.weaponType) &&
+        !/(grenade|flashbang|smokegrenade|hegrenade|molotov|incgrenade|decoy|weapon_c4|knife|taser)/i.test(
+          player.weapon
+        )
       const ammoDropped =
+        canFireProjectile &&
         previous?.ammoClip !== null &&
         player.ammoClip !== null &&
         previous?.weapon === player.weapon &&
@@ -192,11 +265,39 @@ export class AutoDirectorEngine {
     const bombState = String(payload.bomb?.state ?? '').toLowerCase()
     const objectiveActive = bombState === 'planting' || bombState === 'defusing'
     const objectiveSteamId = objectiveActive ? String(payload.bomb?.player ?? '') || null : null
+    const bombPosition = parseVector(payload.bomb?.position)
+    const objectivePlayer = objectiveSteamId ? playersById.get(objectiveSteamId) : null
+    const objectiveOpponentNearBomb = Boolean(
+      bombPosition &&
+      objectivePlayer &&
+      players.some(
+        (player) =>
+          player.alive &&
+          player.team !== objectivePlayer.team &&
+          player.position &&
+          distance(player.position, bombPosition) <= 1600
+      )
+    )
 
     const scores = players
       .map((player): PlayerScore => {
         const factors: ScoreFactor[] = []
         const signal = this.signals.get(player.steamId)!
+        const scene = sceneAnalysis.playerFeatures.get(player.steamId)
+        const sceneBroadcastRelevant = Boolean(
+          scene && (scene.sceneMemberCount >= 3 || scene.opposingSceneMemberCount >= 1)
+        )
+        const sceneThreatViewActive = Boolean(
+          scene &&
+          scene.threatSceneTargetCount >= 2 &&
+          (scene.threatSceneActionableTargetCount > 0 ||
+            (scene.incomingGroupPressure >= 0.35 &&
+              scene.threatSceneCoverage >= 0.35 &&
+              !scene.isolatedNoAction))
+        )
+        const localGroupViewAllowed = Boolean(
+          scene && (!scene.dominantScene || scene.opposingSceneMemberCount > 0)
+        )
         const enemies = players.filter(
           (enemy) => enemy.alive && enemy.team && player.team && enemy.team !== player.team
         )
@@ -217,13 +318,33 @@ export class AutoDirectorEngine {
           player.forward,
           nearestEnemy?.position ?? null
         )
+        const playerGeometry = geometryFeatures?.get(player.steamId)
+        const geometryAware = Boolean(playerGeometry)
+        const nearestCanEngage =
+          !geometryAware ||
+          Boolean(
+            playerGeometry?.nearestEnemyHasLineOfSight ||
+            playerGeometry?.nearestEnemyHasPeekPotential
+          )
         const directionFocus = Math.max(0, Math.min(1, (alignment - 0.5) * 2))
-        const proximityIntensity =
+        const rawProximityIntensity =
           nearestDistance === null ? 0 : Math.max(0, Math.min(1, 1 - nearestDistance / 1800))
+        const proximityEvidence = !geometryAware
+          ? 1
+          : playerGeometry?.nearestEnemyHasLineOfSight
+            ? 1
+            : playerGeometry?.nearestEnemyHasPeekPotential
+              ? 0.45
+              : 0.12
+        const proximityIntensity = rawProximityIntensity * proximityEvidence
         const activeCombat =
           signal.shotUntil > at ||
           signal.damageUntil > at ||
-          (nearestDistance !== null && nearestDistance < 850 && alignment > 0.62)
+          (nearestCanEngage &&
+            nearestDistance !== null &&
+            nearestDistance < 850 &&
+            alignment > 0.62)
+        const recentCombatSignal = signal.shotUntil > at || signal.damageUntil > at
         const ownAlive = aliveByTeam.get(player.team) ?? 0
         const enemyAlive = enemies.length
         const clutch = player.alive && ownAlive === 1 && enemyAlive >= 1
@@ -261,7 +382,167 @@ export class AutoDirectorEngine {
           add('death', -1000, 'Player is dead')
         } else if (settings.rulesEnabled) {
           add('base', profile.weights.base, 'Alive first-person candidate')
-          if (objectiveSteamId === player.steamId) {
+          if (settings.sceneAdvisoryEnabled && scene && scene.sceneKey) {
+            if (
+              scene.dominantScene &&
+              sceneBroadcastRelevant &&
+              scene.opposingSceneMemberCount > 0
+            ) {
+              add(
+                'sceneRelevance',
+                Math.min(9, 5 + scene.sceneRelevance * 4),
+                `Dominant scene: ${scene.sceneMemberCount} players; opposition ${scene.opposingSceneMemberCount}`
+              )
+            } else if (
+              highConfidenceDominantScene &&
+              scene.dominantSceneScore > scene.sceneScore * 1.45 &&
+              scene.sceneScore < scene.dominantSceneScore * 0.7 &&
+              !sceneThreatViewActive
+            ) {
+              add(
+                'sceneRelevance',
+                -Math.min(12, 3 + (1 - scene.sceneRelevance) * 9),
+                `Disconnected from dominant scene (${scene.sceneMemberCount} nearby players)`
+              )
+            }
+            const groupViewCount = sceneThreatViewActive
+              ? scene.threatSceneActionableTargetCount
+              : localGroupViewAllowed
+                ? geometryAware
+                  ? scene.threatSceneActionableTargetCount
+                  : scene.enemiesInViewCone
+                : 0
+            const groupViewCoverage = sceneThreatViewActive
+              ? scene.threatSceneActionableCoverage
+              : geometryAware
+                ? scene.threatSceneActionableCoverage
+                : scene.enemyGroupCoverage
+            if (
+              groupViewCount > 0 &&
+              (sceneThreatViewActive ||
+                (((scene.dominantScene && sceneBroadcastRelevant) || scene.nearbyEnemyCount >= 2) &&
+                  localGroupViewAllowed))
+            ) {
+              add(
+                'groupCoverage',
+                Math.min(
+                  10,
+                  groupViewCount * 2 + groupViewCoverage * 5 + (scene.threatSceneExternal ? 1.5 : 0)
+                ),
+                sceneThreatViewActive
+                  ? `Actionable threat view covers ${scene.threatSceneVisibleCount} visible + ${scene.threatScenePeekCount} peekable/${scene.threatSceneTargetCount}`
+                  : `View cone covers ${groupViewCount}/${scene.nearbyEnemyCount} nearby enemies`
+              )
+            }
+            const actionableRouteEvidence =
+              scene.threatSceneActionableTargetCount > 0 ||
+              (scene.incomingGroupPressure >= 0.35 && scene.threatSceneCoverage >= 0.35) ||
+              (scene.topologyIncomingRoutePressure >= 0.35 && scene.topologyPeekPotential)
+            if (
+              scene.routeEntryRelevance > 0.08 &&
+              scene.routeEntryTargetCount >= 3 &&
+              actionableRouteEvidence
+            ) {
+              add(
+                'routeEntry',
+                Math.min(12, scene.routeEntryRelevance * 12),
+                `Likely group entry: ${scene.routeEntryTargetCount} targets; ${scene.topologyCallout ?? 'unknown area'}; ${scene.topologyRoutePortalId ?? 'no portal'}; relevance ${Math.round(scene.routeEntryRelevance * 100)}%`
+              )
+            }
+            if (
+              scene.incomingGroupPressure > 0.05 &&
+              scene.threatSceneTargetCount >= 2 &&
+              scene.threatSceneCoverage >= 0.35 &&
+              !scene.isolatedNoAction
+            ) {
+              add(
+                'incomingGroupPressure',
+                Math.min(14, scene.incomingGroupPressure * 14),
+                `Incoming group ${scene.incomingGroupCount}/${scene.threatSceneTargetCount}; heading toward held angle`
+              )
+            }
+            if (
+              scene.povQuality > 0.05 &&
+              !scene.isolatedNoAction &&
+              (sceneThreatViewActive ||
+                (scene.dominantScene && sceneBroadcastRelevant) ||
+                scene.nearbyEnemyCount >= 2)
+            ) {
+              add(
+                'scenePovQuality',
+                Math.min(8, scene.povQuality * 8 * Math.max(0.5, scene.sceneConfidence)),
+                sceneThreatViewActive
+                  ? `Threat POV: ${groupViewCount}/${scene.threatSceneTargetCount} dominant-scene enemies in view`
+                  : `Informative POV: ${Math.round(scene.povQuality * 100)}%; phase ${scene.scenePhase ?? 'forming'}`
+              )
+            }
+            const sceneContactImminence =
+              scene.dominantScene && scene.opposingSceneMemberCount === 0
+                ? 0
+                : scene.contactImminence
+            if (
+              sceneContactImminence > 0.05 &&
+              !scene.isolatedNoAction &&
+              (sceneThreatViewActive ||
+                (scene.dominantScene && sceneBroadcastRelevant) ||
+                scene.nearbyEnemyCount >= 2)
+            ) {
+              add(
+                'contactImminence',
+                Math.min(12, sceneContactImminence * 12),
+                `Pre-contact pressure ${Math.round(sceneContactImminence * 100)}%`
+              )
+            }
+            if (scene.isolatedNoAction) {
+              const emptyThreatAngle =
+                scene.threatSceneTargetCount >= 3 && scene.threatSceneActionableTargetCount === 0
+              add(
+                'isolationPenalty',
+                emptyThreatAngle ? -24 : -12,
+                emptyThreatAngle
+                  ? `Empty threat angle: ${scene.threatSceneTargetCount} enemies in cone, no LOS/peek or incoming route`
+                  : 'Isolated player without nearby enemy, objective or recent combat'
+              )
+            }
+            if (
+              !scene.isolatedNoAction &&
+              scene.topologyRouteAdvisoryAllowed &&
+              scene.topologyPortalControlScore >= 0.25 &&
+              scene.routeEntryTargetCount >= 1
+            ) {
+              add(
+                'portalControl',
+                Math.min(6, scene.topologyPortalControlScore * 6),
+                `${scene.topologyPlantSite ?? 'route'} ${scene.topologyCallout ?? 'area'} controls ${scene.topologyRoutePortalChokepoint ? 'chokepoint' : 'portal'} ${scene.topologyRoutePortalId ?? 'unknown'}`
+              )
+            }
+            if (
+              !scene.isolatedNoAction &&
+              scene.topologyRouteAdvisoryAllowed &&
+              scene.topologyPredictedFightMs !== null &&
+              scene.topologyPredictedFightMs <= 2000 &&
+              scene.topologyFightPredictionConfidence >= 0.25
+            ) {
+              add(
+                'fightPrediction',
+                Math.min(
+                  8,
+                  (1 - scene.topologyPredictedFightMs / 2000) *
+                    5 *
+                    scene.topologyFightPredictionConfidence
+                ),
+                `Predicted route fight in ~${Math.round(scene.topologyPredictedFightMs)} ms; confidence ${Math.round(scene.topologyFightPredictionConfidence * 100)}%`
+              )
+            }
+            if (scene.topologyRouteAdvisoryAllowed && scene.topologyCrossfirePotential >= 0.25) {
+              add(
+                'crossfire',
+                Math.min(5, scene.topologyCrossfirePotential * 5),
+                `Crossfire potential on ${scene.topologyCallout ?? 'route portal'}: ${Math.round(scene.topologyCrossfirePotential * 2)} partner(s)`
+              )
+            }
+          }
+          if (objectiveSteamId === player.steamId && !objectiveOpponentNearBomb) {
             add('objective', profile.weights.objective, `${bombState} in progress`)
           }
           if (activeCombat) {
@@ -302,14 +583,23 @@ export class AutoDirectorEngine {
           if (alignment > 0.5 && nearestEnemy) {
             add(
               'aimAlignment',
-              profile.weights.aimAlignment * ((alignment - 0.5) * 2),
+              profile.weights.aimAlignment * ((alignment - 0.5) * 2) * proximityEvidence,
               `Facing ${nearestEnemy.name} (${Math.round(alignment * 100)}% alignment proxy)`
             )
           }
           if (clutch) {
             add('clutch', profile.weights.clutch, `Last alive versus ${enemyAlive}`)
           }
-          if (grenadeActive && nearestDistance !== null && nearestDistance < 1800) {
+          const grenadeHasMeaningfulContext = Boolean(
+            recentCombatSignal ||
+            objectiveSteamId === player.steamId ||
+            (nearestCanEngage &&
+              nearestDistance !== null &&
+              nearestDistance < 900 &&
+              alignment > 0.45) ||
+            (scene && !scene.isolatedNoAction && scene.threatSceneActionableTargetCount > 0)
+          )
+          if (grenadeActive && grenadeHasMeaningfulContext) {
             add('grenade', profile.weights.grenade, 'Active grenade near potential contact')
           }
           if (entryWindow && ownAlive >= 4 && proximityIntensity > 0.25) {
@@ -337,7 +627,7 @@ export class AutoDirectorEngine {
               `${player.health} HP under pressure`
             )
           }
-          if (player.steamId === this.currentSteamId) {
+          if (player.steamId === this.currentSteamId && !scene?.isolatedNoAction) {
             add('continuity', profile.weights.continuity, 'Current POV story continuity')
           }
           if (player.flashed > 80) {
@@ -358,9 +648,57 @@ export class AutoDirectorEngine {
           total: Math.round(factors.reduce((sum, factor) => sum + factor.value, 0) * 10) / 10,
           factors: factors.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
           nearestEnemyDistance: nearestDistance === null ? null : Math.round(nearestDistance),
+          nearestEnemyHasLineOfSight: playerGeometry?.nearestEnemyHasLineOfSight,
+          nearestEnemyHasPeekPotential: playerGeometry?.nearestEnemyHasPeekPotential,
+          sceneKey: scene?.sceneKey ?? null,
+          sceneScore: scene?.sceneScore ?? 0,
+          sceneRelevance: scene?.sceneRelevance ?? 0,
+          sceneMemberCount: scene?.sceneMemberCount ?? 0,
+          opposingSceneMemberCount: scene?.opposingSceneMemberCount ?? 0,
+          enemiesInViewCone: scene?.enemiesInViewCone ?? 0,
+          nearbyEnemyCount: scene?.nearbyEnemyCount ?? 0,
+          enemyGroupAlignment: scene?.enemyGroupAlignment ?? 0,
+          enemyGroupCoverage: scene?.enemyGroupCoverage ?? 0,
+          contactImminence: scene?.contactImminence ?? 0,
+          routeEntryRelevance: scene?.routeEntryRelevance ?? 0,
+          routeEntryTargetCount: scene?.routeEntryTargetCount ?? 0,
+          topologyCallout: scene?.topologyCallout ?? null,
+          topologyTacticalRoles: scene?.topologyTacticalRoles ?? [],
+          topologyPlantSite: scene?.topologyPlantSite ?? null,
+          topologyRoutePortalId: scene?.topologyRoutePortalId ?? null,
+          topologyRouteDistance: scene?.topologyRouteDistance ?? null,
+          topologyRoutePortalChokepoint: scene?.topologyRoutePortalChokepoint ?? false,
+          topologyPortalControlScore: scene?.topologyPortalControlScore ?? 0,
+          topologyDefensiveAngleScore: scene?.topologyDefensiveAngleScore ?? 0,
+          topologyCrossfirePotential: scene?.topologyCrossfirePotential ?? 0,
+          topologyRouteConvergence: scene?.topologyRouteConvergence ?? 0,
+          topologyPeekPotential: scene?.topologyPeekPotential ?? false,
+          topologyPeekPortalCount: scene?.topologyPeekPortalCount ?? 0,
+          topologyIncomingRoutePressure: scene?.topologyIncomingRoutePressure ?? 0,
+          topologyPredictedFightMs: scene?.topologyPredictedFightMs ?? null,
+          topologyFightPredictionConfidence: scene?.topologyFightPredictionConfidence ?? 0,
+          topologyVerticalSeparation: scene?.topologyVerticalSeparation ?? null,
+          topologyRouteAdvisoryAllowed: scene?.topologyRouteAdvisoryAllowed ?? false,
+          incomingGroupPressure: scene?.incomingGroupPressure ?? 0,
+          scenePhase: scene?.scenePhase ?? null,
+          sceneConfidence: scene?.sceneConfidence ?? 0,
+          movementMagnitude: scene?.movementMagnitude ?? 0,
+          approachPressure: scene?.approachPressure ?? 0,
+          povQuality: scene?.povQuality ?? 0,
+          threatSceneKey: scene?.threatSceneKey ?? null,
+          threatSceneTargetCount: scene?.threatSceneTargetCount ?? 0,
+          threatSceneEnemiesInViewCone: scene?.threatSceneEnemiesInViewCone ?? 0,
+          threatSceneAlignment: scene?.threatSceneAlignment ?? 0,
+          threatSceneCoverage: scene?.threatSceneCoverage ?? 0,
+          threatSceneActionableTargetCount: scene?.threatSceneActionableTargetCount ?? 0,
+          threatSceneActionableCoverage: scene?.threatSceneActionableCoverage ?? 0,
+          threatSceneVisibleCount: scene?.threatSceneVisibleCount ?? 0,
+          threatScenePeekCount: scene?.threatScenePeekCount ?? 0,
+          threatSceneExternal: scene?.threatSceneExternal ?? false,
+          isolatedNoAction: scene?.isolatedNoAction ?? false,
           switchEligible: player.alive && player.observerSlot >= 0 && player.observerSlot <= 9
         }
-        const advisoryResults = player.alive ? advisory?.(player, score, players) ?? [] : []
+        const advisoryResults = player.alive ? (advisory?.(player, score, players) ?? []) : []
         for (const advisoryResult of advisoryResults) {
           if (!Number.isFinite(advisoryResult.value)) continue
           const value = Math.max(-18, Math.min(18, advisoryResult.value))
@@ -382,15 +720,35 @@ export class AutoDirectorEngine {
           b.total - a.total || a.observerSlot - b.observerSlot || a.steamId.localeCompare(b.steamId)
       )
 
+    for (const score of scores) {
+      const currentStreak = this.routeEntryStreaks.get(score.steamId) ?? 0
+      this.routeEntryStreaks.set(
+        score.steamId,
+        score.routeEntryRelevance !== undefined && score.routeEntryRelevance >= 0.55
+          ? Math.min(3, currentStreak + 1)
+          : 0
+      )
+      const actionableRouteStreak = this.actionableRouteStreaks.get(score.steamId) ?? 0
+      this.actionableRouteStreaks.set(
+        score.steamId,
+        (score.routeEntryRelevance ?? 0) >= 0.25 &&
+          (score.routeEntryTargetCount ?? 0) >= 3 &&
+          (score.threatSceneActionableTargetCount ?? 0) > 0
+          ? Math.min(3, actionableRouteStreak + 1)
+          : 0
+      )
+    }
+
     const currentScore = scores.find((score) => score.steamId === this.currentSteamId) ?? null
     const ranked =
       settings.rulesEnabled || advisory ? scores.filter((score) => score.switchEligible) : []
     const requestedOverride = settings.manualOverrideSteamId
       ? (ranked.find((score) => score.steamId === settings.manualOverrideSteamId) ?? null)
       : null
-    const objectiveScore = objectiveSteamId
-      ? (ranked.find((score) => score.steamId === objectiveSteamId) ?? null)
-      : null
+    const objectiveScore =
+      objectiveSteamId && !objectiveOpponentNearBomb
+        ? (ranked.find((score) => score.steamId === objectiveSteamId) ?? null)
+        : null
     const best = requestedOverride ?? objectiveScore ?? ranked[0] ?? null
     const runnerUp = ranked.find((score) => score.steamId !== best?.steamId) ?? null
     let shouldSwitch = false
@@ -415,7 +773,11 @@ export class AutoDirectorEngine {
       reason = 'Auto-director paused by operator'
     } else if (!liveRound) {
       reason = `Waiting for live round (${roundPhase || mapPhase || 'no phase'})`
-    } else if (objectiveSteamId && playersById.get(objectiveSteamId)?.alive) {
+    } else if (
+      objectiveSteamId &&
+      playersById.get(objectiveSteamId)?.alive &&
+      !objectiveOpponentNearBomb
+    ) {
       shouldSwitch = objectiveSteamId !== this.currentSteamId
       const objectivePlayer = scores.find((score) => score.steamId === objectiveSteamId)
       reason = shouldSwitch
@@ -441,12 +803,17 @@ export class AutoDirectorEngine {
             currentSignal.damageUntil - 1100 + profile.combatSoftLockMs
           )
         : 0
+      const staleCombatOnEmptyAngle =
+        currentScore.isolatedNoAction &&
+        currentScore.threatSceneActionableTargetCount === 0 &&
+        !currentScore.nearestEnemyHasLineOfSight &&
+        !currentScore.nearestEnemyHasPeekPotential
 
       if (postKillUntil > at) {
         reason = `Post-kill hold on ${currentScore.name}`
         lockKind = 'post-kill'
         lockUntil = postKillUntil
-      } else if (combatUntil > at) {
+      } else if (combatUntil > at && !staleCombatOnEmptyAngle) {
         reason = `Combat soft lock on ${currentScore.name}`
         lockKind = 'combat'
         lockUntil = combatUntil
@@ -454,11 +821,32 @@ export class AutoDirectorEngine {
         reason = `Minimum dwell on ${currentScore.name}`
         lockKind = 'minimum-dwell'
         lockUntil = dwellUntil
-      } else if (best.total >= currentScore.total + profile.switchMargin) {
-        shouldSwitch = true
-        reason = `${best.name} leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
       } else {
-        reason = `${best.name} does not clear the ${profile.switchMargin}-point switch margin`
+        const routeEntryTransition =
+          (best.routeEntryRelevance ?? 0) >= 0.55 &&
+          (best.routeEntryRelevance ?? 0) >= (currentScore.routeEntryRelevance ?? 0) + 0.3 &&
+          (best.routeEntryTargetCount ?? 0) >= 3 &&
+          (this.routeEntryStreaks.get(best.steamId) ?? 0) >= 2
+        const emptyAngleRecovery =
+          Boolean(currentScore.isolatedNoAction) &&
+          (best.routeEntryRelevance ?? 0) >= 0.25 &&
+          (best.routeEntryTargetCount ?? 0) >= 3 &&
+          (best.threatSceneActionableTargetCount ?? 0) > 0 &&
+          (this.actionableRouteStreaks.get(best.steamId) ?? 0) >= 2
+        const effectiveSwitchMargin =
+          routeEntryTransition || emptyAngleRecovery
+            ? Math.max(5, profile.switchMargin * 0.45)
+            : profile.switchMargin
+        if (best.total >= currentScore.total + effectiveSwitchMargin) {
+          shouldSwitch = true
+          reason = emptyAngleRecovery
+            ? `${best.name} recovered an actionable group route while ${currentScore.name} holds an empty angle and leads by ${(best.total - currentScore.total).toFixed(1)} points`
+            : routeEntryTransition
+              ? `${best.name} owns a stable group-entry route and leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
+              : `${best.name} leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
+        } else {
+          reason = `${best.name} does not clear the ${effectiveSwitchMargin}-point switch margin`
+        }
       }
     }
 
@@ -476,7 +864,15 @@ export class AutoDirectorEngine {
       shouldSwitch,
       reason,
       lockKind,
-      lockUntil
+      lockUntil,
+      dominantSceneKey: trackedScene?.key ?? null,
+      dominantSceneScore: trackedScene?.score ?? 0,
+      currentSceneKey: currentScore?.sceneKey ?? null,
+      currentSceneScore: currentScore?.sceneScore ?? 0,
+      dominantScenePhase: trackedScene?.phase ?? null,
+      dominantSceneConfidence: trackedScene?.confidence ?? 0,
+      currentScenePhase: currentScore?.scenePhase ?? null,
+      currentSceneConfidence: currentScore?.sceneConfidence ?? 0
     }
   }
 }

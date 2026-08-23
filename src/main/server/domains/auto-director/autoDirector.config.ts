@@ -26,7 +26,10 @@ export const AUTO_DIRECTOR_PROFILES: Record<AutoDirectorMode, AutoDirectorProfil
       weaponPressure: 14,
       bombCarrier: 10,
       lowHealthDrama: 8,
-      continuity: 10
+      continuity: 10,
+      portalControl: 0,
+      fightPrediction: 0,
+      crossfire: 0
     }
   },
   reactive: {
@@ -50,7 +53,10 @@ export const AUTO_DIRECTOR_PROFILES: Record<AutoDirectorMode, AutoDirectorProfil
       weaponPressure: 15,
       bombCarrier: 8,
       lowHealthDrama: 7,
-      continuity: 5
+      continuity: 5,
+      portalControl: 0,
+      fightPrediction: 0,
+      crossfire: 0
     }
   },
   calm: {
@@ -74,7 +80,10 @@ export const AUTO_DIRECTOR_PROFILES: Record<AutoDirectorMode, AutoDirectorProfil
       weaponPressure: 12,
       bombCarrier: 14,
       lowHealthDrama: 10,
-      continuity: 20
+      continuity: 20,
+      portalControl: 0,
+      fightPrediction: 0,
+      crossfire: 0
     }
   }
 }
@@ -85,6 +94,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   mode: 'balanced',
   autoFallback: false,
   rulesEnabled: true,
+  sceneAdvisoryEnabled: true,
   geometryAdvisoryEnabled: true,
   mlAdvisoryEnabled: true,
   scoringIntervalMs: 100,

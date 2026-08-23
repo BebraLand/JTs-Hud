@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aerial Camera Capture</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">JTS OBSERVER TOOLS</div>
+          <h1>Aerial Camera Capture</h1>
+          <p class="subtitle">Calibrate map anchors once, then export a clean camera manifest.</p>
+        </div>
+        <div class="top-actions">
+          <button class="button secondary" id="import-button">Import JSON</button>
+          <button class="button primary" id="export-button">Export verified JSON</button>
+        </div>
+      </header>
+
+      <section class="connection-card">
+        <div class="field compact">
+          <label for="host">NetCon host</label>
+          <input id="host" value="127.0.0.1" />
+        </div>
+        <div class="field compact">
+          <label for="port">Port</label>
+          <input id="port" type="number" value="2020" min="1" max="65535" />
+        </div>
+        <div class="field map-field">
+          <label for="map">Map</label>
+          <select id="map">
+            <option value="de_ancient">Ancient</option>
+            <option value="de_anubis">Anubis</option>
+            <option value="de_cache">Cache</option>
+            <option value="de_dust2">Dust2</option>
+            <option value="de_inferno">Inferno</option>
+            <option value="de_mirage">Mirage</option>
+            <option value="de_nuke">Nuke</option>
+            <option value="de_overpass">Overpass</option>
+          </select>
+        </div>
+        <div class="connection-status" id="connection-status">
+          <span class="status-dot"></span>
+          Ready to capture
+        </div>
+      </section>
+
+      <main class="workspace">
+        <section class="panel checklist-panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">CALIBRATION CHECKLIST</div>
+              <h2 id="map-title">Ancient</h2>
+            </div>
+            <div class="progress" id="progress">0 / 4 required</div>
+          </div>
+          <p class="panel-help">
+            Open a local demo or observer session, place the camera in CS2, select the point below, then press Capture current position.
+          </p>
+          <div class="anchor-list" id="anchor-list"></div>
+          <div class="custom-anchor-row">
+            <input id="custom-anchor" placeholder="custom anchor, e.g. temple_exit" />
+            <button class="button secondary" id="add-custom">Add custom</button>
+          </div>
+        </section>
+
+        <section class="panel detail-panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">CURRENT ANCHOR</div>
+              <h2 id="selected-label">Select a point</h2>
+            </div>
+            <span class="badge" id="selected-kind">Waiting</span>
+          </div>
+
+          <div class="selected-hint" id="selected-hint">
+            Choose an anchor from the checklist. The tool will read the current observer camera through NetCon.
+          </div>
+
+          <div class="pose-grid">
+            <div class="pose-box">
+              <div class="pose-label">POSITION</div>
+              <code id="position">not captured</code>
+            </div>
+            <div class="pose-box">
+              <div class="pose-label">ANGLES</div>
+              <code id="angles">not captured</code>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="notes">Notes for this shot</label>
+            <textarea id="notes" rows="3" placeholder="Why this angle is useful, what it should show, and any map-specific caveat."></textarea>
+          </div>
+
+          <button class="capture-button" id="capture-button" disabled>Capture current position</button>
+          <div class="capture-result" id="capture-result"></div>
+
+          <div class="quality-box">
+            <div class="eyebrow">QUALITY RULES</div>
+            <ul>
+              <li>Required anchors: both spawns, Mid, A Site, B Site.</li>
+              <li>Every captured pose must contain six finite numbers.</li>
+              <li>Route and post-plant shots are optional, but recommended.</li>
+              <li>Final export is blocked until required anchors exist.</li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer-note">
+        <span>Source: CS2 NetCon <code>getpos</code></span>
+        <span>Presentation layer only, no memory access or hooks</span>
+      </footer>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

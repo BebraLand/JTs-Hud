@@ -10,6 +10,7 @@ const emptyStatus = (): AutoDirectorStatus => ({
     mode: 'balanced',
     autoFallback: false,
     rulesEnabled: true,
+    sceneAdvisoryEnabled: true,
     geometryAdvisoryEnabled: true,
     mlAdvisoryEnabled: true,
     scoringIntervalMs: 100,
@@ -44,6 +45,13 @@ const emptyStatus = (): AutoDirectorStatus => ({
       mapName: null,
       state: 'missing',
       triangleCount: 0,
+      message: 'No map requested'
+    },
+    topology: {
+      mapName: null,
+      state: 'missing',
+      areaCount: 0,
+      portalCount: 0,
       message: 'No map requested'
     }
   }

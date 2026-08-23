@@ -19,10 +19,13 @@ import { CameraController } from './cameraController'
 import { getAutoDirectorResourceDir } from '../../../paths'
 import { computeGeometryFeatures } from './geometry/geometryFeatures'
 import { GeometryRegistry } from './geometry/geometryRegistry'
+import { computeTopologyFeatures } from './topology/topologyFeatures'
+import { TopologyRegistry } from './topology/topologyRegistry'
 import type {
   AutoDirectorSettings,
   AutoDirectorStatus,
   CameraTransport,
+  DirectorPlayer,
   DirectorHistoryEntry,
   GsiLikePayload
 } from './autoDirector.types'
@@ -37,6 +40,8 @@ const sanitizeSettings = (input: Partial<AutoDirectorSettings>): Partial<AutoDir
   if (['balanced', 'reactive', 'calm'].includes(String(input.mode))) output.mode = input.mode
   if (typeof input.autoFallback === 'boolean') output.autoFallback = input.autoFallback
   if (typeof input.rulesEnabled === 'boolean') output.rulesEnabled = input.rulesEnabled
+  if (typeof input.sceneAdvisoryEnabled === 'boolean')
+    output.sceneAdvisoryEnabled = input.sceneAdvisoryEnabled
   if (typeof input.geometryAdvisoryEnabled === 'boolean')
     output.geometryAdvisoryEnabled = input.geometryAdvisoryEnabled
   if (typeof input.mlAdvisoryEnabled === 'boolean')
@@ -70,6 +75,9 @@ export class AutoDirectorService {
   )
   private readonly geometry = new GeometryRegistry(
     path.join(getAutoDirectorResourceDir(), 'geometry')
+  )
+  private readonly topology = new TopologyRegistry(
+    path.join(getAutoDirectorResourceDir(), 'topology')
   )
   private mlRanker: LightGbmRanker | null = null
   private mlModelMessage = 'Model not loaded'
@@ -106,6 +114,7 @@ export class AutoDirectorService {
   private retryNotBefore = 0
   private lastDecisionSignature = ''
   private lastDecisionHistoryAt = 0
+  private previousTopologyPlayers = new Map<string, DirectorPlayer>()
   private statusTimer: NodeJS.Timeout | null = null
 
   async initialize(io: Server): Promise<void> {
@@ -184,7 +193,8 @@ export class AutoDirectorService {
         enabled: this.settings.mlAdvisoryEnabled,
         modelLoaded: this.mlRanker !== null,
         modelMessage: this.mlModelMessage,
-        geometry: this.geometry.getStatus()
+        geometry: this.geometry.getStatus(),
+        topology: this.topology.getStatus()
       }
     }
   }
@@ -281,6 +291,18 @@ export class AutoDirectorService {
           geometryMap
         )
       : null
+    const topologyMap =
+      this.settings.sceneAdvisoryEnabled && payload.map?.name
+        ? this.topology.load(payload.map.name)
+        : null
+    const topologyFeatures = topologyMap
+      ? computeTopologyFeatures(
+          players.filter((player) => player.alive),
+          topologyMap,
+          geometryMap,
+          this.previousTopologyPlayers
+        )
+      : null
     const roundKey = `${payload.map?.name ?? ''}:${payload.map?.round ?? ''}`
     if (this.roundStartedAt === 0 || roundKey !== this.lastRoundKey) {
       this.lastRoundKey = roundKey
@@ -326,7 +348,15 @@ export class AutoDirectorService {
             return results
           }
         : undefined
-    this.decision = this.engine.evaluate(payload, this.settings, now, advisory)
+    this.decision = this.engine.evaluate(
+      payload,
+      this.settings,
+      now,
+      advisory,
+      geometryFeatures ?? undefined,
+      topologyFeatures ?? undefined
+    )
+    this.previousTopologyPlayers = new Map(players.map((player) => [player.steamId, player]))
     this.recordDecision(this.decision, now)
 
     if (

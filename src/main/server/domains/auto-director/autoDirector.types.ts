@@ -22,6 +22,16 @@ export type ScoreFactorKey =
   | 'death'
   | 'flashPenalty'
   | 'orientationPenalty'
+  | 'sceneRelevance'
+  | 'groupCoverage'
+  | 'routeEntry'
+  | 'contactImminence'
+  | 'incomingGroupPressure'
+  | 'scenePovQuality'
+  | 'portalControl'
+  | 'fightPrediction'
+  | 'crossfire'
+  | 'isolationPenalty'
 
 export interface ScoreFactor {
   key: ScoreFactorKey
@@ -59,6 +69,54 @@ export interface PlayerScore {
   total: number
   factors: ScoreFactor[]
   nearestEnemyDistance: number | null
+  nearestEnemyHasLineOfSight?: boolean
+  nearestEnemyHasPeekPotential?: boolean
+  sceneKey?: string | null
+  sceneScore?: number
+  sceneRelevance?: number
+  sceneMemberCount?: number
+  opposingSceneMemberCount?: number
+  enemiesInViewCone?: number
+  nearbyEnemyCount?: number
+  enemyGroupAlignment?: number
+  enemyGroupCoverage?: number
+  contactImminence?: number
+  routeEntryRelevance?: number
+  routeEntryTargetCount?: number
+  topologyCallout?: string | null
+  topologyTacticalRoles?: string[]
+  topologyPlantSite?: 'site_a' | 'site_b' | null
+  topologyRoutePortalId?: string | null
+  topologyRouteDistance?: number | null
+  topologyRoutePortalChokepoint?: boolean
+  topologyPortalControlScore?: number
+  topologyDefensiveAngleScore?: number
+  topologyCrossfirePotential?: number
+  topologyRouteConvergence?: number
+  topologyPeekPotential?: boolean
+  topologyPeekPortalCount?: number
+  topologyIncomingRoutePressure?: number
+  topologyPredictedFightMs?: number | null
+  topologyFightPredictionConfidence?: number
+  topologyVerticalSeparation?: number | null
+  topologyRouteAdvisoryAllowed?: boolean
+  incomingGroupPressure?: number
+  scenePhase?: 'forming' | 'approaching' | 'contact' | 'objective' | null
+  sceneConfidence?: number
+  movementMagnitude?: number
+  approachPressure?: number
+  povQuality?: number
+  threatSceneKey?: string | null
+  threatSceneTargetCount?: number
+  threatSceneEnemiesInViewCone?: number
+  threatSceneAlignment?: number
+  threatSceneCoverage?: number
+  threatSceneActionableTargetCount?: number
+  threatSceneActionableCoverage?: number
+  threatSceneVisibleCount?: number
+  threatScenePeekCount?: number
+  threatSceneExternal?: boolean
+  isolatedNoAction?: boolean
   switchEligible: boolean
 }
 
@@ -71,7 +129,18 @@ export interface AutoDirectorProfile {
   weights: Record<
     Exclude<
       ScoreFactorKey,
-      'death' | 'flashPenalty' | 'orientationPenalty' | 'geometryAdvisory' | 'mlAdvisory'
+      | 'death'
+      | 'flashPenalty'
+      | 'orientationPenalty'
+      | 'geometryAdvisory'
+      | 'mlAdvisory'
+      | 'sceneRelevance'
+      | 'groupCoverage'
+      | 'routeEntry'
+      | 'contactImminence'
+      | 'incomingGroupPressure'
+      | 'scenePovQuality'
+      | 'isolationPenalty'
     >,
     number
   >
@@ -83,6 +152,7 @@ export interface AutoDirectorSettings {
   mode: AutoDirectorMode
   autoFallback: boolean
   rulesEnabled: boolean
+  sceneAdvisoryEnabled: boolean
   geometryAdvisoryEnabled: boolean
   mlAdvisoryEnabled: boolean
   scoringIntervalMs: number
@@ -111,6 +181,14 @@ export interface AutoDirectorDecision {
   reason: string
   lockKind: CameraLockKind
   lockUntil: number | null
+  dominantSceneKey?: string | null
+  dominantSceneScore?: number
+  currentSceneKey?: string | null
+  currentSceneScore?: number
+  dominantScenePhase?: 'forming' | 'approaching' | 'contact' | 'objective' | null
+  dominantSceneConfidence?: number
+  currentScenePhase?: 'forming' | 'approaching' | 'contact' | 'objective' | null
+  currentSceneConfidence?: number
 }
 
 export interface CameraCommandResult {
@@ -158,6 +236,13 @@ export interface AutoDirectorStatus {
       mapName: string | null
       state: 'missing' | 'loaded' | 'error'
       triangleCount: number
+      message: string
+    }
+    topology: {
+      mapName: string | null
+      state: 'missing' | 'loaded' | 'error'
+      areaCount: number
+      portalCount: number
       message: string
     }
   }

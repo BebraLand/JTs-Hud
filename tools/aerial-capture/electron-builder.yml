@@ -1,0 +1,20 @@
+appId: com.jtshudhmanager.aerialcapture
+productName: JTs Aerial Capture
+directories:
+  output: dist/aerial-capture
+files:
+  - tools/aerial-capture/app/**/*
+  - package.json
+  - '!tools/aerial-capture/app/**/*.map'
+extraMetadata:
+  main: tools/aerial-capture/app/main.cjs
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  executableName: JTs Aerial Capture
+portable:
+  artifactName: JTs-Aerial-Capture-${version}-portable.${ext}

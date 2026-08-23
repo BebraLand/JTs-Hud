@@ -307,6 +307,73 @@ const healthClass = (state: string) =>
                   </p>
                 </div>
               </div>
+              <div class="mt-3 grid grid-cols-2 gap-3">
+                <div class="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                  <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
+                    Dominant scene
+                  </p>
+                  <p class="mt-1 truncate font-semibold text-zinc-200">
+                    {{ status.decision?.dominantSceneKey ?? 'none' }}
+                  </p>
+                  <p class="text-[11px] text-zinc-500">
+                    score {{ status.decision?.dominantSceneScore?.toFixed(1) ?? '0.0' }} ·
+                    {{ status.decision?.dominantScenePhase ?? 'forming' }} ·
+                    {{ Math.round((status.decision?.dominantSceneConfidence ?? 0) * 100) }}%
+                    confidence
+                  </p>
+                </div>
+                <div class="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                  <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
+                    POV scene
+                  </p>
+                  <p class="mt-1 truncate font-semibold text-zinc-200">
+                    {{ status.decision?.currentSceneKey ?? 'none' }}
+                  </p>
+                  <p class="text-[11px] text-zinc-500">
+                    score {{ status.decision?.currentSceneScore?.toFixed(1) ?? '0.0' }} ·
+                    {{ status.decision?.currentScenePhase ?? 'none' }} ·
+                    {{ Math.round((status.decision?.currentSceneConfidence ?? 0) * 100) }}%
+                    confidence
+                  </p>
+                </div>
+              </div>
+              <div class="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                  Threat POV
+                </p>
+                <p class="mt-1 font-semibold text-zinc-200">
+                  {{
+                    current?.threatSceneExternal
+                      ? 'External view into dominant scene'
+                      : current?.threatSceneKey
+                        ? 'Dominant-scene participant view'
+                        : 'No dominant threat view'
+                  }}
+                </p>
+                <p class="text-[11px] text-zinc-500">
+                  {{ current?.threatSceneEnemiesInViewCone ?? 0 }} /
+                  {{ current?.threatSceneTargetCount ?? 0 }} targets in cone ·
+                  {{ Math.round((current?.threatSceneCoverage ?? 0) * 100) }}% direction ·
+                  {{ current?.threatSceneVisibleCount ?? 0 }} visible +
+                  {{ current?.threatScenePeekCount ?? 0 }} peekable ·
+                  {{ Math.round((current?.threatSceneActionableCoverage ?? 0) * 100) }}% actionable
+                  · entry {{ Math.round((current?.routeEntryRelevance ?? 0) * 100) }}% · incoming
+ {{ Math.round((current?.incomingGroupPressure ?? 0) * 100) }}%
+ </p>
+ <p class="mt-1 text-[11px] text-zinc-600">
+ {{ current?.topologyPlantSite ?? 'route' }} ·
+ {{ current?.topologyCallout ?? 'unknown area' }} ·
+ {{ current?.topologyRoutePortalChokepoint ? 'chokepoint' : 'portal' }}
+ {{ current?.topologyRoutePortalId ?? 'none' }} · control
+ {{ Math.round((current?.topologyPortalControlScore ?? 0) * 100) }}% ·
+ {{
+   current?.topologyPredictedFightMs !== null &&
+   current?.topologyPredictedFightMs !== undefined
+     ? `fight ~${Math.round(current.topologyPredictedFightMs)} ms`
+     : 'fight timing unknown'
+ }}
+ </p>
+              </div>
             </div>
 
             <button
@@ -350,6 +417,19 @@ const healthClass = (state: string) =>
                   class="accent-amber-400"
                 />
                 Enable Rules scoring
+              </label>
+              <label class="mt-2 flex items-center gap-2 text-[10px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  :checked="status.settings.sceneAdvisoryEnabled"
+                  @change="
+                    updateSettings({
+                      sceneAdvisoryEnabled: ($event.target as HTMLInputElement).checked
+                    })
+                  "
+                  class="accent-emerald-400"
+                />
+                Enable Scene intelligence
               </label>
               <label class="mt-2 flex items-center gap-2 text-[10px] text-zinc-400">
                 <input
@@ -517,7 +597,15 @@ const healthClass = (state: string) =>
                     <p class="mt-1 truncate font-mono text-[10px] text-zinc-600">
                       {{ player.steamId }} · SLOT {{ slotLabel(player.observerSlot) }}
                       <span v-if="player.nearestEnemyDistance !== null"
-                        >· {{ player.nearestEnemyDistance }}u CONTACT</span
+                        >· {{ player.nearestEnemyDistance }}u MAP DISTANCE
+                        <span v-if="player.nearestEnemyHasLineOfSight"> · LOS</span>
+                        <span v-else-if="player.nearestEnemyHasPeekPotential"> · PEEK</span>
+                        <span v-else> · OCCLUDED</span></span
+                      >
+                      <span v-if="player.threatSceneTargetCount"
+                        >· THREAT {{ player.threatSceneVisibleCount ?? 0 }} visible +
+                        {{ player.threatScenePeekCount ?? 0 }} peekable /
+                        {{ player.threatSceneTargetCount }}</span
                       >
                     </p>
                   </div>

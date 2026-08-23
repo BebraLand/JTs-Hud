@@ -9,6 +9,9 @@ export interface PlayerGeometryFeatures {
   nearestEnemyHasLineOfSight: boolean
   nearestEnemyHasPeekPotential: boolean
   peekPotentialEnemyCount: number
+  visibleEnemySteamIds: string[]
+  peekPotentialEnemySteamIds: string[]
+  forwardEnemySteamIds: string[]
   forwardEnemyCount: number
   forwardEnemyAlignment: number
   bestVisibleAimAlignment: number
@@ -71,7 +74,11 @@ export const hasPlayerLineOfSight = (
   )
 }
 
-const hasPeekPotential = (geometry: GeometryMap, observer: DirectorPlayer, target: DirectorPlayer): boolean => {
+const hasPeekPotential = (
+  geometry: GeometryMap,
+  observer: DirectorPlayer,
+  target: DirectorPlayer
+): boolean => {
   if (!observer.position || !target.position) return false
   const forward = observer.forward ?? [1, 0, 0]
   const length = Math.hypot(forward[0], forward[1]) || 1
@@ -145,6 +152,9 @@ export const computeGeometryFeatures = (
       nearestEnemyHasLineOfSight: enemies[0]?.visible ?? false,
       nearestEnemyHasPeekPotential: Boolean(peekable[0]),
       peekPotentialEnemyCount: peekable.length,
+      visibleEnemySteamIds: visible.map((entry) => entry.enemy.steamId),
+      peekPotentialEnemySteamIds: peekable.map((entry) => entry.enemy.steamId),
+      forwardEnemySteamIds: forward.map((entry) => entry.enemy.steamId),
       forwardEnemyCount: forward.length,
       forwardEnemyAlignment:
         forward.length === 0
