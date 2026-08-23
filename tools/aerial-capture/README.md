@@ -18,7 +18,7 @@ npm run aerial:app
 -netconport 2020
 ```
 
-Открой локальный demo или observer-сессию, поставь камеру в нужную точку и нажми **Capture current position**.
+Открой локальный demo или observer-сессию и вручную выбери карту в приложении. Aerial не требует запущенный JTs-Hud и не зависит от GSI. Поставь камеру в нужную точку и нажми **Capture current position**.
 
 ## Рабочий порядок
 
@@ -47,7 +47,12 @@ Vertigo намеренно не включён: в MAT active pool исполь�
 6. Нажми **Capture current position**.
 7. Повтори для обязательных точек.
 8. Добавь optional route/post-plant points.
-9. Нажми **Export verified JSON**.
+9. Нажми **Teleport to this anchor**, чтобы вернуться к уже сохранённой точке и перепроверить композицию.
+10. Нажми **Export verified JSON**.
+
+Все capture, notes и custom anchors сохраняются в durable draft внутри Electron `userData` и переживают перезапуск приложения. Browser `localStorage` остаётся резервным fallback. После перезапуска уже записанные anchors снова видны в списке.
+
+Кнопка **Try read map from CS2 status** является только необязательной диагностикой. Некоторые режимы CS2 возвращают в `status` только `game`, без имени карты. Это не блокирует capture или teleport: выбранная в приложении карта считается картой текущего manifest.
 
 ## Обязательные точки первой версии
 
@@ -77,7 +82,17 @@ Map Wide Overview
 
 Приложение блокирует verified export, если отсутствует обязательный anchor или в координатах есть нечисловое значение.
 
-После того как manifest будет готов, его можно проверить отдельным geometry/topology validator. Проверка будет смотреть:
+После того как manifest будет готов, его можно проверить отдельным geometry/topology validator. В репозитории уже есть advisory visibility-заготовка: она принимает сохранённые `position + angles` камеры и позиции игроков из replay/GSI и для каждого anchor вычисляет:
+
+- находится ли игрок внутри FOV камеры;
+- есть ли static-geometry LOS к нескольким body points;
+- виден ли игрок фактически, а не только находится ли он по направлению камеры;
+- расстояние, alignment и first intersection distance;
+- причину `visible`, `occluded`, `outside-frustum`, `dead` или `missing-position`.
+
+Это позволяет иметь несколько камер на одном site и позже выбирать ту, которая действительно показывает plant/entry/retake. Smoke, dynamic doors, breakables и временная игровая окклюзия не считаются доказанными static geometry, поэтому слой остаётся advisory и не переключает камеру напрямую.
+
+Полная проверка будет смотреть:
 
 - находится ли anchor в границах карты;
 - не внутри ли он solid geometry;

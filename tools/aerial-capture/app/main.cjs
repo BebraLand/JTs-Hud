@@ -2,6 +2,13 @@ const { app, BrowserWindow, dialog, ipcMain } = require('electron')
 const fs = require('node:fs/promises')
 const net = require('node:net')
 const path = require('node:path')
+const {
+  MAP_PATTERN,
+  parseCurrentMap,
+  parseGetposOutput,
+  formatPoseCommand
+} = require('./netcon.cjs')
+const draftSaveQueues = new Map()
 
 const createWindow = () => {
   const window = new BrowserWindow({
@@ -21,23 +28,7 @@ const createWindow = () => {
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'))
 }
 
-const parseGetposOutput = (text) => {
-  const number = '(-?\\d+(?:\\.\\d+)?)'
-  const pattern = new RegExp(
-    `setpos(?:_exact)?\\s+${number}\\s+${number}\\s+${number}\\s*;?\\s*setang(?:_exact)?\\s+${number}\\s+${number}\\s+${number}`,
-    'i'
-  )
-  const match = text.match(pattern)
-  if (!match) return null
-  const values = match.slice(1).map(Number)
-  if (values.length !== 6 || values.some((value) => !Number.isFinite(value))) return null
-  return {
-    position: values.slice(0, 3),
-    angles: values.slice(3, 6)
-  }
-}
-
-const captureGetpos = ({ host, port }) =>
+const sendNetconCommand = ({ host, port, command, timeoutMs = 4000 }) =>
   new Promise((resolve, reject) => {
     const numericPort = Number(port)
     if (!host || !Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) {
@@ -49,22 +40,15 @@ const captureGetpos = ({ host, port }) =>
     const nonce = `jts_aerial_app_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     let response = ''
     let settled = false
-    const timeoutMs = 4000
-
+    let idleTimeoutId
     const finish = (error) => {
       if (settled) return
       settled = true
       clearTimeout(timeoutId)
+      clearTimeout(idleTimeoutId)
       socket.destroy()
       if (error) reject(error)
-      else {
-        const pose = parseGetposOutput(response)
-        if (!pose) {
-          reject(new Error(`Could not parse getpos response:\n${response.slice(-1800)}`))
-        } else {
-          resolve({ pose, raw: response })
-        }
-      }
+      else resolve({ raw: response, host, port: numericPort, command, nonce })
     }
 
     const timeoutId = setTimeout(
@@ -77,16 +61,148 @@ const captureGetpos = ({ host, port }) =>
     socket.on('data', (chunk) => {
       response = `${response}${chunk}`.slice(-32768)
       if (response.includes(nonce)) finish()
+      else {
+        clearTimeout(idleTimeoutId)
+        idleTimeoutId = setTimeout(() => {
+          if (response) finish()
+        }, 250)
+      }
     })
-    socket.on('connect', () => socket.write(`getpos\r\necho ${nonce}\r\n`))
+    socket.on('connect', () => socket.write(`${command}\r\necho ${nonce}\r\n`))
     socket.on('timeout', () => finish(new Error('NetCon read timeout')))
     socket.on('error', finish)
     socket.on('close', () => {
-      if (!settled) finish(new Error('NetCon closed before getpos acknowledgement'))
+      if (!settled) {
+        if (response) finish()
+        else finish(new Error('NetCon closed before command acknowledgement'))
+      }
     })
   })
 
+const captureGetpos = async (options) => {
+  const result = await sendNetconCommand({ ...options, command: 'getpos' })
+  const pose = parseGetposOutput(result.raw)
+  if (!pose) {
+    const error = new Error(`Could not parse getpos response:\n${result.raw.slice(-1800)}`)
+    error.diagnostic = {
+      transport: 'netcon',
+      command: result.command,
+      endpoint: `${result.host}:${result.port}`,
+      responseTail: result.raw.slice(-1800)
+    }
+    throw error
+  }
+  return {
+    pose,
+    raw: result.raw,
+    diagnostic: {
+      transport: 'netcon',
+      command: result.command,
+      endpoint: `${result.host}:${result.port}`,
+      responseTail: result.raw.slice(-1800)
+    }
+  }
+}
+
+const detectCurrentMap = async (options) => {
+  const errors = []
+  const attempts = []
+  try {
+    const result = await sendNetconCommand({ ...options, command: 'status' })
+    const map = parseCurrentMap(result.raw)
+    attempts.push({
+      transport: 'netcon',
+      endpoint: `${result.host}:${result.port}`,
+      command: result.command,
+      result: map || 'status did not expose a supported de_* map',
+      responseTail: result.raw.slice(-1800)
+    })
+    if (map) return { map, source: 'netcon', errors, attempts }
+    errors.push('CS2 status did not expose a supported de_* map; choose the map manually')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    attempts.push({
+      transport: 'netcon',
+      endpoint: `${options.host}:${options.port}`,
+      error: message
+    })
+    errors.push(`NetCon: ${message}`)
+  }
+  return { map: null, source: null, errors, attempts }
+}
+
 ipcMain.handle('capture-pose', async (_event, options) => captureGetpos(options))
+
+ipcMain.handle('detect-map', async (_event, options) => {
+  return detectCurrentMap(options)
+})
+
+ipcMain.handle('teleport-pose', async (_event, { options, pose }) => {
+  const result = await sendNetconCommand({
+    ...options,
+    command: formatPoseCommand(pose)
+  })
+  return {
+    acknowledged: result.raw.length > 0,
+    diagnostic: {
+      transport: 'netcon',
+      command: result.command,
+      endpoint: `${result.host}:${result.port}`,
+      responseTail: result.raw.slice(-1800)
+    }
+  }
+})
+
+const getDraftPath = (map) => {
+  if (typeof map !== 'string' || !MAP_PATTERN.test(map)) throw new Error('Invalid map name')
+  return path.join(app.getPath('userData'), 'aerial-drafts', `${map}.json`)
+}
+
+const isValidManifest = (manifest, map) =>
+  Boolean(
+    manifest &&
+    manifest.schemaVersion === 1 &&
+    MAP_PATTERN.test(manifest.map) &&
+    (!map || manifest.map === map) &&
+    manifest.anchors &&
+    typeof manifest.anchors === 'object'
+  )
+
+ipcMain.handle('load-draft', async (_event, map) => {
+  const filePath = getDraftPath(map)
+  try {
+    const manifest = JSON.parse(await fs.readFile(filePath, 'utf8'))
+    return { manifest: isValidManifest(manifest, map) ? manifest : null, filePath }
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return { manifest: null, filePath }
+    throw error
+  }
+})
+
+ipcMain.handle('save-draft', async (_event, manifest) => {
+  if (!isValidManifest(manifest)) {
+    throw new Error('Invalid Aerial draft')
+  }
+  const previous = draftSaveQueues.get(manifest.map) ?? Promise.resolve()
+  const next = previous
+    .catch(() => undefined)
+    .then(async () => {
+      const filePath = getDraftPath(manifest.map)
+      const directory = path.dirname(filePath)
+      const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
+      await fs.mkdir(directory, { recursive: true })
+      await fs.writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+      await fs.rename(temporaryPath, filePath)
+      return filePath
+    })
+  draftSaveQueues.set(manifest.map, next)
+  try {
+    const filePath = await next
+    return { filePath }
+  } finally {
+    if (draftSaveQueues.get(manifest.map) === next) draftSaveQueues.delete(manifest.map)
+  }
+})
 
 ipcMain.handle('export-manifest', async (_event, { map, manifest }) => {
   const result = await dialog.showSaveDialog({

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { gzipSync } from 'node:zlib'
 import type { DirectorPlayer } from '../src/main/server/domains/auto-director/autoDirector.types'
 import { computeGeometryFeatures } from '../src/main/server/domains/auto-director/geometry/geometryFeatures'
+import { computeCameraVisibility } from '../src/main/server/domains/auto-director/geometry/cameraVisibility'
 import {
   GeometryMap,
   type GeometryArtifact
@@ -75,6 +76,27 @@ assert.equal(features.nearestVisibleEnemyDistance, 3)
 assert.equal(features.bestVisibleAimAlignment, 1)
 assert.equal(features.forwardEnemyCount, 2)
 assert.equal(features.forwardEnemyAlignment, 1)
+
+const cameraVisibility = computeCameraVisibility(
+  {
+    position: [0, 0, 48],
+    angles: [0, 0, 0]
+  },
+  [
+    { steamId: 'visible-from-camera', position: [3, 0, 0], alive: true },
+    { steamId: 'behind-box', position: [10, 0, 0], alive: true },
+    { steamId: 'outside-shot', position: [3, 300, 0], alive: true },
+    { steamId: 'dead-player', position: [3, 0, 0], alive: false }
+  ],
+  tallWall
+)
+assert.equal(cameraVisibility.get('visible-from-camera')?.visible, true)
+assert.equal(cameraVisibility.get('visible-from-camera')?.reason, 'visible')
+assert.equal(cameraVisibility.get('behind-box')?.inFrustum, true)
+assert.equal(cameraVisibility.get('behind-box')?.visible, false)
+assert.equal(cameraVisibility.get('behind-box')?.reason, 'occluded')
+assert.equal(cameraVisibility.get('outside-shot')?.reason, 'outside-frustum')
+assert.equal(cameraVisibility.get('dead-player')?.reason, 'dead')
 
 const artifactDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jts-geometry-'))
 try {

@@ -22,11 +22,11 @@
 
       <section class="connection-card">
         <div class="field compact">
-          <label for="host">NetCon host</label>
+          <label for="host">CS2 Telnet host</label>
           <input id="host" value="127.0.0.1" />
         </div>
         <div class="field compact">
-          <label for="port">Port</label>
+          <label for="port">CS2 Telnet port</label>
           <input id="port" type="number" value="2020" min="1" max="65535" />
         </div>
         <div class="field map-field">
@@ -42,6 +42,9 @@
             <option value="de_overpass">Overpass</option>
           </select>
         </div>
+        <button class="button secondary detect-map-button" id="detect-map">
+          Try read map from CS2 status
+        </button>
         <div class="connection-status" id="connection-status">
           <span class="status-dot"></span>
           Ready to capture
@@ -58,7 +61,8 @@
             <div class="progress" id="progress">0 / 4 required</div>
           </div>
           <p class="panel-help">
-            Open a local demo or observer session, place the camera in CS2, select the point below, then press Capture current position.
+            Open a local demo or observer session, place the camera in CS2, select the point below,
+            then press Capture current position.
           </p>
           <div class="anchor-list" id="anchor-list"></div>
           <div class="custom-anchor-row">
@@ -77,7 +81,8 @@
           </div>
 
           <div class="selected-hint" id="selected-hint">
-            Choose an anchor from the checklist. The tool will read the current observer camera through NetCon.
+            Choose an anchor from the checklist. The tool will read the current observer camera
+            through CS2 Telnet.
           </div>
 
           <div class="pose-grid">
@@ -93,11 +98,34 @@
 
           <div class="field">
             <label for="notes">Notes for this shot</label>
-            <textarea id="notes" rows="3" placeholder="Why this angle is useful, what it should show, and any map-specific caveat."></textarea>
+            <textarea
+              id="notes"
+              rows="3"
+              placeholder="Why this angle is useful, what it should show, and any map-specific caveat."
+            ></textarea>
           </div>
 
-          <button class="capture-button" id="capture-button" disabled>Capture current position</button>
+          <div class="capture-actions">
+            <button class="capture-button" id="capture-button" disabled>
+              Capture current position
+            </button>
+            <button class="button secondary teleport-button" id="teleport-button" disabled>
+              Teleport to this anchor
+            </button>
+            <button class="button danger remove-custom-button" id="remove-custom" disabled>
+              Delete custom anchor
+            </button>
+          </div>
           <div class="capture-result" id="capture-result"></div>
+
+          <details class="debug-box" open>
+            <summary>Connection diagnostics</summary>
+            <div class="debug-actions">
+              <button class="button secondary" id="copy-debug">Copy debug log</button>
+              <button class="button secondary" id="clear-debug">Clear log</button>
+            </div>
+            <pre id="debug-log">Starting diagnostics...</pre>
+          </details>
 
           <div class="quality-box">
             <div class="eyebrow">QUALITY RULES</div>
@@ -112,7 +140,9 @@
       </main>
 
       <footer class="footer-note">
-        <span>Source: CS2 NetCon <code>getpos</code></span>
+        <span
+          >Standalone pose tool: CS2 Telnet <code>getpos</code> / <code>setpos_exact</code></span
+        >
         <span>Presentation layer only, no memory access or hooks</span>
       </footer>
     </div>

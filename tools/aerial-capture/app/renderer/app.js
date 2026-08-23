@@ -1,16 +1,88 @@
 const STANDARD_ANCHORS = [
-  { id: 't_spawn', label: 'T Spawn', kind: 'spawn', required: true, hint: 'Wide, readable overview of the attacking spawn.' },
-  { id: 'ct_spawn', label: 'CT Spawn', kind: 'spawn', required: true, hint: 'Wide, readable overview of the defending spawn.' },
-  { id: 'mid', label: 'Mid', kind: 'mid', required: true, hint: 'The most useful central route overview.' },
-  { id: 'a_main', label: 'A Main / Approach', kind: 'route', required: false, hint: 'Show the entry portal and the first fight space.' },
-  { id: 'a_site', label: 'A Site', kind: 'site', required: true, hint: 'Wide site view with plant and contest visibility.' },
-  { id: 'b_main', label: 'B Main / Approach', kind: 'route', required: false, hint: 'Show the entry portal and the first fight space.' },
-  { id: 'b_site', label: 'B Site', kind: 'site', required: true, hint: 'Wide site view with plant and contest visibility.' },
-  { id: 'long', label: 'Long', kind: 'route', required: false, hint: 'Long lane or its closest equivalent.' },
-  { id: 'short', label: 'Short', kind: 'route', required: false, hint: 'Short lane or its closest equivalent.' },
-  { id: 'a_postplant', label: 'A Post-plant', kind: 'postplant', required: false, hint: 'Show bomb and main retake lanes.' },
-  { id: 'b_postplant', label: 'B Post-plant', kind: 'postplant', required: false, hint: 'Show bomb and main retake lanes.' },
-  { id: 'wide_overview', label: 'Map Wide Overview', kind: 'custom', required: false, hint: 'High-level shot for round transitions.' }
+  {
+    id: 't_spawn',
+    label: 'T Spawn',
+    kind: 'spawn',
+    required: true,
+    hint: 'Wide, readable overview of the attacking spawn.'
+  },
+  {
+    id: 'ct_spawn',
+    label: 'CT Spawn',
+    kind: 'spawn',
+    required: true,
+    hint: 'Wide, readable overview of the defending spawn.'
+  },
+  {
+    id: 'mid',
+    label: 'Mid',
+    kind: 'mid',
+    required: true,
+    hint: 'The most useful central route overview.'
+  },
+  {
+    id: 'a_main',
+    label: 'A Main / Approach',
+    kind: 'route',
+    required: false,
+    hint: 'Show the entry portal and the first fight space.'
+  },
+  {
+    id: 'a_site',
+    label: 'A Site',
+    kind: 'site',
+    required: true,
+    hint: 'Wide site view with plant and contest visibility.'
+  },
+  {
+    id: 'b_main',
+    label: 'B Main / Approach',
+    kind: 'route',
+    required: false,
+    hint: 'Show the entry portal and the first fight space.'
+  },
+  {
+    id: 'b_site',
+    label: 'B Site',
+    kind: 'site',
+    required: true,
+    hint: 'Wide site view with plant and contest visibility.'
+  },
+  {
+    id: 'long',
+    label: 'Long',
+    kind: 'route',
+    required: false,
+    hint: 'Long lane or its closest equivalent.'
+  },
+  {
+    id: 'short',
+    label: 'Short',
+    kind: 'route',
+    required: false,
+    hint: 'Short lane or its closest equivalent.'
+  },
+  {
+    id: 'a_postplant',
+    label: 'A Post-plant',
+    kind: 'postplant',
+    required: false,
+    hint: 'Show bomb and main retake lanes.'
+  },
+  {
+    id: 'b_postplant',
+    label: 'B Post-plant',
+    kind: 'postplant',
+    required: false,
+    hint: 'Show bomb and main retake lanes.'
+  },
+  {
+    id: 'wide_overview',
+    label: 'Map Wide Overview',
+    kind: 'custom',
+    required: false,
+    hint: 'High-level shot for round transitions.'
+  }
 ]
 
 const $ = (id) => document.getElementById(id)
@@ -25,12 +97,28 @@ const positionOutput = $('position')
 const anglesOutput = $('angles')
 const notesInput = $('notes')
 const captureButton = $('capture-button')
+const teleportButton = $('teleport-button')
+const removeCustomButton = $('remove-custom')
 const resultOutput = $('capture-result')
 const statusOutput = $('connection-status')
 const progressOutput = $('progress')
 const exportButton = $('export-button')
+const detectMapButton = $('detect-map')
+const debugLogOutput = $('debug-log')
+const copyDebugButton = $('copy-debug')
+const clearDebugButton = $('clear-debug')
 let selectedId = null
 let manifest = createManifest(mapInput.value)
+let lastMapDetection = null
+
+function debugLog(event, details = {}) {
+  const line = `[${new Date().toISOString()}] ${event} ${JSON.stringify(details)}`
+  const current =
+    debugLogOutput.textContent === 'Starting diagnostics...' ? '' : debugLogOutput.textContent
+  debugLogOutput.textContent = `${current}${current ? '\n' : ''}${line}`.slice(-24000)
+  debugLogOutput.scrollTop = debugLogOutput.scrollHeight
+  console.debug(`[Aerial] ${event}`, details)
+}
 
 function createManifest(map) {
   const anchors = {}
@@ -50,18 +138,34 @@ function draftKey(map) {
 
 function saveDraft() {
   localStorage.setItem(draftKey(manifest.map), JSON.stringify(manifest))
+  window.aerial.saveDraft(manifest).catch(() => {
+    debugLog('draft-save-failed', { map: manifest.map, fallback: 'localStorage' })
+    statusOutput.classList.add('error')
+    statusOutput.innerHTML = '<span class="status-dot"></span>Local draft only; disk save failed'
+  })
 }
 
-function loadDraft(map) {
+function loadLocalDraft(map) {
   try {
     const saved = localStorage.getItem(draftKey(map))
     if (!saved) return createManifest(map)
     const parsed = JSON.parse(saved)
-    if (parsed.schemaVersion !== 1 || parsed.map !== map || !parsed.anchors) return createManifest(map)
+    if (parsed.schemaVersion !== 1 || parsed.map !== map || !parsed.anchors)
+      return createManifest(map)
     return mergeWithCatalog(parsed)
   } catch {
     return createManifest(map)
   }
+}
+
+async function loadDraft(map) {
+  try {
+    const response = await window.aerial.loadDraft(map)
+    if (response?.manifest) return mergeWithCatalog(response.manifest)
+  } catch {
+    // Fall back to the browser profile draft below.
+  }
+  return loadLocalDraft(map)
 }
 
 function mergeWithCatalog(input) {
@@ -73,7 +177,12 @@ function mergeWithCatalog(input) {
 }
 
 function isCaptured(anchor) {
-  return Array.isArray(anchor.position) && anchor.position.length === 3 && Array.isArray(anchor.angles) && anchor.angles.length === 3
+  return (
+    Array.isArray(anchor.position) &&
+    anchor.position.length === 3 &&
+    Array.isArray(anchor.angles) &&
+    anchor.angles.length === 3
+  )
 }
 
 function render() {
@@ -111,11 +220,14 @@ function render() {
     selectedLabel.textContent = 'Select a point'
     selectedKind.textContent = 'Waiting'
     selectedKind.className = 'badge'
-    selectedHint.textContent = 'Choose an anchor from the checklist. The tool will read the current observer camera through NetCon.'
+    selectedHint.textContent =
+      'Choose an anchor from the checklist. The tool will read the current observer camera through CS2 Telnet.'
     positionOutput.textContent = 'not captured'
     anglesOutput.textContent = 'not captured'
     notesInput.value = ''
     captureButton.disabled = true
+    teleportButton.disabled = true
+    removeCustomButton.disabled = true
     return
   }
 
@@ -128,6 +240,8 @@ function render() {
   anglesOutput.textContent = isCaptured(anchor) ? anchor.angles.join('  ') : 'not captured'
   notesInput.value = anchor.notes || ''
   captureButton.disabled = false
+  teleportButton.disabled = !isCaptured(anchor)
+  removeCustomButton.disabled = anchor.kind !== 'custom'
 }
 
 function selectAnchor(id) {
@@ -144,7 +258,10 @@ function validateManifest() {
       if (anchor.required) errors.push(`Missing required anchor: ${anchor.label}`)
       continue
     }
-    if (anchor.position.some((value) => !Number.isFinite(value)) || anchor.angles.some((value) => !Number.isFinite(value))) {
+    if (
+      anchor.position.some((value) => !Number.isFinite(value)) ||
+      anchor.angles.some((value) => !Number.isFinite(value))
+    ) {
       errors.push(`Invalid numeric values: ${anchor.label}`)
     }
   }
@@ -153,15 +270,26 @@ function validateManifest() {
 
 async function captureSelected() {
   if (!selectedId) return
-  const anchor = manifest.anchors[selectedId]
+  debugLog('capture-start', {
+    map: manifest.map,
+    anchor: selectedId,
+    telnet: `${hostInput.value.trim()}:${portInput.value}`
+  })
   resultOutput.className = 'capture-result'
   resultOutput.textContent = 'Reading current camera position...'
   captureButton.disabled = true
+  teleportButton.disabled = true
   statusOutput.classList.remove('error')
-  statusOutput.innerHTML = '<span class="status-dot"></span>Reading CS2 camera'
+  statusOutput.innerHTML =
+    '<span class="status-dot"></span>Reading current camera position through CS2 Telnet'
 
   try {
-    const captured = await window.aerial.capturePose({ host: hostInput.value.trim(), port: Number(portInput.value) })
+    const anchor = manifest.anchors[selectedId]
+    if (!anchor) throw new Error('The selected anchor is not available on the selected map.')
+    const captured = await window.aerial.capturePose({
+      host: hostInput.value.trim(),
+      port: Number(portInput.value)
+    })
     anchor.position = captured.pose.position
     anchor.angles = captured.pose.angles
     anchor.raw = captured.raw
@@ -169,21 +297,119 @@ async function captureSelected() {
     anchor.source = 'cs2-netcon-getpos'
     anchor.notes = notesInput.value.trim()
     saveDraft()
-    statusOutput.innerHTML = '<span class="status-dot"></span>Connected, last capture succeeded'
-    resultOutput.textContent = `Captured ${anchor.label}. Position and angles were saved to the local draft.`
+    statusOutput.innerHTML =
+      '<span class="status-dot"></span>CS2 Telnet connected, capture succeeded'
+    resultOutput.textContent = `Captured ${anchor.label}. Position and angles were saved locally.`
+    debugLog('capture-success', {
+      map: manifest.map,
+      anchor: anchor.id,
+      diagnostic: captured.diagnostic
+    })
   } catch (error) {
+    debugLog('capture-failed', {
+      map: manifest.map,
+      anchor: selectedId,
+      error: error instanceof Error ? error.message : String(error),
+      diagnostic: error?.diagnostic || null
+    })
     statusOutput.classList.add('error')
     statusOutput.innerHTML = '<span class="status-dot"></span>Capture failed'
     resultOutput.className = 'capture-result error'
     resultOutput.textContent = error instanceof Error ? error.message : String(error)
   } finally {
-    captureButton.disabled = false
     render()
   }
 }
 
+async function teleportSelected() {
+  if (!selectedId) return
+  const selectedAnchor = manifest.anchors[selectedId]
+  if (!isCaptured(selectedAnchor)) return
+
+  resultOutput.className = 'capture-result'
+  resultOutput.textContent = `Teleporting to ${selectedAnchor.label}...`
+  teleportButton.disabled = true
+  captureButton.disabled = true
+  statusOutput.classList.remove('error')
+  statusOutput.innerHTML = '<span class="status-dot"></span>Sending anchor through CS2 Telnet'
+  debugLog('teleport-start', {
+    map: manifest.map,
+    anchor: selectedId,
+    telnet: `${hostInput.value.trim()}:${portInput.value}`
+  })
+
+  try {
+    const anchor = manifest.anchors[selectedId]
+    if (!isCaptured(anchor)) throw new Error('This anchor is not captured on the selected map.')
+    const result = await window.aerial.teleportPose({
+      options: { host: hostInput.value.trim(), port: Number(portInput.value) },
+      pose: { position: anchor.position, angles: anchor.angles }
+    })
+    if (!result?.acknowledged)
+      throw new Error('CS2 Telnet did not acknowledge the teleport command.')
+    statusOutput.innerHTML =
+      '<span class="status-dot"></span>CS2 Telnet connected, teleport succeeded'
+    resultOutput.textContent = `Teleported to ${anchor.label}. The selected map is ${manifest.map}.`
+    debugLog('teleport-success', {
+      map: manifest.map,
+      anchor: anchor.id,
+      diagnostic: result
+    })
+  } catch (error) {
+    debugLog('teleport-failed', {
+      map: manifest.map,
+      anchor: selectedId,
+      error: error instanceof Error ? error.message : String(error)
+    })
+    statusOutput.classList.add('error')
+    statusOutput.innerHTML = '<span class="status-dot"></span>Teleport failed'
+    resultOutput.className = 'capture-result error'
+    resultOutput.textContent = error instanceof Error ? error.message : String(error)
+  } finally {
+    render()
+  }
+}
+
+async function detectAndSelectCurrentMap({
+  quiet = false,
+  preserveAnchorId = selectedId,
+  adopt = true
+} = {}) {
+  const response = await window.aerial.detectMap({
+    host: hostInput.value.trim(),
+    port: Number(portInput.value)
+  })
+  lastMapDetection = response
+  debugLog('map-detection', { response })
+  const detectedMap = response?.map
+  if (!detectedMap) {
+    if (!quiet) {
+      throw new Error(
+        `Could not read the current CS2 map from status. ${response?.errors?.join(' | ') || 'No CS2 Telnet response.'}`
+      )
+    }
+    return null
+  }
+
+  const option = [...mapInput.options].find((item) => item.value === detectedMap)
+  if (!option) throw new Error(`Detected unsupported map: ${detectedMap}`)
+
+  if (adopt && mapInput.value !== detectedMap) {
+    mapInput.value = detectedMap
+    manifest = await loadDraft(detectedMap)
+    selectedId = manifest.anchors[preserveAnchorId]
+      ? preserveAnchorId
+      : Object.keys(manifest.anchors)[0] || null
+    render()
+  }
+  return detectedMap
+}
+
 function addCustomAnchor() {
-  const raw = $('custom-anchor').value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_')
+  const raw = $('custom-anchor')
+    .value.trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
   if (!raw || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(raw)) {
     resultOutput.className = 'capture-result error'
     resultOutput.textContent = 'Use a custom name starting with a-z or 0-9.'
@@ -206,6 +432,20 @@ function addCustomAnchor() {
   render()
 }
 
+function removeCustomAnchor() {
+  const anchor = selectedId ? manifest.anchors[selectedId] : null
+  if (!anchor || anchor.kind !== 'custom') return
+  if (!window.confirm(`Delete custom anchor "${anchor.label}"?`)) return
+
+  const removedLabel = anchor.label
+  delete manifest.anchors[selectedId]
+  selectedId = manifest.anchors.t_spawn ? 't_spawn' : Object.keys(manifest.anchors)[0] || null
+  saveDraft()
+  resultOutput.className = 'capture-result'
+  resultOutput.textContent = `Deleted custom anchor ${removedLabel}.`
+  render()
+}
+
 async function exportManifest() {
   const errors = validateManifest()
   if (errors.length) {
@@ -224,8 +464,16 @@ async function importManifest() {
   try {
     const response = await window.aerial.importManifest()
     if (response.canceled) return
-    if (!response.manifest || response.manifest.schemaVersion !== 1 || !response.manifest.map || !response.manifest.anchors) {
+    if (
+      !response.manifest ||
+      response.manifest.schemaVersion !== 1 ||
+      !response.manifest.map ||
+      !response.manifest.anchors
+    ) {
       throw new Error('This file is not a compatible Aerial manifest.')
+    }
+    if (![...mapInput.options].some((option) => option.value === response.manifest.map)) {
+      throw new Error(`This manifest targets an unsupported map: ${response.manifest.map}`)
     }
     manifest = mergeWithCatalog(response.manifest)
     mapInput.value = manifest.map
@@ -240,8 +488,8 @@ async function importManifest() {
   }
 }
 
-mapInput.addEventListener('change', () => {
-  manifest = loadDraft(mapInput.value)
+mapInput.addEventListener('change', async () => {
+  manifest = await loadDraft(mapInput.value)
   selectedId = Object.keys(manifest.anchors)[0] || null
   resultOutput.textContent = ''
   render()
@@ -253,13 +501,55 @@ notesInput.addEventListener('input', () => {
   }
 })
 captureButton.addEventListener('click', captureSelected)
+teleportButton.addEventListener('click', teleportSelected)
 $('add-custom').addEventListener('click', addCustomAnchor)
+$('remove-custom').addEventListener('click', removeCustomAnchor)
 $('custom-anchor').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') addCustomAnchor()
 })
 exportButton.addEventListener('click', exportManifest)
 $('import-button').addEventListener('click', importManifest)
+detectMapButton.addEventListener('click', async () => {
+  detectMapButton.disabled = true
+  statusOutput.classList.remove('error')
+  statusOutput.innerHTML = '<span class="status-dot"></span>Detecting current CS2 map'
+  try {
+    const detectedMap = await detectAndSelectCurrentMap()
+    statusOutput.innerHTML = `<span class="status-dot"></span>Optional CS2 status detected: ${detectedMap}`
+  } catch (error) {
+    debugLog('manual-map-detection-failed', {
+      error: error instanceof Error ? error.message : String(error),
+      response: lastMapDetection
+    })
+    statusOutput.classList.add('error')
+    statusOutput.innerHTML = '<span class="status-dot"></span>Map detection failed'
+    resultOutput.className = 'capture-result error'
+    resultOutput.textContent = error instanceof Error ? error.message : String(error)
+  } finally {
+    detectMapButton.disabled = false
+  }
+})
 
-manifest = loadDraft(mapInput.value)
-selectedId = 't_spawn'
-render()
+async function initialize() {
+  manifest = await loadDraft(mapInput.value)
+  selectedId = 't_spawn'
+  render()
+  debugLog('startup', {
+    selectedMap: mapInput.value,
+    telnet: `${hostInput.value}:${portInput.value}`
+  })
+}
+
+clearDebugButton.addEventListener('click', () => {
+  debugLogOutput.textContent = 'Diagnostics cleared.'
+})
+copyDebugButton.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(debugLogOutput.textContent)
+    debugLog('debug-copied')
+  } catch (error) {
+    debugLog('debug-copy-failed', { error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+void initialize()
