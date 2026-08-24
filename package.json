@@ -33,7 +33,7 @@
     "aerial:app": "electron tools/aerial-capture/app/main.cjs",
     "build:aerial:win:portable": "electron-builder --config tools/aerial-capture/electron-builder.yml --win portable",
     "aerial:capture": "esbuild tools/aerial-capture/src/index.ts --bundle --platform=node --format=cjs --outfile=out/tools/aerial-capture.js && node out/tools/aerial-capture.js",
-    "test:aerial-capture": "esbuild scripts/test-aerial-capture.ts --bundle --platform=node --format=cjs --outfile=out/tests/test-aerial-capture.js && node --test out/tests/test-aerial-capture.js"
+    "test:aerial-capture": "esbuild scripts/test-aerial-capture.ts --bundle --platform=node --format=cjs --outfile=out/tests/test-aerial-capture.js && node --test out/tests/test-aerial-capture.js scripts/test-aerial-capture-app.cjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
