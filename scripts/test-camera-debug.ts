@@ -4,6 +4,7 @@ import { computeCameraDebugStatus, emptyCameraDebugStatus } from '../src/main/se
 import type { AerialCameraAnchor } from '../src/main/server/domains/auto-director/aerial/aerialCameraRegistry'
 import type { DirectorPlayer, PlayerScore } from '../src/main/server/domains/auto-director/autoDirector.types'
 import { GeometryMap } from '../src/main/server/domains/auto-director/geometry/geometryMap'
+import { getRadarMapConfig, worldToRadar } from '../src/renderer/src/features/auto-director/radar'
 
 const makePlayer = (
   steamId: string,
@@ -69,6 +70,23 @@ test('empty camera debug status is safe before GSI', () => {
   assert.equal(status.mapName, null)
   assert.deepEqual(status.players, [])
   assert.deepEqual(status.anchors, [])
+})
+
+test('JTs-Hud radar transform places Ancient spawn anchors on the map', () => {
+  const config = getRadarMapConfig('maps/de_ancient.bsp')
+  assert.ok(config)
+  assert.equal(config.asset, 'radar-d6f7b7b1.png')
+  const tSpawn = worldToRadar([-250.964157, -2430.066406, -13.788737], config)
+  const ctSpawn = worldToRadar([-98.902443, 1030.861328, 85.071098], config)
+  assert.deepEqual(tSpawn.map(Math.round), [540, 919])
+  assert.deepEqual(ctSpawn.map(Math.round), [571, 227])
+})
+
+test('radar resolver switches assets by map and falls back for unsupported maps', () => {
+  assert.equal(getRadarMapConfig('de_cache')?.asset, 'radar-63202ed1.png')
+  assert.equal(getRadarMapConfig('de_nuke')?.asset, 'radar-e7a6de7b.png')
+  assert.equal(getRadarMapConfig('de_unknown'), null)
+  assert.equal(getRadarMapConfig(null), null)
 })
 
 test('camera debug projects player and Aerial visibility evidence', () => {

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useAutoDirector } from '../features/auto-director/composables/useAutoDirector'
+import { API_URL } from '../index'
+import { getRadarMapConfig, worldToRadar } from '../features/auto-director/radar'
 
 const { status, loading, error } = useAutoDirector()
 const selectedAnchorId = ref<string | null>(null)
@@ -9,6 +11,11 @@ type Point = { x: number; y: number }
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number }
 
 const debug = computed(() => status.value.cameraDebug)
+const radarConfig = computed(() => getRadarMapConfig(debug.value.mapName))
+const radarAssetUrl = computed(() => {
+  const config = radarConfig.value
+  return config ? `${API_URL.replace(/\/api$/, '')}/huds/default/assets/${config.asset}` : ''
+})
 const selectedAnchor = computed(() => {
   const anchors = debug.value.anchors
   return (
@@ -40,6 +47,11 @@ const bounds = computed<Bounds>(() => {
 
 const project = (position: readonly [number, number, number] | null): Point | null => {
   if (!position) return null
+  const map = radarConfig.value
+  if (map) {
+    const [x, y] = worldToRadar(position, map)
+    return { x, y }
+  }
   const currentBounds = bounds.value
   return {
     x: 48 + ((position[0] - currentBounds.minX) / (currentBounds.maxX - currentBounds.minX)) * 904,
@@ -128,8 +140,8 @@ const selectAnchor = (id: string) => {
         <span class="rounded-full border border-violet-400/25 bg-violet-400/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-300">
           {{ debug.mapName ?? 'NO MAP' }}
         </span>
-        <span :class="debug.geometryAvailable ? 'border-emerald-500/25 text-emerald-300' : 'border-amber-500/25 text-amber-300'" class="rounded-full border bg-black/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider">
-          {{ debug.geometryAvailable ? 'STATIC LOS READY' : 'LOS UNAVAILABLE' }}
+        <span :class="radarConfig ? 'border-emerald-500/25 text-emerald-300' : 'border-amber-500/25 text-amber-300'" class="rounded-full border bg-black/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider">
+          {{ radarConfig ? 'RADAR MAP READY' : 'RADAR MAP UNKNOWN' }}
         </span>
       </div>
     </header>
@@ -173,15 +185,17 @@ const selectAnchor = (id: string) => {
           </div>
 
           <div class="overflow-hidden rounded-xl border border-zinc-800 bg-[#090b12]">
-            <svg viewBox="0 0 1000 650" class="block aspect-[1.52] w-full" role="img" aria-label="Camera debug radar">
+            <svg :viewBox="radarConfig ? '0 0 1024 1024' : '0 0 1000 650'" :class="radarConfig ? 'aspect-square' : 'aspect-[1.52]'" class="block w-full" role="img" aria-label="Camera debug radar">
               <defs>
                 <pattern id="radar-grid" width="50" height="50" patternUnits="userSpaceOnUse">
                   <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(148,163,184,0.08)" stroke-width="1" />
                 </pattern>
                 <filter id="radar-glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
               </defs>
-              <rect width="1000" height="650" fill="url(#radar-grid)" />
-              <rect x="16" y="16" width="968" height="618" rx="14" fill="none" stroke="rgba(148,163,184,0.12)" />
+              <rect v-if="!radarConfig" width="1000" height="650" fill="url(#radar-grid)" />
+              <rect v-else width="1024" height="1024" fill="url(#radar-grid)" opacity="0.2" />
+              <image v-if="radarAssetUrl" :href="radarAssetUrl" x="0" y="0" width="1024" height="1024" preserveAspectRatio="none" opacity="0.88" />
+              <rect :x="radarConfig ? 12 : 16" :y="radarConfig ? 12 : 16" :width="radarConfig ? 1000 : 968" :height="radarConfig ? 1000 : 618" rx="14" fill="none" stroke="rgba(148,163,184,0.18)" />
 
               <g v-for="(edge, index) in losEdges" :key="`los-${index}`" opacity="0.38">
                 <line :x1="edge.from.x" :y1="edge.from.y" :x2="edge.to.x" :y2="edge.to.y" :stroke="edge.kind === 'visible' ? '#34d399' : '#f87171'" stroke-width="1.5" stroke-dasharray="5 5" />
