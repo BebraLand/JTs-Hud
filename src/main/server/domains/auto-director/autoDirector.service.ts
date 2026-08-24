@@ -14,7 +14,10 @@ import {
 } from './autoDirector.engine'
 import { buildAutoDirectorMlFeatures } from './autoDirector.mlFeatures'
 import { LightGbmRanker, loadLightGbmRanker } from './autoDirector.ml'
-import { persistSettingsCandidate } from './autoDirector.settings'
+import {
+  persistSettingsCandidate,
+  sanitizeAerialPresentationPhases
+} from './autoDirector.settings'
 import { CameraController } from './cameraController'
 import { getAutoDirectorResourceDir } from '../../../paths'
 import { computeGeometryFeatures } from './geometry/geometryFeatures'
@@ -43,7 +46,10 @@ const AERIAL_MAX_HOLD_MS = 6000
 const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
 
-const sanitizeSettings = (input: Partial<AutoDirectorSettings>): Partial<AutoDirectorSettings> => {
+const sanitizeSettings = (
+  input: Partial<AutoDirectorSettings>,
+  aerialPresentationPhases = DEFAULT_AUTO_DIRECTOR_SETTINGS.aerialPresentationPhases
+): Partial<AutoDirectorSettings> => {
   const output: Partial<AutoDirectorSettings> = {}
   if (typeof input.enabled === 'boolean') output.enabled = input.enabled
   if (typeof input.paused === 'boolean') output.paused = input.paused
@@ -60,13 +66,10 @@ const sanitizeSettings = (input: Partial<AutoDirectorSettings>): Partial<AutoDir
     output.aerialPresentationEnabled = input.aerialPresentationEnabled
   }
   if (input.aerialPresentationPhases && typeof input.aerialPresentationPhases === 'object') {
-    const phases = input.aerialPresentationPhases
-    output.aerialPresentationPhases = {
-      ...DEFAULT_AUTO_DIRECTOR_SETTINGS.aerialPresentationPhases,
-      ...(typeof phases.freezeTime === 'boolean' ? { freezeTime: phases.freezeTime } : {}),
-      ...(typeof phases.midRound === 'boolean' ? { midRound: phases.midRound } : {}),
-      ...(typeof phases.roundEnd === 'boolean' ? { roundEnd: phases.roundEnd } : {})
-    }
+    output.aerialPresentationPhases = sanitizeAerialPresentationPhases(
+      input.aerialPresentationPhases,
+      aerialPresentationPhases
+    )
   }
   if (input.scoringIntervalMs !== undefined) {
     const interval = Number(input.scoringIntervalMs)
@@ -247,7 +250,7 @@ export class AutoDirectorService {
   }
 
   async updateSettings(input: Partial<AutoDirectorSettings>): Promise<AutoDirectorStatus> {
-    const next = sanitizeSettings(input)
+    const next = sanitizeSettings(input, this.settings.aerialPresentationPhases)
     const previousOverride = this.settings.manualOverrideSteamId
     const aerialReturnTarget =
       next.aerialPresentationEnabled === false && this.aerialActiveAnchor

@@ -196,6 +196,28 @@ const sparseFreezeCt = decideAerialPresentation(
 assert.equal(sparseFreezeCt.eligible, true)
 assert.equal(sparseFreezeCt.anchor?.id, 'ct_spawn')
 
+const geometryBlindFreeze = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  [],
+  decision(),
+  aerialMap,
+  geometry
+)
+assert.equal(geometryBlindFreeze.eligible, true)
+assert.equal(geometryBlindFreeze.anchor?.id, 't_spawn')
+const geometryBlindFreezeCt = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  [],
+  decision(),
+  aerialMap,
+  geometry,
+  { excludedAnchorIds: new Set(['t_spawn']) }
+)
+assert.equal(geometryBlindFreezeCt.eligible, true)
+assert.equal(geometryBlindFreezeCt.anchor?.id, 'ct_spawn')
+
 const freezeWithoutSpawns = decideAerialPresentation(
   { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
   settings,
@@ -206,7 +228,7 @@ const freezeWithoutSpawns = decideAerialPresentation(
   { excludedAnchorIds: new Set(['t_spawn', 'ct_spawn']) }
 )
 assert.equal(freezeWithoutSpawns.eligible, false)
-assert.match(freezeWithoutSpawns.reason, /freeze-time anchor/)
+assert.match(freezeWithoutSpawns.reason, /freeze-time/)
 
 const planted = decideAerialPresentation(
   { ...quietPayload, bomb: { state: 'planted' } },

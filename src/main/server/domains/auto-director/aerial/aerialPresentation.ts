@@ -221,11 +221,9 @@ export const decideAerialPresentation = (
     )
     const totalVisible = visibility.steamIds.length
     const crossTeam = visibility.ct > 0 && visibility.t > 0
-    const visibleSpawnTeamCount =
-      spawnTeam === 'CT' ? visibility.ct : spawnTeam === 'T' ? visibility.t : 0
     const eligible =
       phase === 'freeze-time'
-        ? spawnTeam !== null && visibleSpawnTeamCount >= 1
+        ? spawnTeam !== null
         : phase === 'post-round'
           ? totalVisible >= 2
           : phase === 'post-plant'
@@ -244,7 +242,11 @@ export const decideAerialPresentation = (
   }
 
   if (!selected) {
-    return emptyDecision(`No ${phase} anchor has enough geometry-visible living players`)
+    return emptyDecision(
+      phase === 'freeze-time'
+        ? 'No calibrated freeze-time spawn anchor is available'
+        : `No ${phase} anchor has enough geometry-visible living players`
+    )
   }
   const totalVisible = selected.visibility.steamIds.length
   const selectedSpawnSide =
