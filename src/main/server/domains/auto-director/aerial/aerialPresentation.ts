@@ -15,6 +15,7 @@ export interface AerialPresentationDecision {
   reason: string
   phase: AerialPresentationPhase | null
   anchor: AerialCameraAnchor | null
+  presentationAngles: AerialCameraAnchor['angles'] | null
   visibleSteamIds: string[]
   visibleCtCount: number
   visibleTCount: number
@@ -32,6 +33,7 @@ const emptyDecision = (reason: string, actionBlocked = false): AerialPresentatio
   reason,
   phase: null,
   anchor: null,
+  presentationAngles: null,
   visibleSteamIds: [],
   visibleCtCount: 0,
   visibleTCount: 0,
@@ -89,6 +91,41 @@ const visibleCounts = (
   return { steamIds: steamIds.sort(), ct, t }
 }
 
+const spawnTeamForAnchor = (anchor: AerialCameraAnchor): 'CT' | 'T' | null =>
+  anchor.kind !== 'spawn'
+    ? null
+    : anchor.id.startsWith('ct_')
+      ? 'CT'
+      : anchor.id.startsWith('t_')
+        ? 'T'
+        : null
+
+const teamFramingAngles = (
+  anchor: AerialCameraAnchor,
+  team: 'CT' | 'T',
+  players: DirectorPlayer[]
+): AerialCameraAnchor['angles'] => {
+  const teamPlayers = players.filter((player) => player.team === team && player.position)
+  if (!teamPlayers.length) return anchor.angles
+  const target: [number, number, number] = [
+    teamPlayers.reduce((sum, player) => sum + player.position![0], 0) / teamPlayers.length,
+    teamPlayers.reduce((sum, player) => sum + player.position![1], 0) / teamPlayers.length,
+    teamPlayers.reduce((sum, player) => sum + player.position![2], 0) / teamPlayers.length + 48
+  ]
+  const delta: [number, number, number] = [
+    target[0] - anchor.position[0],
+    target[1] - anchor.position[1],
+    target[2] - anchor.position[2]
+  ]
+  const horizontalDistance = Math.hypot(delta[0], delta[1])
+  if (horizontalDistance <= 1e-6) return anchor.angles
+  return [
+    (-Math.atan2(delta[2], horizontalDistance) * 180) / Math.PI,
+    (Math.atan2(delta[1], delta[0]) * 180) / Math.PI,
+    0
+  ]
+}
+
 /**
  * Selects a stable calibrated shot only when it tells a clearer story than a
  * player POV. It never overrides a player switch, an objective/combat lock, or
@@ -129,6 +166,7 @@ export const decideAerialPresentation = (
   const playersById = new Map(alivePlayers.map((player) => [player.steamId, player]))
   let selected: {
     anchor: AerialCameraAnchor
+    presentationAngles: AerialCameraAnchor['angles']
     visibility: { steamIds: string[]; ct: number; t: number }
     score: number
   } | null = null
@@ -137,9 +175,13 @@ export const decideAerialPresentation = (
     if (options.excludedAnchorIds?.has(anchor.id)) continue
     const affinity = anchorAffinity(anchor, phase)
     if (affinity <= 0) continue
+    const spawnTeam = phase === 'freeze-time' ? spawnTeamForAnchor(anchor) : null
+    const presentationAngles = spawnTeam
+      ? teamFramingAngles(anchor, spawnTeam, alivePlayers)
+      : anchor.angles
     const visibility = visibleCounts(
       computeCameraVisibility(
-        { position: anchor.position, angles: anchor.angles },
+        { position: anchor.position, angles: presentationAngles },
         alivePlayers.map((player) => ({
           steamId: player.steamId,
           position: player.position,
@@ -151,14 +193,6 @@ export const decideAerialPresentation = (
     )
     const totalVisible = visibility.steamIds.length
     const crossTeam = visibility.ct > 0 && visibility.t > 0
-    const spawnTeam =
-      anchor.kind === 'spawn'
-        ? anchor.id.startsWith('ct_')
-          ? 'CT'
-          : anchor.id.startsWith('t_')
-            ? 'T'
-            : null
-        : null
     const visibleSpawnTeamCount =
       spawnTeam === 'CT' ? visibility.ct : spawnTeam === 'T' ? visibility.t : 0
     const eligible =
@@ -177,7 +211,7 @@ export const decideAerialPresentation = (
       score > selected.score ||
       (score === selected.score && anchor.id < selected.anchor.id)
     ) {
-      selected = { anchor, visibility, score }
+      selected = { anchor, presentationAngles, visibility, score }
     }
   }
 
@@ -200,6 +234,7 @@ export const decideAerialPresentation = (
     eligible: true,
     phase,
     anchor: selected.anchor,
+    presentationAngles: selected.presentationAngles,
     visibleSteamIds: selected.visibility.steamIds,
     visibleCtCount: selected.visibility.ct,
     visibleTCount: selected.visibility.t,

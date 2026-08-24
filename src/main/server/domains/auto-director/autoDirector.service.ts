@@ -545,7 +545,10 @@ export class AutoDirectorService {
   ): Promise<void> {
     this.commandInFlight = true
     try {
-      this.lastCommand = await this.camera.moveToAerial(anchor)
+      this.lastCommand = await this.camera.moveToAerial(
+        anchor,
+        decision.presentationAngles ?? anchor.angles
+      )
       this.updateTransportHealth(this.lastCommand)
       if (this.lastCommand.ok) {
         this.aerialActiveAnchor = anchor

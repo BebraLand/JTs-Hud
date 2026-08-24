@@ -96,8 +96,11 @@ export class CameraController {
    * Reuses the exact NetCon pose command produced by the calibration app.
    * Keyboard fallback is deliberately unavailable for non-player presentation.
    */
-  async moveToAerial(anchor: AerialCameraAnchor): Promise<CameraCommandResult> {
-    const values = [...anchor.position, ...anchor.angles]
+  async moveToAerial(
+    anchor: AerialCameraAnchor,
+    presentationAngles: AerialCameraAnchor['angles'] = anchor.angles
+  ): Promise<CameraCommandResult> {
+    const values = [...anchor.position, ...presentationAngles]
     if (values.some((value) => !Number.isFinite(value))) {
       return {
         ok: false,
@@ -114,8 +117,8 @@ export class CameraController {
       // and setang_exact, spec_goto applies the roaming camera pose after the
       // observer leaves the player POV. Player POV restoration remains handled
       // by switchTo() with spec_mode 1.
-      const pitch = String(anchor.angles[0])
-      const yaw = String(anchor.angles[1])
+      const pitch = String(presentationAngles[0])
+      const yaw = String(presentationAngles[1])
       await this.sendTelnet(`spec_mode 6\nspec_goto ${position} ${pitch} ${yaw}`, {
         host: telnet.host,
         port: telnet.port,
