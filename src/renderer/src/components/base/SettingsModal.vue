@@ -46,6 +46,7 @@ watch(
 )
 
 const persistAutoSwitch = () => saveSettings({ autoSwitchSides: settings.value.autoSwitchSides })
+const persistAutoRefresh = () => saveSettings({ autoRefreshHuds: settings.value.autoRefreshHuds })
 
 const saveTelnet = async () => {
   const saved = await saveSettings({ telnetHost: telnetHost.value, telnetPort: telnetPort.value })
@@ -185,6 +186,21 @@ const installGsiCfg = async () => {
                     @update:model-value="persistAutoSwitch"
                   />
                 </div>
+              </div>
+              <div class="flex items-center justify-between mt-4">
+                <div>
+                  <p class="text-sm font-medium text-zinc-200">Auto Refresh HUDs</p>
+                  <p class="text-xs text-zinc-500 mt-0.5">
+                    Reload HUDs automatically after player, team, or match data is saved
+                  </p>
+                </div>
+                <BaseCheckbox
+                  v-model="settings.autoRefreshHuds"
+                  :disabled="isSaving"
+                  size="md"
+                  class="text-primary"
+                  @update:model-value="persistAutoRefresh"
+                />
               </div>
             </div>
 

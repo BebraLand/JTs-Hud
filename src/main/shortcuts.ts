@@ -1,5 +1,6 @@
 import { globalShortcut } from 'electron'
 import { io } from './server/server'
+import { refreshAllHuds } from './server/hudRefresh'
 import { getLastGSIState } from './server/integrations/gsi'
 import { MatchService } from './server/domains/matches/match.service'
 
@@ -34,7 +35,7 @@ export function unregisterHudKeybinds(): void {
 export function registerShortcuts(): void {
   // Global Alt+F: Refresh HUDs
   globalShortcut.register('Alt+F', () => {
-    io.emit('refreshHUD')
+    refreshAllHuds(io, 'shortcut')
     // console.log('Emitted refresh to all HUD clients')
   })
 

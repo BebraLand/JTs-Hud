@@ -1,9 +1,16 @@
 import { Server, Socket } from 'socket.io'
 import { getHudConfig } from './domains/huds/hud.routes'
 import { getActiveHudId } from './server'
+import { getHudRefreshState, refreshAllHuds } from './hudRefresh'
 
 export const setupSockets = (io: Server) => {
   io.on('connection', (socket: Socket) => {
+    socket.emit('hud:refresh-state', getHudRefreshState())
+
+    socket.on('request-hud-refresh', () => {
+      refreshAllHuds(io)
+    })
+
     // HUD registration:
     socket.on('started', () => {
       socket.emit('readyToRegister')

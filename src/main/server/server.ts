@@ -11,8 +11,8 @@ import { setupSockets } from './socket'
 import { setupGSI } from './integrations/gsi'
 
 import createMatchRouter from './domains/matches/match.routes'
-import playerRoutes from './domains/players/player.routes'
-import teamRoutes from './domains/teams/team.routes'
+import createPlayerRouter from './domains/players/player.routes'
+import createTeamRouter from './domains/teams/team.routes'
 import createHudRouter from './domains/huds/hud.routes'
 import settingsRoutes from './domains/settings/settings.routes'
 import spectatorRoutes from './domains/spectator/spectator.routes'
@@ -57,8 +57,8 @@ app.use('/huds', express.static(hudsPath))
 app.use('/api/uploads', express.static(uploadsPath))
 
 app.use('/api/huds', createHudRouter(io))
-app.use('/api/teams', teamRoutes)
-app.use('/api/players', playerRoutes)
+app.use('/api/teams', createTeamRouter(io))
+app.use('/api/players', createPlayerRouter(io))
 app.use('/api/match', createMatchRouter(io))
 app.use('/api/settings', settingsRoutes)
 app.use('/api/spectator', spectatorRoutes)

@@ -11,6 +11,7 @@ import {
 } from './match.controller'
 import { MatchService } from './match.service'
 import { syncGSITeams } from '../../integrations/gsi'
+import { notifyHudDataChanged } from '../../hudRefresh'
 
 const matchService = new MatchService()
 
@@ -24,6 +25,7 @@ export default function createMatchRouter(io: Server) {
   // Emit 'match' when a new match is created as current
   router.post('/', async (req: Request, res: Response) => {
     await createMatch(req, res)
+    if (res.statusCode < 400) void notifyHudDataChanged(io, 'match')
     if (req.body?.current) {
       io.emit('match')
       syncGSITeams()
@@ -41,6 +43,7 @@ export default function createMatchRouter(io: Server) {
     }
 
     await updateMatch(req, res)
+    if (res.statusCode < 400) void notifyHudDataChanged(io, 'match')
     if ((wasCurrent || req.body?.current) && res.statusCode < 400) {
       io.emit('match')
       syncGSITeams()
@@ -58,6 +61,7 @@ export default function createMatchRouter(io: Server) {
     }
 
     await deleteMatch(req, res)
+    if (res.statusCode < 400) void notifyHudDataChanged(io, 'match')
     if (wasCurrent && res.statusCode < 400) {
       io.emit('match')
       syncGSITeams()
@@ -68,6 +72,7 @@ export default function createMatchRouter(io: Server) {
   router.patch('/current/veto/:mapName/reverse-side', async (req: Request, res: Response) => {
     await toggleReverseSide(req, res)
     if (res.statusCode < 400) {
+      void notifyHudDataChanged(io, 'match')
       io.emit('match')
       syncGSITeams()
     }

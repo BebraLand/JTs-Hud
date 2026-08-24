@@ -7,6 +7,7 @@ const router = Router()
 
 export interface AppSettings {
   autoSwitchSides: boolean
+  autoRefreshHuds: boolean
   telnetHost: string
   telnetPort: number
   matEnabled: boolean
@@ -17,6 +18,7 @@ export interface AppSettings {
 
 const DEFAULT_SETTINGS: AppSettings = {
   autoSwitchSides: true,
+  autoRefreshHuds: true,
   telnetHost: '127.0.0.1',
   telnetPort: 2020,
   matEnabled: false,
@@ -35,6 +37,10 @@ export const getSettings = async (): Promise<AppSettings> => {
       map.autoSwitchSides !== undefined
         ? map.autoSwitchSides === 'true'
         : DEFAULT_SETTINGS.autoSwitchSides,
+    autoRefreshHuds:
+      map.autoRefreshHuds !== undefined
+        ? map.autoRefreshHuds === 'true'
+        : DEFAULT_SETTINGS.autoRefreshHuds,
     telnetHost: telnet.host,
     telnetPort: telnet.port,
     matEnabled: map.matEnabled === 'true',
@@ -95,7 +101,7 @@ router.get('/', async (_req: Request, res: Response) => {
 router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
   try {
     const updates: Partial<AppSettings> = req.body
-    const localKeys = new Set(['autoSwitchSides', 'telnetHost', 'telnetPort'])
+    const localKeys = new Set(['autoSwitchSides', 'autoRefreshHuds', 'telnetHost', 'telnetPort'])
     if (
       updates.telnetHost !== undefined &&
       (typeof updates.telnetHost !== 'string' || !updates.telnetHost.trim())

@@ -11,6 +11,7 @@ import type {
   MatIntegrationStatus
 } from './mat.types'
 import { mapMatch, mapPlayer, mapTeam } from './mat.mapper'
+import { notifyHudDataChanged } from '../hudRefresh'
 
 const DEFAULT_POLL_SECONDS = 5
 const MIN_POLL_SECONDS = 2
@@ -392,6 +393,7 @@ class MatIntegrationService {
     this.localIo?.emit('match')
     this.localIo?.emit('teams')
     this.localIo?.emit('players')
+    if (this.localIo) void notifyHudDataChanged(this.localIo, 'mat')
   }
 }
 

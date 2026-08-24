@@ -9,6 +9,8 @@ import BaseButton from './base/BaseButton.vue'
 const settingsOpen = ref(false)
 const hasLiveData = ref(false)
 const updateAvailable = ref<string | null>(null)
+const hudRefreshPending = ref(false)
+const hudRefreshing = ref(false)
 let liveDataTimeout: ReturnType<typeof setTimeout> | null = null
 
 // Sidebar collapsed state — persisted across sessions
@@ -23,14 +25,39 @@ const onUpdate = () => {
   }, 5000)
 }
 
+const onHudRefreshNeeded = () => {
+  hudRefreshPending.value = true
+}
+
+const onHudRefreshState = (state: { pending?: boolean }) => {
+  hudRefreshPending.value = Boolean(state.pending)
+}
+
+const onHudRefreshApplied = () => {
+  hudRefreshPending.value = false
+  hudRefreshing.value = false
+}
+
+const refreshHuds = () => {
+  if (hudRefreshing.value) return
+  hudRefreshing.value = true
+  socket.emit('request-hud-refresh')
+}
+
 onMounted(() => {
   socket.on('update', onUpdate)
+  socket.on('hud:refresh-needed', onHudRefreshNeeded)
+  socket.on('hud:refresh-state', onHudRefreshState)
+  socket.on('hud:refresh-applied', onHudRefreshApplied)
   window.api.onUpdateAvailable((version) => {
     updateAvailable.value = version
   })
 })
 onUnmounted(() => {
   socket.off('update', onUpdate)
+  socket.off('hud:refresh-needed', onHudRefreshNeeded)
+  socket.off('hud:refresh-state', onHudRefreshState)
+  socket.off('hud:refresh-applied', onHudRefreshApplied)
   if (liveDataTimeout) clearTimeout(liveDataTimeout)
 })
 
@@ -241,6 +268,33 @@ function openTwitch() {
         class="px-5 py-3 border-t border-border flex items-center justify-center gap-1"
       >
         <button
+          @click="refreshHuds"
+          class="relative transition-colors"
+          :class="hudRefreshPending ? 'text-red-400 hover:text-red-300' : 'text-zinc-500 hover:text-zinc-300'"
+          :title="hudRefreshPending ? 'HUD data changed — refresh HUDs' : 'Refresh HUDs'"
+          :disabled="hudRefreshing"
+          aria-label="Refresh HUDs"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="size-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 4v5h5M20 20v-5h-5M5.1 9A7 7 0 0 1 17.5 5.5L20 9M4 15l2.5 3.5A7 7 0 0 0 18.9 15"
+            />
+          </svg>
+          <span
+            v-if="hudRefreshPending"
+            class="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"
+          ></span>
+        </button>
+        <button
           v-if="updateAvailable"
           @click="openReleasesPage"
           class="hover:cursor-pointer relative text-amber-400 hover:text-amber-300 transition-colors"
@@ -313,6 +367,33 @@ function openTwitch() {
 
       <!-- Footer — collapsed (icons only) -->
       <div v-else class="py-3 border-t border-border flex flex-col items-center gap-1">
+        <button
+          @click="refreshHuds"
+          class="relative transition-colors"
+          :class="hudRefreshPending ? 'text-red-400 hover:text-red-300' : 'text-zinc-500 hover:text-zinc-300'"
+          :title="hudRefreshPending ? 'HUD data changed — refresh HUDs' : 'Refresh HUDs'"
+          :disabled="hudRefreshing"
+          aria-label="Refresh HUDs"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="size-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 4v5h5M20 20v-5h-5M5.1 9A7 7 0 0 1 17.5 5.5L20 9M4 15l2.5 3.5A7 7 0 0 0 18.9 15"
+            />
+          </svg>
+          <span
+            v-if="hudRefreshPending"
+            class="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"
+          ></span>
+        </button>
         <button
           v-if="updateAvailable"
           @click="openReleasesPage"
