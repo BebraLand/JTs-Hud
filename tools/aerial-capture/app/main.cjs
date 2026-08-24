@@ -12,6 +12,19 @@ const {
 } = require('./manifest.cjs')
 const { DEFAULT_GSI_STATE_URL, parseGsiMap, validateGsiStateUrl } = require('./gsi.cjs')
 const draftSaveQueues = new Map()
+const AERIAL_USER_DATA_DIR = 'JTs-Aerial-Capture'
+let legacyUserDataPaths = []
+
+const configureUserDataPath = () => {
+  const defaultUserDataPath = app.getPath('userData')
+  const stableUserDataPath = path.join(app.getPath('appData'), AERIAL_USER_DATA_DIR)
+  legacyUserDataPaths = [...new Set([
+    defaultUserDataPath,
+    path.join(app.getPath('appData'), 'jts-hud'),
+    path.join(app.getPath('appData'), 'JTs Aerial Capture')
+  ])].filter((candidate) => candidate !== stableUserDataPath)
+  app.setPath('userData', stableUserDataPath)
+}
 
 const createWindow = () => {
   const window = new BrowserWindow({
@@ -172,13 +185,27 @@ const getDraftPath = (map) => {
 
 ipcMain.handle('load-draft', async (_event, map) => {
   const filePath = getDraftPath(map)
-  try {
-    const manifest = JSON.parse(await fs.readFile(filePath, 'utf8'))
-    return { manifest: isValidManifest(manifest, map) ? manifest : null, filePath }
-  } catch (error) {
-    if (error && error.code === 'ENOENT') return { manifest: null, filePath }
-    throw error
+  const candidates = [
+    filePath,
+    ...legacyUserDataPaths.map((basePath) =>
+      path.join(basePath, 'aerial-drafts', `${map}.json`)
+    )
+  ]
+  for (const candidate of candidates) {
+    try {
+      const manifest = JSON.parse(await fs.readFile(candidate, 'utf8'))
+      if (!isValidManifest(manifest, map)) continue
+      if (candidate !== filePath) {
+        await fs.mkdir(path.dirname(filePath), { recursive: true })
+        await fs.copyFile(candidate, filePath)
+      }
+      return { manifest, filePath }
+    } catch (error) {
+      if (error && error.code === 'ENOENT') continue
+      throw error
+    }
   }
+  return { manifest: null, filePath }
 })
 
 ipcMain.handle('save-draft', async (_event, manifest) => {
@@ -237,6 +264,7 @@ ipcMain.handle('import-manifest', async () => {
 })
 
 app.whenReady().then(() => {
+  configureUserDataPath()
   void startApplication()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
