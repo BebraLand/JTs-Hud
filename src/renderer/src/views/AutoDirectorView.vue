@@ -144,8 +144,8 @@ const healthClass = (state: string) =>
 </script>
 
 <template>
-  <div class="min-h-full bg-[#0b0b11] text-zinc-100 p-6 xl:p-8">
-    <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+  <div class="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0b0b11] p-4 text-zinc-100 xl:p-5 2xl:p-6">
+    <header class="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
       <div>
         <div class="flex items-center gap-3">
           <div
@@ -170,7 +170,7 @@ const healthClass = (state: string) =>
             <h1 class="text-2xl font-bold tracking-tight">Auto Director</h1>
           </div>
         </div>
-        <p class="mt-2 text-sm text-zinc-500">
+        <p class="mt-1 text-xs text-zinc-500">
           Explainable first-person observer control. Telnet is the primary camera transport.
         </p>
       </div>
@@ -201,19 +201,19 @@ const healthClass = (state: string) =>
 
     <div
       v-if="error"
-      class="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+      class="mb-3 shrink-0 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-300"
     >
       {{ error }}
     </div>
     <div
       v-if="loading"
-      class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8 text-center text-zinc-500"
+      class="min-h-0 flex-1 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8 text-center text-zinc-500"
     >
       Loading auto-director service…
     </div>
 
     <template v-else>
-      <section class="mb-6 grid gap-3 lg:grid-cols-[1fr_auto]">
+      <section class="mb-3 min-w-0 shrink-0 grid gap-2 lg:grid-cols-[1fr_auto]">
         <div class="grid gap-2 sm:grid-cols-3">
           <button
             v-for="mode in modes"
@@ -253,12 +253,12 @@ const healthClass = (state: string) =>
         </div>
       </section>
 
-      <div class="grid gap-6 2xl:grid-cols-[370px_minmax(0,1fr)]">
-        <aside class="space-y-5">
+      <div class="min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[340px_340px_minmax(0,1fr)]">
+        <aside class="min-w-0 space-y-3 2xl:contents">
           <section
-            class="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/20"
+            class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 shadow-2xl shadow-black/20"
           >
-            <div class="mb-5 flex items-center justify-between">
+            <div class="mb-3 flex items-center justify-between">
               <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
                 Broadcast Focus
               </h2>
@@ -266,14 +266,14 @@ const healthClass = (state: string) =>
             </div>
 
             <div
-              class="rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-400/[0.09] to-transparent p-5"
+              class="rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-400/[0.09] to-transparent p-3"
             >
               <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                 Current first-person POV
               </p>
               <div class="mt-2 flex items-end justify-between gap-3">
                 <div>
-                  <p class="text-3xl font-bold">{{ current?.name ?? 'No camera target' }}</p>
+                  <p class="text-2xl font-bold">{{ current?.name ?? 'No camera target' }}</p>
                   <p
                     class="mt-1 text-xs font-semibold"
                     :class="current?.team === 'CT' ? 'text-blue-400' : 'text-amber-400'"
@@ -289,21 +289,21 @@ const healthClass = (state: string) =>
               </div>
             </div>
 
-            <div class="mt-4 space-y-3 text-sm">
-              <div class="rounded-xl border border-zinc-800 bg-black/20 p-3">
+            <div class="mt-3 space-y-2 text-xs">
+              <div class="rounded-xl border border-zinc-800 bg-black/20 p-2">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">Decision</p>
                 <p class="mt-1 text-zinc-200">
                   {{ status.decision?.reason ?? 'Waiting for complete GSI player data' }}
                 </p>
               </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div class="rounded-xl border border-zinc-800 bg-black/20 p-3">
+              <div class="grid grid-cols-2 gap-2">
+                <div class="rounded-xl border border-zinc-800 bg-black/20 p-2">
                   <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
                     Next candidate
                   </p>
                   <p class="mt-1 font-semibold text-zinc-200">{{ candidate?.name ?? 'None' }}</p>
                 </div>
-                <div class="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                <div class="rounded-xl border border-zinc-800 bg-black/20 p-2">
                   <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
                     Camera lock
                   </p>
@@ -315,8 +315,8 @@ const healthClass = (state: string) =>
                   </p>
                 </div>
               </div>
-              <div class="mt-3 grid grid-cols-2 gap-3">
-                <div class="rounded-xl border border-zinc-800 bg-black/20 p-3">
+              <div class="mt-2 grid grid-cols-2 gap-2">
+                <div class="rounded-xl border border-zinc-800 bg-black/20 p-2">
                   <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
                     Dominant scene
                   </p>
@@ -330,7 +330,7 @@ const healthClass = (state: string) =>
                     confidence
                   </p>
                 </div>
-                <div class="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                <div class="rounded-xl border border-zinc-800 bg-black/20 p-2">
                   <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
                     POV scene
                   </p>
@@ -345,7 +345,7 @@ const healthClass = (state: string) =>
                   </p>
                 </div>
               </div>
-              <div class="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+              <div class="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-2">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-amber-300">
                   Threat POV
                 </p>
@@ -393,11 +393,11 @@ const healthClass = (state: string) =>
             </button>
           </section>
 
-          <section class="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
-            <h2 class="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+          <section class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+            <h2 class="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
               Camera Transport
             </h2>
-            <div class="mb-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+            <div class="mb-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2">
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <p class="text-xs font-semibold text-zinc-200">Advisory inputs</p>
@@ -610,9 +610,9 @@ const healthClass = (state: string) =>
           </section>
         </aside>
 
-        <main class="min-w-0 space-y-6">
-          <section class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <main class="min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_220px] gap-3 overflow-hidden">
+          <section class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
                   Player Priority Board
@@ -633,7 +633,7 @@ const healthClass = (state: string) =>
             >
               Start CS2 or replay a GSI fixture to populate the board.
             </div>
-            <div v-else class="space-y-3">
+            <div v-else class="grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
               <article
                 v-for="(player, index) in players"
                 :key="player.steamId"
@@ -643,13 +643,13 @@ const healthClass = (state: string) =>
                     : 'border-zinc-800 bg-black/20',
                   !player.alive ? 'opacity-45' : ''
                 ]"
-                class="rounded-xl border p-4 transition-colors"
+                class="rounded-xl border p-2 transition-colors"
               >
                 <div
-                  class="grid items-center gap-4 xl:grid-cols-[42px_minmax(150px,0.8fr)_110px_minmax(300px,2fr)_auto]"
+                  class="grid items-center gap-2 xl:grid-cols-[34px_minmax(100px,0.8fr)_90px_minmax(180px,2fr)_auto]"
                 >
                   <div
-                    class="grid size-9 place-items-center rounded-lg bg-zinc-800 text-sm font-bold text-zinc-400"
+                    class="grid size-7 place-items-center rounded-lg bg-zinc-800 text-xs font-bold text-zinc-400"
                   >
                     {{ index + 1 }}
                   </div>
@@ -727,7 +727,7 @@ const healthClass = (state: string) =>
                         ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
                         : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
                     "
-                    class="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-30"
+                    class="rounded-lg border px-2 py-1.5 text-[10px] font-semibold disabled:opacity-30"
                   >
                     {{
                       status.settings.manualOverrideSteamId === player.steamId
@@ -740,9 +740,9 @@ const healthClass = (state: string) =>
             </div>
           </section>
 
-          <section class="grid gap-6 xl:grid-cols-2">
-            <div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-              <div class="mb-4 flex items-center justify-between">
+          <section class="min-h-0 grid gap-3 overflow-hidden xl:grid-cols-2">
+            <div class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+              <div class="mb-2 flex items-center justify-between">
                 <div>
                   <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
                     Scoring Weights
@@ -753,7 +753,7 @@ const healthClass = (state: string) =>
                   Reset mode defaults
                 </button>
               </div>
-              <div class="grid gap-x-5 gap-y-3 sm:grid-cols-2">
+              <div class="grid gap-x-3 gap-y-2 sm:grid-cols-2">
                 <label v-for="[key, label] in weightDefinitions" :key="key" class="block">
                   <span class="flex justify-between text-[11px] text-zinc-500"
                     ><span>{{ label }}</span
@@ -772,18 +772,18 @@ const healthClass = (state: string) =>
               </div>
             </div>
 
-            <div class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-              <h2 class="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+            <div class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+              <h2 class="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
                 Decision History
               </h2>
-              <div class="max-h-72 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+              <div class="h-full space-y-1 overflow-hidden pr-1">
                 <div v-if="!status.history.length" class="py-12 text-center text-xs text-zinc-600">
                   No camera decisions yet.
                 </div>
                 <div
                   v-for="entry in status.history.slice(0, 50)"
                   :key="`${entry.at}-${entry.message}`"
-                  class="flex gap-3 rounded-lg border border-zinc-800 bg-black/20 p-3 text-xs"
+                  class="flex gap-2 rounded-lg border border-zinc-800 bg-black/20 p-2 text-[10px]"
                 >
                   <span class="shrink-0 font-mono text-zinc-600">{{ formatTime(entry.at) }}</span>
                   <div class="min-w-0">
