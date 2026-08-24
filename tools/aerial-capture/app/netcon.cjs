@@ -35,7 +35,7 @@ const formatPoseCommand = (pose) => {
   }
   const position = pose.position.map((value) => String(Number(value))).join(' ')
   const angles = pose.angles.map((value) => String(Number(value))).join(' ')
-  return `setpos_exact ${position}; setang_exact ${angles}`
+  return `spec_mode 6; setpos_exact ${position}; setang_exact ${angles}`
 }
 
 module.exports = {

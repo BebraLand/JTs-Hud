@@ -111,7 +111,10 @@ export class CameraController {
       const telnet = await this.readTelnetSettings()
       const position = anchor.position.map((value) => String(value)).join(' ')
       const angles = anchor.angles.map((value) => String(value)).join(' ')
-      await this.sendTelnet(`setpos_exact ${position}\nsetang_exact ${angles}`, {
+      // CS2 ignores setpos_exact while the observer is still attached to a
+      // player POV. Enter roaming/free-camera mode before applying the pose.
+      // Player POV restoration remains handled by switchTo() with spec_mode 1.
+      await this.sendTelnet(`spec_mode 6\nsetpos_exact ${position}\nsetang_exact ${angles}`, {
         host: telnet.host,
         port: telnet.port,
         timeoutMs: 3000,
