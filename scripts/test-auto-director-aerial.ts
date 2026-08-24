@@ -84,8 +84,10 @@ const geometry = new GeometryMap({
 const players = [
   player('ct-1', 'CT', [100, 0, 0]),
   player('ct-2', 'CT', [120, 20, 0]),
+  player('ct-3', 'CT', [140, 20, 0]),
   player('t-1', 'T', [140, -20, 0]),
-  player('t-2', 'T', [160, 10, 0])
+  player('t-2', 'T', [160, 10, 0]),
+  player('t-3', 'T', [180, -10, 0])
 ]
 
 const aerialMap = {
@@ -94,6 +96,13 @@ const aerialMap = {
     {
       id: 't_spawn',
       label: 'T Spawn',
+      kind: 'spawn' as const,
+      position: [0, 0, 0] as const,
+      angles: [0, 0, 0] as const
+    },
+    {
+      id: 'ct_spawn',
+      label: 'CT Spawn',
       kind: 'spawn' as const,
       position: [0, 0, 0] as const,
       angles: [0, 0, 0] as const
@@ -129,7 +138,7 @@ const quiet = decideAerialPresentation(
 )
 assert.equal(quiet.eligible, true)
 assert.equal(quiet.anchor?.id, 'mid')
-assert.equal(quiet.visibleSteamIds.length, 4)
+assert.equal(quiet.visibleSteamIds.length, 6)
 
 const freeze = decideAerialPresentation(
   { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
@@ -141,6 +150,32 @@ const freeze = decideAerialPresentation(
 )
 assert.equal(freeze.eligible, true)
 assert.equal(freeze.anchor?.id, 't_spawn')
+
+const freezeNextAnchor = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  players,
+  decision(),
+  aerialMap,
+  geometry,
+  { excludedAnchorIds: new Set(['t_spawn']) }
+)
+assert.equal(freezeNextAnchor.eligible, true)
+assert.equal(freezeNextAnchor.anchor?.id, 'ct_spawn')
+assert.equal(freezeNextAnchor.visibleCtCount, 3)
+assert.match(freezeNextAnchor.reason, /opposite-team visibility is not required/)
+
+const freezeWithoutSpawns = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  players,
+  decision(),
+  aerialMap,
+  geometry,
+  { excludedAnchorIds: new Set(['t_spawn', 'ct_spawn']) }
+)
+assert.equal(freezeWithoutSpawns.eligible, false)
+assert.match(freezeWithoutSpawns.reason, /freeze-time anchor/)
 
 const planted = decideAerialPresentation(
   { ...quietPayload, bomb: { state: 'planted' } },

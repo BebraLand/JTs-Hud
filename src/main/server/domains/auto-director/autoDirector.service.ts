@@ -24,6 +24,7 @@ import { TopologyRegistry } from './topology/topologyRegistry'
 import { AerialCameraRegistry, type AerialCameraAnchor } from './aerial/aerialCameraRegistry'
 import {
   decideAerialPresentation,
+  getAerialPresentationPhase,
   type AerialPresentationDecision
 } from './aerial/aerialPresentation'
 import type {
@@ -39,6 +40,7 @@ const SETTINGS_KEY = 'autoDirectorSettings'
 const MAX_HISTORY = 200
 const AERIAL_MIN_CONFIRMATIONS = 2
 const AERIAL_MAX_HOLD_MS = 4500
+const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
 
 const sanitizeSettings = (input: Partial<AutoDirectorSettings>): Partial<AutoDirectorSettings> => {
@@ -137,6 +139,8 @@ export class AutoDirectorService {
   private aerialCandidateConfirmations = 0
   private aerialReason = 'Aerial presentation disabled'
   private aerialVisibleSteamIds: string[] = []
+  private aerialSequencePhase: ReturnType<typeof getAerialPresentationPhase> = null
+  private aerialSequenceAnchorIds = new Set<string>()
 
   async initialize(io: Server): Promise<void> {
     this.io = io
@@ -353,6 +357,9 @@ export class AutoDirectorService {
       : null
     const roundKey = `${payload.map?.name ?? ''}:${payload.map?.round ?? ''}`
     if (this.roundStartedAt === 0 || roundKey !== this.lastRoundKey) {
+      if (this.roundStartedAt !== 0 && roundKey !== this.lastRoundKey) {
+        this.resetAerialSequence()
+      }
       this.lastRoundKey = roundKey
       this.roundStartedAt = now
     }
@@ -407,13 +414,21 @@ export class AutoDirectorService {
     this.previousTopologyPlayers = new Map(players.map((player) => [player.steamId, player]))
     this.recordDecision(this.decision, now)
 
+    const aerialPhase = getAerialPresentationPhase(payload)
+    if (aerialPhase !== this.aerialSequencePhase) {
+      this.aerialSequencePhase = aerialPhase
+      this.aerialSequenceAnchorIds.clear()
+    }
     const aerialDecision = decideAerialPresentation(
       payload,
       this.settings,
       players,
       this.decision,
       aerialMap,
-      geometryMap
+      geometryMap,
+      {
+        excludedAnchorIds: this.aerialActiveAnchor ? undefined : this.aerialSequenceAnchorIds
+      }
     )
     const presentationControlsCamera = this.handleAerialPresentation(aerialDecision, now)
 
@@ -535,6 +550,8 @@ export class AutoDirectorService {
       if (this.lastCommand.ok) {
         this.aerialActiveAnchor = anchor
         this.aerialActiveUntil = now + AERIAL_MAX_HOLD_MS
+        this.aerialSequenceAnchorIds.add(anchor.id)
+        this.aerialSequencePhase = decision.phase
         this.aerialReason = decision.reason
         this.aerialVisibleSteamIds = decision.visibleSteamIds
         this.addHistory({
@@ -544,6 +561,7 @@ export class AutoDirectorService {
           transport: this.lastCommand.transport
         })
       } else {
+        this.resetAerialSequence()
         this.aerialCooldownUntil = now + AERIAL_COOLDOWN_MS
         this.aerialReason = `Aerial command failed: ${this.lastCommand.message}`
         this.addHistory({
@@ -565,6 +583,8 @@ export class AutoDirectorService {
   ): Promise<void> {
     const anchorLabel = this.aerialActiveAnchor?.label ?? 'Aerial camera'
     const shouldConfirmSwitch = Boolean(this.decision?.shouldSwitch)
+    const continueSequence =
+      this.aerialSequencePhase === 'freeze-time' && reason.startsWith('Aerial hold limit reached')
     this.commandInFlight = true
     try {
       this.lastCommand = await this.camera.switchTo(target, this.settings)
@@ -584,7 +604,7 @@ export class AutoDirectorService {
           toSteamId: target.steamId,
           transport: this.lastCommand.transport
         })
-        this.clearAerialPresentation(this.lastCommand.at, reason)
+        this.clearAerialPresentation(this.lastCommand.at, reason, continueSequence)
       } else {
         this.aerialReason = `Could not exit Aerial camera: ${this.lastCommand.message}`
         this.addHistory({
@@ -601,14 +621,21 @@ export class AutoDirectorService {
     }
   }
 
-  private clearAerialPresentation(now: number, reason: string): void {
+  private clearAerialPresentation(now: number, reason: string, continueSequence = false): void {
     this.aerialActiveAnchor = null
     this.aerialActiveUntil = 0
     this.aerialCandidateId = null
     this.aerialCandidateConfirmations = 0
-    this.aerialCooldownUntil = now + AERIAL_COOLDOWN_MS
+    this.aerialCooldownUntil =
+      now + (continueSequence ? AERIAL_SEQUENCE_GAP_MS : AERIAL_COOLDOWN_MS)
+    if (!continueSequence) this.resetAerialSequence()
     this.aerialReason = reason
     this.aerialVisibleSteamIds = []
+  }
+
+  private resetAerialSequence(): void {
+    this.aerialSequencePhase = null
+    this.aerialSequenceAnchorIds.clear()
   }
 
   private async persistSettings(settings: AutoDirectorSettings): Promise<void> {

@@ -21,6 +21,10 @@ export interface AerialPresentationDecision {
   actionBlocked: boolean
 }
 
+export interface AerialPresentationOptions {
+  excludedAnchorIds?: ReadonlySet<string>
+}
+
 const ACTION_FACTOR_KEYS = new Set(['combat', 'damage', 'recentKill', 'objective'])
 
 const emptyDecision = (reason: string, actionBlocked = false): AerialPresentationDecision => ({
@@ -34,7 +38,9 @@ const emptyDecision = (reason: string, actionBlocked = false): AerialPresentatio
   actionBlocked
 })
 
-const phaseForPayload = (payload: GsiLikePayload): AerialPresentationPhase | null => {
+export const getAerialPresentationPhase = (
+  payload: GsiLikePayload
+): AerialPresentationPhase | null => {
   const roundPhase = String(
     payload.round?.phase ?? payload.phase_countdowns?.phase ?? ''
   ).toLowerCase()
@@ -52,7 +58,7 @@ const phaseForPayload = (payload: GsiLikePayload): AerialPresentationPhase | nul
 }
 
 const anchorAffinity = (anchor: AerialCameraAnchor, phase: AerialPresentationPhase): number => {
-  if (phase === 'freeze-time') return anchor.kind === 'spawn' ? 60 : anchor.kind === 'mid' ? 20 : 0
+  if (phase === 'freeze-time') return anchor.kind === 'spawn' ? 60 : 0
   if (phase === 'post-plant')
     return anchor.kind === 'postplant' ? 60 : anchor.kind === 'site' ? 45 : 0
   if (phase === 'quiet-live') {
@@ -94,7 +100,8 @@ export const decideAerialPresentation = (
   players: DirectorPlayer[],
   directorDecision: AutoDirectorDecision,
   map: AerialCameraMap | null,
-  geometry: GeometryMap | null
+  geometry: GeometryMap | null,
+  options: AerialPresentationOptions = {}
 ): AerialPresentationDecision => {
   if (!settings.aerialPresentationEnabled) return emptyDecision('Aerial presentation disabled')
   if (!settings.enabled || settings.paused) return emptyDecision('Director is disabled or paused')
@@ -110,7 +117,7 @@ export const decideAerialPresentation = (
     return emptyDecision(`First-person ${directorDecision.lockKind} lock has priority`, true)
   }
 
-  const phase = phaseForPayload(payload)
+  const phase = getAerialPresentationPhase(payload)
   if (!phase) return emptyDecision('Round phase is not presentation-safe')
   const actionBlocked = directorDecision.scores.some((score) =>
     score.factors.some((factor) => ACTION_FACTOR_KEYS.has(factor.key))
@@ -127,6 +134,7 @@ export const decideAerialPresentation = (
   } | null = null
 
   for (const anchor of map.anchors) {
+    if (options.excludedAnchorIds?.has(anchor.id)) continue
     const affinity = anchorAffinity(anchor, phase)
     if (affinity <= 0) continue
     const visibility = visibleCounts(
@@ -143,16 +151,27 @@ export const decideAerialPresentation = (
     )
     const totalVisible = visibility.steamIds.length
     const crossTeam = visibility.ct > 0 && visibility.t > 0
+    const spawnTeam =
+      anchor.kind === 'spawn'
+        ? anchor.id.startsWith('ct_')
+          ? 'CT'
+          : anchor.id.startsWith('t_')
+            ? 'T'
+            : null
+        : null
+    const visibleSpawnTeamCount =
+      spawnTeam === 'CT' ? visibility.ct : spawnTeam === 'T' ? visibility.t : 0
     const eligible =
       phase === 'freeze-time'
-        ? totalVisible >= 3
+        ? spawnTeam !== null && visibleSpawnTeamCount >= 3
         : phase === 'post-round'
           ? totalVisible >= 2
           : phase === 'post-plant'
             ? totalVisible >= 2 && crossTeam
             : totalVisible >= 3 && crossTeam
     if (!eligible) continue
-    const score = affinity + totalVisible * 8 + (crossTeam ? 12 : 0)
+    const freezeOrderBonus = phase === 'freeze-time' ? (anchor.id === 't_spawn' ? 1 : 0) : 0
+    const score = affinity + totalVisible * 8 + (crossTeam ? 12 : 0) + freezeOrderBonus
     if (
       !selected ||
       score > selected.score ||
@@ -166,6 +185,17 @@ export const decideAerialPresentation = (
     return emptyDecision(`No ${phase} anchor has enough geometry-visible living players`)
   }
   const totalVisible = selected.visibility.steamIds.length
+  const selectedSpawnSide =
+    selected.anchor.kind === 'spawn'
+      ? selected.anchor.id.startsWith('ct_')
+        ? 'CT'
+        : selected.anchor.id.startsWith('t_')
+          ? 'T'
+          : null
+      : null
+  const spawnVisibilityNote = selectedSpawnSide
+    ? `; ${selectedSpawnSide} spawn shot, opposite-team visibility is not required`
+    : ''
   return {
     eligible: true,
     phase,
@@ -174,6 +204,6 @@ export const decideAerialPresentation = (
     visibleCtCount: selected.visibility.ct,
     visibleTCount: selected.visibility.t,
     actionBlocked: false,
-    reason: `${phase}: ${selected.anchor.label}; ${totalVisible} geometry-visible (${selected.visibility.ct} CT, ${selected.visibility.t} T)`
+    reason: `${phase}: ${selected.anchor.label}; ${totalVisible} geometry-visible (${selected.visibility.ct} CT, ${selected.visibility.t} T)${spawnVisibilityNote}`
   }
 }
