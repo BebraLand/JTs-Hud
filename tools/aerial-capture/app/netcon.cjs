@@ -34,8 +34,8 @@ const formatPoseCommand = (pose) => {
     throw new Error('Invalid anchor pose')
   }
   const position = pose.position.map((value) => String(Number(value))).join(' ')
-  const angles = pose.angles.map((value) => String(Number(value))).join(' ')
-  return `spec_mode 6; setpos_exact ${position}; setang_exact ${angles}`
+  const angles = pose.angles.map((value) => String(Number(value)))
+  return `spec_mode 6; spec_goto ${position} ${angles[0]} ${angles[1]}`
 }
 
 module.exports = {

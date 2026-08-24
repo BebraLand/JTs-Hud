@@ -110,11 +110,13 @@ export class CameraController {
     try {
       const telnet = await this.readTelnetSettings()
       const position = anchor.position.map((value) => String(value)).join(' ')
-      const angles = anchor.angles.map((value) => String(value)).join(' ')
-      // CS2 ignores setpos_exact while the observer is still attached to a
-      // player POV. Enter roaming/free-camera mode before applying the pose.
-      // Player POV restoration remains handled by switchTo() with spec_mode 1.
-      await this.sendTelnet(`spec_mode 6\nsetpos_exact ${position}\nsetang_exact ${angles}`, {
+      // Static spectator cameras use CS2's spec_goto path. Unlike setpos_exact
+      // and setang_exact, spec_goto applies the roaming camera pose after the
+      // observer leaves the player POV. Player POV restoration remains handled
+      // by switchTo() with spec_mode 1.
+      const pitch = String(anchor.angles[0])
+      const yaw = String(anchor.angles[1])
+      await this.sendTelnet(`spec_mode 6\nspec_goto ${position} ${pitch} ${yaw}`, {
         host: telnet.host,
         port: telnet.port,
         timeoutMs: 3000,

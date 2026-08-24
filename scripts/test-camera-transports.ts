@@ -103,7 +103,7 @@ const main = async (): Promise<void> => {
     const aerialResult = await aerialController.moveToAerial(anchor)
     assert.equal(aerialResult.ok, true)
     assert.equal(aerialResult.transport, 'telnet')
-    assert.equal(aerialCommand, 'spec_mode 6\nsetpos_exact 1.25 -2.5 3.75\nsetang_exact 12 180 0')
+    assert.equal(aerialCommand, 'spec_mode 6\nspec_goto 1.25 -2.5 3.75 12 180')
     const invalidAerial = await aerialController.moveToAerial({
       ...anchor,
       position: [Number.NaN, 0, 0]
