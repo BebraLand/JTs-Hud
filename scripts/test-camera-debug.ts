@@ -75,7 +75,7 @@ test('empty camera debug status is safe before GSI', () => {
 test('JTs-Hud radar transform places Ancient spawn anchors on the map', () => {
   const config = getRadarMapConfig('maps/de_ancient.bsp')
   assert.ok(config)
-  assert.equal(config.asset, 'radar-d6f7b7b1.png')
+  assert.equal(config.asset, 'radar-257c12c3.png')
   const tSpawn = worldToRadar([-250.964157, -2430.066406, -13.788737], config)
   const ctSpawn = worldToRadar([-98.902443, 1030.861328, 85.071098], config)
   assert.deepEqual(tSpawn.map(Math.round), [540, 919])
@@ -83,8 +83,22 @@ test('JTs-Hud radar transform places Ancient spawn anchors on the map', () => {
 })
 
 test('radar resolver switches assets by map and falls back for unsupported maps', () => {
-  assert.equal(getRadarMapConfig('de_cache')?.asset, 'radar-63202ed1.png')
-  assert.equal(getRadarMapConfig('de_nuke')?.asset, 'radar-e7a6de7b.png')
+  const expectedAssets = {
+    de_ancient: 'radar-257c12c3.png',
+    de_anubis: 'radar-d6f7b7b1.png',
+    de_cache: 'radar-9ed7aced.png',
+    de_dust2: 'radar-d2e673ab.png',
+    de_inferno: 'radar-230b60d6.png',
+    de_mirage: 'radar-0f6c4bb0.png',
+    de_nuke: 'radar-e7a6de7b.png',
+    de_overpass: 'radar-5ec70095.png',
+    de_train: 'radar-63202ed1.png',
+    de_vertigo: 'radar-f15cebdb.png'
+  } as const
+
+  for (const [mapName, asset] of Object.entries(expectedAssets)) {
+    assert.equal(getRadarMapConfig(mapName)?.asset, asset)
+  }
   assert.equal(getRadarMapConfig('de_unknown'), null)
   assert.equal(getRadarMapConfig(null), null)
 })
