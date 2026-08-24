@@ -11,5 +11,5 @@
 .observed .bebraland-observed-player-info{width:100%;min-width:0;max-width:100%;overflow:hidden}
 .observed .bebraland-observed-player-info .username{width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .observed .bebraland-observed-player-info .bebraland-player-meta{width:100%;max-width:100%;min-width:0;height:12px;min-height:12px;line-height:12px;font-size:11px;gap:4px;box-sizing:border-box}
-.observed .bebraland-observed-player-info .bebraland-player-real-name{min-width:0;flex:1 1 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.observed .bebraland-observed-player-info .bebraland-player-real-name{min-width:0;flex:0 1 auto;width:auto;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .observed .bebraland-observed-player-info .bebraland-player-country-flag{width:16px;height:12px}
