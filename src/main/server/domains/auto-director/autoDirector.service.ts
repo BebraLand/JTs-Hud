@@ -30,6 +30,7 @@ import {
   getAerialPresentationPhase,
   type AerialPresentationDecision
 } from './aerial/aerialPresentation'
+import { computeCameraDebugStatus, emptyCameraDebugStatus } from './cameraDebug'
 import type {
   AutoDirectorSettings,
   AutoDirectorStatus,
@@ -153,6 +154,7 @@ export class AutoDirectorService {
   private aerialVisibleSteamIds: string[] = []
   private aerialSequencePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private aerialSequenceAnchorIds = new Set<string>()
+  private cameraDebug = emptyCameraDebugStatus()
 
   async initialize(io: Server): Promise<void> {
     this.io = io
@@ -245,7 +247,8 @@ export class AutoDirectorService {
         activeUntil: this.aerialActiveAnchor ? this.aerialActiveUntil : null,
         reason: this.aerialReason,
         visibleSteamIds: [...this.aerialVisibleSteamIds]
-      }
+      },
+      cameraDebug: structuredClone(this.cameraDebug)
     }
   }
 
@@ -423,6 +426,19 @@ export class AutoDirectorService {
       geometryFeatures ?? undefined,
       topologyFeatures ?? undefined
     )
+    this.cameraDebug = computeCameraDebugStatus({
+      mapName: payload.map?.name ? String(payload.map.name) : null,
+      at: now,
+      players,
+      scores: this.decision.scores,
+      geometryFeatures,
+      geometry: geometryMap,
+      anchors: aerialMap?.anchors ?? [],
+      currentPlayerSteamId: this.decision.currentSteamId,
+      candidatePlayerSteamId: this.decision.candidateSteamId,
+      activeAnchorId: this.aerialActiveAnchor?.id ?? null,
+      geometryMessage: this.geometry.getStatus().message
+    })
     this.previousTopologyPlayers = new Map(players.map((player) => [player.steamId, player]))
     this.recordDecision(this.decision, now)
 
