@@ -10,6 +10,7 @@ export type PanelInput = {
   type: string
   name: string
   label: string
+  default?: boolean
   values?: { name: string; label: string }[]
 }
 
@@ -81,7 +82,11 @@ export function useHudPanelView() {
         if (input.type === 'action') continue
         if (config.value[section.name][input.name] === undefined) {
           config.value[section.name][input.name] =
-            input.type === 'checkbox' ? false : input.type === 'images' ? [] : ''
+            input.type === 'checkbox'
+              ? input.default ?? false
+              : input.type === 'images'
+                ? []
+                : ''
         }
       }
     }

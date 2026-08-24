@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import fs from 'fs'
 import path from 'path'
 import { SignatureVerifier } from '../domains/huds/signature.verifier'
-import { getHudsDir, getBuiltinHudDir } from '../../paths'
+import { getHudDir } from '../../paths'
 
 /*  WARNING: A lot of this code was create by AI and may contain errors. 
     While I don't love vibe coding, I think protecting hud makers work is more
@@ -29,7 +29,7 @@ export function signedHudMiddleware(req: Request, res: Response, next: NextFunct
   }
 
   const hudId = hudIdMatch[1]
-  const hudDir = hudId === 'default' ? getBuiltinHudDir() : path.join(getHudsDir(), hudId)
+  const hudDir = getHudDir(hudId)
 
   // Check if HUD is signed
   if (!SignatureVerifier.isHudSigned(hudDir)) {

@@ -16,14 +16,14 @@ export const getHudsDir = (): string => {
  * Returns the path to the bundled default HUD inside the app package.
  * Tries multiple locations to support dev, packed, and unpacked scenarios.
  */
-export const getBuiltinHudDir = (): string => {
+export const getBuiltinHudDir = (hudId = 'default'): string => {
   const candidates = [
     // Production packed build
-    path.join(app.getAppPath(), 'resources/default-hud'),
+    path.join(app.getAppPath(), `resources/${hudId}-hud`),
     // Unpacked build
-    path.join(process.execPath, '../resources/default-hud'),
+    path.join(process.execPath, `../resources/${hudId}-hud`),
     // Development
-    path.join(__dirname, '../../resources/default-hud')
+    path.join(__dirname, `../../resources/${hudId}-hud`)
   ]
 
   for (const candidate of candidates) {
@@ -33,7 +33,14 @@ export const getBuiltinHudDir = (): string => {
   }
 
   // Fallback to development path if none exist (will error at runtime if actually needed)
-  return path.join(__dirname, '../../resources/default-hud')
+  return path.join(__dirname, `../../resources/${hudId}-hud`)
+}
+
+export const getHudDir = (hudId: string): string => {
+  const builtinDir = getBuiltinHudDir(hudId)
+  return fs.existsSync(path.join(builtinDir, 'hud.json'))
+    ? builtinDir
+    : path.join(getHudsDir(), hudId)
 }
 
 export const getAutoDirectorResourceDir = (): string => {

@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { enforceOverlayOnTop } from './overlayUtils'
 import { registerHudKeybinds, unregisterHudKeybinds } from './shortcuts'
-import { getHudsDir, getBuiltinHudDir } from './paths'
+import { getHudsDir, getHudDir } from './paths'
 import { setActiveHudId } from './server/server'
 import { sendTelnetCommands } from './camera/telnet'
 import { getControlToken } from './server/controlToken'
@@ -74,7 +74,7 @@ export function registerIpcHandlers(): void {
 
     // Load hud keybinds
     if (hudId) {
-      const hudDir = hudId === 'default' ? getBuiltinHudDir() : path.join(getHudsDir(), hudId)
+      const hudDir = getHudDir(hudId)
       const keybindsPath = path.join(hudDir, 'keybinds.json')
       if (fs.existsSync(keybindsPath)) {
         try {

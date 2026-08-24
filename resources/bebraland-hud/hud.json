@@ -1,0 +1,18 @@
+{
+  "name": "BebraLand HUD",
+  "version": "1.0.0",
+  "author": "BebraLand team",
+  "legacy": false,
+  "radar": true,
+  "killfeed": false,
+  "game": "cs2",
+  "boltobserv": {
+    "css": false,
+    "maps": false
+  },
+  "variants": [
+    "default",
+    "horizontal",
+    "vertical"
+  ]
+}
