@@ -101,6 +101,14 @@ const setWeight = (key: string, value: number) => {
 
 const resetWeights = () => void updateSettings({ customWeights: {} })
 
+const setAerialPhase = (phase: 'freezeTime' | 'midRound' | 'roundEnd', enabled: boolean) =>
+  void updateSettings({
+    aerialPresentationPhases: {
+      ...status.value.settings.aerialPresentationPhases,
+      [phase]: enabled
+    }
+  })
+
 const lockRemaining = computed(() => {
   const until = status.value.decision?.lockUntil
   return until ? Math.max(0, until - Date.now()) : 0
@@ -483,6 +491,34 @@ const healthClass = (state: string) =>
                   </span>
                 </span>
               </label>
+              <div class="mt-2 grid gap-2 sm:grid-cols-3">
+                <label
+                  v-for="phase in [
+                    ['freezeTime', 'Freeze-time', 'Always show T + CT spawns'],
+                    ['midRound', 'Mid-round', 'Only calm, action-safe windows'],
+                    ['roundEnd', 'Round end', 'Post-round establishing shot']
+                  ] as const"
+                  :key="phase[0]"
+                  class="flex items-start gap-2 rounded border border-sky-500/15 bg-sky-500/[0.03] p-2 text-[10px] text-zinc-400"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="status.settings.aerialPresentationPhases[phase[0]]"
+                    :disabled="!status.settings.aerialPresentationEnabled"
+                    @change="
+                      setAerialPhase(
+                        phase[0],
+                        ($event.target as HTMLInputElement).checked
+                      )
+                    "
+                    class="mt-0.5 accent-sky-400"
+                  />
+                  <span>
+                    <span class="block font-semibold text-sky-200">{{ phase[1] }}</span>
+                    <span class="mt-0.5 block text-[9px] text-zinc-600">{{ phase[2] }}</span>
+                  </span>
+                </label>
+              </div>
               <p class="mt-2 text-[10px] text-zinc-600">
                 {{ status.ml.modelMessage }} · {{ status.ml.geometry.message }}
               </p>

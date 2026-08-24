@@ -156,6 +156,11 @@ export interface AutoDirectorSettings {
   geometryAdvisoryEnabled: boolean
   mlAdvisoryEnabled: boolean
   aerialPresentationEnabled: boolean
+  aerialPresentationPhases: {
+    freezeTime: boolean
+    midRound: boolean
+    roundEnd: boolean
+  }
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Partial<AutoDirectorProfile['weights']>

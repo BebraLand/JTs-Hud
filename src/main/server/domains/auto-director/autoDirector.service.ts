@@ -39,7 +39,7 @@ import type {
 const SETTINGS_KEY = 'autoDirectorSettings'
 const MAX_HISTORY = 200
 const AERIAL_MIN_CONFIRMATIONS = 2
-const AERIAL_MAX_HOLD_MS = 4500
+const AERIAL_MAX_HOLD_MS = 6000
 const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
 
@@ -58,6 +58,15 @@ const sanitizeSettings = (input: Partial<AutoDirectorSettings>): Partial<AutoDir
     output.mlAdvisoryEnabled = input.mlAdvisoryEnabled
   if (typeof input.aerialPresentationEnabled === 'boolean') {
     output.aerialPresentationEnabled = input.aerialPresentationEnabled
+  }
+  if (input.aerialPresentationPhases && typeof input.aerialPresentationPhases === 'object') {
+    const phases = input.aerialPresentationPhases
+    output.aerialPresentationPhases = {
+      ...DEFAULT_AUTO_DIRECTOR_SETTINGS.aerialPresentationPhases,
+      ...(typeof phases.freezeTime === 'boolean' ? { freezeTime: phases.freezeTime } : {}),
+      ...(typeof phases.midRound === 'boolean' ? { midRound: phases.midRound } : {}),
+      ...(typeof phases.roundEnd === 'boolean' ? { roundEnd: phases.roundEnd } : {})
+    }
   }
   if (input.scoringIntervalMs !== undefined) {
     const interval = Number(input.scoringIntervalMs)
