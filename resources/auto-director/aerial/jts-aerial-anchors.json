@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 2,
+  "coordinateSystem": "source2-hammer-units",
+  "source": "cs2-netcon-getpos",
+  "maps": {
+    "de_ancient": {
+      "schemaVersion": 1,
+      "map": "de_ancient",
+      "coordinateSystem": "source2-hammer-units",
+      "source": "cs2-netcon-getpos",
+      "anchors": {
+        "t_spawn": {
+          "id": "t_spawn",
+          "label": "T Spawn",
+          "kind": "spawn",
+          "required": true,
+          "hint": "Wide, readable overview of the attacking spawn.",
+          "position": [
+            -250.964157,
+            -2430.066406,
+            -13.788737
+          ],
+          "angles": [
+            21.45013,
+            136.810089,
+            0
+          ],
+          "raw": "setpos -250.964157 -2430.066406 -13.788737;setang 21.450130 136.810089 0.000000\r\njts_aerial_app_1787526696039_cnjdcz\r\n",
+          "capturedAt": "2026-08-23T23:11:36.055Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "ct_spawn": {
+          "id": "ct_spawn",
+          "label": "CT Spawn",
+          "kind": "spawn",
+          "required": true,
+          "hint": "Wide, readable overview of the defending spawn.",
+          "notes": "",
+          "position": [
+            -98.902443,
+            1030.861328,
+            85.071098
+          ],
+          "angles": [
+            -16.537579,
+            131.746918,
+            0
+          ],
+          "raw": "setpos -98.902443 1030.861328 85.071098;setang -16.537579 131.746918 0.000000\r\njts_aerial_app_1787526764538_tehv1g\r\n",
+          "capturedAt": "2026-08-23T23:12:44.561Z",
+          "source": "cs2-netcon-getpos"
+        },
+        "mid": {
+          "id": "mid",
+          "label": "Mid",
+          "kind": "mid",
+          "required": true,
+          "hint": "The most useful central route overview.",
+          "position": [
+            -273.709991,
+            -876.217102,
+            277.608765
+          ],
+          "angles": [
+            22.834921,
+            133.109009,
+            0
+          ],
+          "raw": "setpos -273.709991 -876.217102 277.608765;setang 22.834921 133.109009 0.000000\r\njts_aerial_app_1787526958776_i1cemr\r\n",
+          "capturedAt": "2026-08-23T23:15:58.787Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "a_main": {
+          "id": "a_main",
+          "label": "A Main / Approach",
+          "kind": "route",
+          "required": false,
+          "hint": "Show the entry portal and the first fight space."
+        },
+        "a_site": {
+          "id": "a_site",
+          "label": "A Site",
+          "kind": "site",
+          "required": true,
+          "hint": "Wide site view with plant and contest visibility.",
+          "position": [
+            1247.908569,
+            376.313507,
+            294.342651
+          ],
+          "angles": [
+            15.41006,
+            -139.712936,
+            0
+          ],
+          "raw": "setpos 1247.908569 376.313507 294.342651;setang 15.410060 -139.712936 0.000000\r\njts_aerial_app_1787526912770_qz0tm4\r\n",
+          "capturedAt": "2026-08-23T23:15:12.776Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "b_main": {
+          "id": "b_main",
+          "label": "B Main / Approach",
+          "kind": "route",
+          "required": false,
+          "hint": "Show the entry portal and the first fight space."
+        },
+        "b_site": {
+          "id": "b_site",
+          "label": "B Site",
+          "kind": "site",
+          "required": true,
+          "hint": "Wide site view with plant and contest visibility.",
+          "position": [
+            -2126.313721,
+            1050.577148,
+            271.288788
+          ],
+          "angles": [
+            25.117567,
+            -37.915222,
+            0
+          ],
+          "raw": "setpos -2126.313721 1050.577148 271.288788;setang 25.117567 -37.915222 0.000000\r\njts_aerial_app_1787527015740_pt2lbn\r\n",
+          "capturedAt": "2026-08-23T23:16:55.746Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "long": {
+          "id": "long",
+          "label": "Long",
+          "kind": "route",
+          "required": false,
+          "hint": "Long lane or its closest equivalent.",
+          "position": [
+            1386.86792,
+            -872.197632,
+            35.52494
+          ],
+          "angles": [
+            -13.079948,
+            136.90419,
+            0
+          ],
+          "raw": "setpos 1386.867920 -872.197632 35.524940;setang -13.079948 136.904190 0.000000\r\njts_aerial_app_1787526936056_f0wro0\r\n",
+          "capturedAt": "2026-08-23T23:15:36.073Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "short": {
+          "id": "short",
+          "label": "Short",
+          "kind": "route",
+          "required": false,
+          "hint": "Short lane or its closest equivalent."
+        },
+        "a_postplant": {
+          "id": "a_postplant",
+          "label": "A Post-plant",
+          "kind": "postplant",
+          "required": false,
+          "hint": "Show bomb and main retake lanes."
+        },
+        "b_postplant": {
+          "id": "b_postplant",
+          "label": "B Post-plant",
+          "kind": "postplant",
+          "required": false,
+          "hint": "Show bomb and main retake lanes."
+        },
+        "wide_overview": {
+          "id": "wide_overview",
+          "label": "Map Wide Overview",
+          "kind": "custom",
+          "required": false,
+          "hint": "High-level shot for round transitions."
+        }
+      }
+    },
+    "de_dust2": {
+      "schemaVersion": 1,
+      "map": "de_dust2",
+      "coordinateSystem": "source2-hammer-units",
+      "source": "cs2-netcon-getpos",
+      "anchors": {
+        "t_spawn": {
+          "id": "t_spawn",
+          "label": "T Spawn",
+          "kind": "spawn",
+          "required": true,
+          "hint": "Wide, readable overview of the attacking spawn.",
+          "position": [
+            -1353.959961,
+            -947.436462,
+            301.645172
+          ],
+          "angles": [
+            12.569591,
+            36.610985,
+            0
+          ],
+          "raw": "setpos -1353.959961 -947.436462 301.645172;setang 12.569591 36.610985 0.000000\r\njts_aerial_app_1787514291671_f4v4s4\r\n",
+          "capturedAt": "2026-08-23T19:44:51.674Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "ct_spawn": {
+          "id": "ct_spawn",
+          "label": "CT Spawn",
+          "kind": "spawn",
+          "required": true,
+          "hint": "Wide, readable overview of the defending spawn.",
+          "position": [
+            508.646118,
+            2046.581543,
+            28.001284
+          ],
+          "angles": [
+            16.777166,
+            135.721466,
+            0
+          ],
+          "raw": "setpos 508.646118 2046.581543 28.001284;setang 16.777166 135.721466 0.000000\r\njts_aerial_app_1787514224244_z2mok2\r\n",
+          "capturedAt": "2026-08-23T19:43:44.265Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "mid": {
+          "id": "mid",
+          "label": "Mid",
+          "kind": "mid",
+          "required": true,
+          "hint": "The most useful central route overview.",
+          "position": [
+            -146.330139,
+            329.770477,
+            127.41729
+          ],
+          "angles": [
+            15.567236,
+            136.182907,
+            0
+          ],
+          "raw": "setpos -146.330139 329.770477 127.417290;setang 15.567236 136.182907 0.000000\r\njts_aerial_app_1787525065046_g8etpg\r\n",
+          "capturedAt": "2026-08-23T22:44:25.065Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "a_main": {
+          "id": "a_main",
+          "label": "A Main / Approach",
+          "kind": "route",
+          "required": false,
+          "hint": "Show the entry portal and the first fight space.",
+          "notes": "Long from CT perspective",
+          "position": [
+            1560.960205,
+            1297.336426,
+            112.834877
+          ],
+          "angles": [
+            9.195362,
+            -150.013596,
+            0
+          ],
+          "raw": "setpos 1560.960205 1297.336426 112.834877;setang 9.195362 -150.013596 0.000000\r\njts_aerial_app_1787526524682_nvqqgx\r\n",
+          "capturedAt": "2026-08-23T23:08:44.694Z",
+          "source": "cs2-netcon-getpos"
+        },
+        "a_site": {
+          "id": "a_site",
+          "label": "A Site",
+          "kind": "site",
+          "required": true,
+          "hint": "Wide site view with plant and contest visibility.",
+          "position": [
+            1608.226929,
+            2061.297119,
+            383.175873
+          ],
+          "angles": [
+            24.81531,
+            142.562881,
+            0
+          ],
+          "raw": "setpos 1608.226929 2061.297119 383.175873;setang 24.815310 142.562881 0.000000\r\njts_aerial_app_1787514592485_0s3g0d\r\n",
+          "capturedAt": "2026-08-23T19:49:52.494Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "b_main": {
+          "id": "b_main",
+          "label": "B Main / Approach",
+          "kind": "route",
+          "required": false,
+          "hint": "Show the entry portal and the first fight space.",
+          "position": [
+            -2071.363037,
+            2498.548096,
+            202.393234
+          ],
+          "angles": [
+            9.477638,
+            -68.393372,
+            0
+          ],
+          "raw": "setpos -2071.363037 2498.548096 202.393234;setang 9.477638 -68.393372 0.000000\r\njts_aerial_app_1787526459335_27i7ui\r\n",
+          "capturedAt": "2026-08-23T23:07:39.355Z",
+          "source": "cs2-netcon-getpos",
+          "notes": "Looking from B site to Tunnel"
+        },
+        "b_site": {
+          "id": "b_site",
+          "label": "B Site",
+          "kind": "site",
+          "required": true,
+          "hint": "Wide site view with plant and contest visibility.",
+          "position": [
+            -2140.888916,
+            1816.723877,
+            236.079895
+          ],
+          "angles": [
+            25.152506,
+            46.477024,
+            0
+          ],
+          "raw": "setpos -2140.888916 1816.723877 236.079895;setang 25.152506 46.477024 0.000000\r\njts_aerial_app_1787526400306_9e4hhq\r\n",
+          "capturedAt": "2026-08-23T23:06:40.314Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "long": {
+          "id": "long",
+          "label": "Long",
+          "kind": "route",
+          "required": false,
+          "hint": "Long lane or its closest equivalent.",
+          "position": [
+            1546.594727,
+            660.447083,
+            146.837692
+          ],
+          "angles": [
+            11.112164,
+            132.773972,
+            0
+          ],
+          "raw": "setpos 1546.594727 660.447083 146.837692;setang 11.112164 132.773972 0.000000\r\njts_aerial_app_1787525045812_cn8uy0\r\n",
+          "capturedAt": "2026-08-23T22:44:05.828Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "short": {
+          "id": "short",
+          "label": "Short",
+          "kind": "route",
+          "required": false,
+          "hint": "Short lane or its closest equivalent.",
+          "position": [
+            488.861023,
+            1368.385498,
+            138.761368
+          ],
+          "angles": [
+            12.715134,
+            137.990906,
+            0
+          ],
+          "raw": "setpos 488.861023 1368.385498 138.761368;setang 12.715134 137.990906 0.000000\r\njts_aerial_app_1787526549619_i261ec\r\n",
+          "capturedAt": "2026-08-23T23:09:09.624Z",
+          "source": "cs2-netcon-getpos",
+          "notes": ""
+        },
+        "a_postplant": {
+          "id": "a_postplant",
+          "label": "A Post-plant",
+          "kind": "postplant",
+          "required": false,
+          "hint": "Show bomb and main retake lanes."
+        },
+        "b_postplant": {
+          "id": "b_postplant",
+          "label": "B Post-plant",
+          "kind": "postplant",
+          "required": false,
+          "hint": "Show bomb and main retake lanes."
+        },
+        "wide_overview": {
+          "id": "wide_overview",
+          "label": "Map Wide Overview",
+          "kind": "custom",
+          "required": false,
+          "hint": "High-level shot for round transitions."
+        }
+      }
+    }
+  }
+}

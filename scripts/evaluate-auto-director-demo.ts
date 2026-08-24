@@ -15,6 +15,8 @@ import {
 import { GeometryRegistry } from '../src/main/server/domains/auto-director/geometry/geometryRegistry'
 import type { GeometryMap } from '../src/main/server/domains/auto-director/geometry/geometryMap'
 import { computeGeometryFeatures } from '../src/main/server/domains/auto-director/geometry/geometryFeatures'
+import { AerialCameraRegistry } from '../src/main/server/domains/auto-director/aerial/aerialCameraRegistry'
+import { decideAerialPresentation } from '../src/main/server/domains/auto-director/aerial/aerialPresentation'
 import { TopologyRegistry } from '../src/main/server/domains/auto-director/topology/topologyRegistry'
 import type { TopologyMap } from '../src/main/server/domains/auto-director/topology/topologyMap'
 import { computeTopologyFeatures } from '../src/main/server/domains/auto-director/topology/topologyFeatures'
@@ -58,6 +60,12 @@ interface CameraSample {
   objectiveActorSteamId: string | null
 }
 
+interface AerialEligibilitySample {
+  eligible: boolean
+  anchorId: string | null
+  actionBlocked: boolean
+}
+
 const percentage = (hits: number, total: number): number =>
   total > 0 ? Number(((hits / total) * 100).toFixed(1)) : 0
 
@@ -86,6 +94,8 @@ interface HybridConfig {
   topology: TopologyMap | null
   geometryEnabled: boolean
   mlEnabled: boolean
+  aerialRegistry: AerialCameraRegistry | null
+  aerialEnabled: boolean
   geometryCache: WeakMap<GsiLikePayload, ReturnType<typeof computeGeometryFeatures>>
   topologyCache: WeakMap<
     GsiLikePayload,
@@ -103,10 +113,12 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
     enabled: true,
     mode,
     geometryAdvisoryEnabled: hybrid?.geometryEnabled ?? false,
-    mlAdvisoryEnabled: hybrid?.mlEnabled ?? false
+    mlAdvisoryEnabled: hybrid?.mlEnabled ?? false,
+    aerialPresentationEnabled: hybrid?.aerialEnabled ?? false
   }
   const samples: CameraSample[] = []
   const switches: Array<{ atMs: number; round: number }> = []
+  const aerialSamples: AerialEligibilitySample[] = []
   let targetSteamId: string | null = null
   let roundStartedAt = 0
   let lastRound = -1
@@ -195,6 +207,22 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
       geometryFeatures ?? undefined,
       topologyFeatures
     )
+    if (hybrid?.aerialEnabled && hybrid.aerialRegistry) {
+      const aerialMap = hybrid.aerialRegistry.load(frame.payload.map?.name ?? timeline.metadata.map)
+      const aerial = decideAerialPresentation(
+        frame.payload,
+        settings,
+        players,
+        decision,
+        aerialMap,
+        geometryFeatures ? hybrid.geometry : null
+      )
+      aerialSamples.push({
+        eligible: aerial.eligible,
+        anchorId: aerial.anchor?.id ?? null,
+        actionBlocked: aerial.actionBlocked
+      })
+    }
     if (decision.shouldSwitch && decision.candidateSteamId) {
       targetSteamId = decision.candidateSteamId
       engine.confirmSwitch(targetSteamId, frame.atMs)
@@ -247,6 +275,15 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
   const objectiveHits = objectiveSamples.filter(
     (sample) => sample.targetSteamId === sample.objectiveActorSteamId
   ).length
+  const eligibleAerialSamples = aerialSamples.filter((sample) => sample.eligible)
+  const aerialAnchorFrames = Object.fromEntries(
+    [...new Set(eligibleAerialSamples.map((sample) => sample.anchorId).filter(Boolean))]
+      .sort()
+      .map((anchorId) => [
+        anchorId,
+        eligibleAerialSamples.filter((sample) => sample.anchorId === anchorId).length
+      ])
+  )
 
   return {
     mode,
@@ -263,13 +300,25 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
     killerCaptureOneSecondBeforePercent: percentage(captures(1_000, false), validKills.length),
     participantCaptureOneSecondBeforePercent: percentage(captures(1_000, true), validKills.length),
     objectiveCoveragePercent: percentage(objectiveHits, objectiveSamples.length),
-    objectiveSamples: objectiveSamples.length
+    objectiveSamples: objectiveSamples.length,
+    aerialEligibility:
+      hybrid?.aerialEnabled && hybrid.aerialRegistry
+        ? {
+            eligibleFrames: eligibleAerialSamples.length,
+            eligiblePercent: percentage(eligibleAerialSamples.length, aerialSamples.length),
+            actionBlockedFrames: aerialSamples.filter((sample) => sample.actionBlocked).length,
+            anchorFrames: aerialAnchorFrames,
+            note: 'Eligibility only: does not simulate transport, two-frame confirmation, hold limit or cooldown.'
+          }
+        : undefined
   }
 }
 
 const input = process.argv[2]
 if (!input) {
-  console.error('Usage: npm run demo:evaluate -- fixtures/demos/example.timeline.json')
+  console.error(
+    'Usage: npm run demo:evaluate -- <timeline.json[.gz]> [geometry-dir model.json aerial-dir]'
+  )
   process.exit(1)
 }
 
@@ -283,6 +332,7 @@ if (!timeline.frames.length) {
 
 const geometryDirectory = process.argv[3]
 const modelPath = process.argv[4]
+const aerialDirectory = process.argv[5]
 let hybrid: HybridConfig | undefined
 if (geometryDirectory && modelPath) {
   const geometry = new GeometryRegistry(path.resolve(geometryDirectory)).load(timeline.metadata.map)
@@ -295,6 +345,10 @@ if (geometryDirectory && modelPath) {
     ranker: loadLightGbmRanker(path.resolve(modelPath)),
     geometryEnabled: true,
     mlEnabled: true,
+    aerialRegistry: new AerialCameraRegistry(
+      path.resolve(aerialDirectory ?? 'resources/auto-director/aerial')
+    ),
+    aerialEnabled: false,
     geometryCache: new WeakMap(),
     topologyCache: new WeakMap()
   }
@@ -318,6 +372,9 @@ const report = {
         ),
         hybridModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
           evaluateMode(timeline, mode, hybrid)
+        ),
+        aerialEligibilityModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
+          evaluateMode(timeline, mode, { ...hybrid!, mlEnabled: false, aerialEnabled: true })
         )
       }
     : {})

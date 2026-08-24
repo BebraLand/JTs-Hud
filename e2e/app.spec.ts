@@ -108,6 +108,9 @@ test.describe('Auto Director desktop smoke', () => {
     })
 
     expect(response.ok()).toBe(true)
+    const stateResponse = await page.request.get('http://127.0.0.1:23415/cs2/state')
+    expect(stateResponse.status()).toBe(200)
+    expect((await stateResponse.json()).map.round).toBe(4)
     await expect(page.getByText('GSI LIVE')).toBeVisible()
     await expect(page.getByText('Anchor', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Entry', { exact: true }).first()).toBeVisible()

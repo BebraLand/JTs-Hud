@@ -86,9 +86,16 @@ const STANDARD_ANCHORS = [
 ]
 
 const $ = (id) => document.getElementById(id)
+
+if (!window.aerial || window.aerial.apiVersion !== 'gsi-state-fix-1') {
+  document.body.innerHTML =
+    '<main style="padding:32px;font:16px sans-serif;color:#fff;background:#080a10">This Aerial Capture build is stale or incomplete. Download the latest gsi-state-fix portable build.</main>'
+  throw new Error('Aerial preload bridge is missing or stale')
+}
 const hostInput = $('host')
 const portInput = $('port')
 const mapInput = $('map')
+
 const list = $('anchor-list')
 const selectedLabel = $('selected-label')
 const selectedKind = $('selected-kind')
@@ -221,7 +228,7 @@ function render() {
     selectedKind.textContent = 'Waiting'
     selectedKind.className = 'badge'
     selectedHint.textContent =
-      'Choose an anchor from the checklist. The tool will read the current observer camera through CS2 Telnet.'
+      'Choose an anchor from the checklist. The map is received through JTs-Hud GSI; the camera pose is read through CS2 Telnet.'
     positionOutput.textContent = 'not captured'
     anglesOutput.textContent = 'not captured'
     notesInput.value = ''
@@ -375,17 +382,14 @@ async function detectAndSelectCurrentMap({
   preserveAnchorId = selectedId,
   adopt = true
 } = {}) {
-  const response = await window.aerial.detectMap({
-    host: hostInput.value.trim(),
-    port: Number(portInput.value)
-  })
+  const response = await window.aerial.detectMap()
   lastMapDetection = response
   debugLog('map-detection', { response })
   const detectedMap = response?.map
   if (!detectedMap) {
     if (!quiet) {
       throw new Error(
-        `Could not read the current CS2 map from status. ${response?.errors?.join(' | ') || 'No CS2 Telnet response.'}`
+        `Could not read the current CS2 map from JTs-Hud GSI. ${response?.errors?.join(' | ') || 'No GSI response yet.'}`
       )
     }
     return null
@@ -446,6 +450,22 @@ function removeCustomAnchor() {
   render()
 }
 
+function hasExportableData(candidate) {
+  return Object.values(candidate.anchors || {}).some(
+    (anchor) => isCaptured(anchor) || Boolean(anchor.notes?.trim())
+  )
+}
+
+async function collectExportManifests() {
+  const manifests = {}
+  for (const option of mapInput.options) {
+    const candidate = option.value === manifest.map ? manifest : await loadDraft(option.value)
+    if (candidate.map === manifest.map || hasExportableData(candidate))
+      manifests[candidate.map] = candidate
+  }
+  return manifests
+}
+
 async function exportManifest() {
   const errors = validateManifest()
   if (errors.length) {
@@ -453,10 +473,22 @@ async function exportManifest() {
     resultOutput.textContent = errors.join('\n')
     return
   }
-  const response = await window.aerial.exportManifest({ map: manifest.map, manifest })
-  if (!response.canceled) {
-    resultOutput.className = 'capture-result'
-    resultOutput.textContent = `Verified manifest exported:\n${response.filePath}`
+  try {
+    const manifests = await collectExportManifests()
+    const bundle = await window.aerial.createBundle(manifests)
+    const response = await window.aerial.exportManifest({
+      map: manifest.map,
+      manifest,
+      manifests,
+      bundle
+    })
+    if (!response.canceled) {
+      resultOutput.className = 'capture-result'
+      resultOutput.textContent = `Verified Aerial bundle exported (${Object.keys(manifests).length} maps):\n${response.filePath}`
+    }
+  } catch (error) {
+    resultOutput.className = 'capture-result error'
+    resultOutput.textContent = error instanceof Error ? error.message : String(error)
   }
 }
 
@@ -464,23 +496,31 @@ async function importManifest() {
   try {
     const response = await window.aerial.importManifest()
     if (response.canceled) return
-    if (
-      !response.manifest ||
-      response.manifest.schemaVersion !== 1 ||
-      !response.manifest.map ||
-      !response.manifest.anchors
-    ) {
-      throw new Error('This file is not a compatible Aerial manifest.')
+    const imported = response.manifest
+    let importedManifests
+    if (await window.aerial.isBundle(imported)) {
+      importedManifests = await window.aerial.getBundleManifests(imported)
+    } else if (imported?.schemaVersion === 1 && imported.map && imported.anchors) {
+      importedManifests = { [imported.map]: imported }
+    } else {
+      throw new Error('This file is not a compatible Aerial manifest or multi-map bundle.')
     }
-    if (![...mapInput.options].some((option) => option.value === response.manifest.map)) {
-      throw new Error(`This manifest targets an unsupported map: ${response.manifest.map}`)
+
+    const supportedMaps = new Set([...mapInput.options].map((option) => option.value))
+    const unsupportedMap = Object.keys(importedManifests).find((map) => !supportedMaps.has(map))
+    if (unsupportedMap) throw new Error(`This bundle targets an unsupported map: ${unsupportedMap}`)
+
+    for (const importedManifest of Object.values(importedManifests)) {
+      await window.aerial.saveDraft(mergeWithCatalog(importedManifest))
     }
-    manifest = mergeWithCatalog(response.manifest)
-    mapInput.value = manifest.map
+    const targetMap = importedManifests[mapInput.value]
+      ? mapInput.value
+      : Object.keys(importedManifests)[0]
+    mapInput.value = targetMap
+    manifest = await loadDraft(targetMap)
     selectedId = Object.keys(manifest.anchors)[0] || null
-    saveDraft()
     resultOutput.className = 'capture-result'
-    resultOutput.textContent = `Imported ${response.filePath}`
+    resultOutput.textContent = `Imported ${Object.keys(importedManifests).length} map(s) from ${response.filePath}`
     render()
   } catch (error) {
     resultOutput.className = 'capture-result error'
@@ -512,10 +552,10 @@ $('import-button').addEventListener('click', importManifest)
 detectMapButton.addEventListener('click', async () => {
   detectMapButton.disabled = true
   statusOutput.classList.remove('error')
-  statusOutput.innerHTML = '<span class="status-dot"></span>Detecting current CS2 map'
+  statusOutput.innerHTML = '<span class="status-dot"></span>Reading current map from JTs-Hud GSI'
   try {
     const detectedMap = await detectAndSelectCurrentMap()
-    statusOutput.innerHTML = `<span class="status-dot"></span>Optional CS2 status detected: ${detectedMap}`
+    statusOutput.innerHTML = `<span class="status-dot"></span>JTs-Hud GSI detected: ${detectedMap}`
   } catch (error) {
     debugLog('manual-map-detection-failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -536,8 +576,22 @@ async function initialize() {
   render()
   debugLog('startup', {
     selectedMap: mapInput.value,
-    telnet: `${hostInput.value}:${portInput.value}`
+    telnet: `${hostInput.value}:${portInput.value}`,
+    gsi: 'JTs-Hud listener at http://127.0.0.1:23415/cs2/state'
   })
+  try {
+    const detectedMap = await detectAndSelectCurrentMap({ quiet: true })
+    if (detectedMap) {
+      statusOutput.innerHTML = `<span class="status-dot"></span>JTs-Hud GSI detected: ${detectedMap}`
+    } else {
+      statusOutput.innerHTML = '<span class="status-dot"></span>Waiting for JTs-Hud GSI state'
+    }
+  } catch (error) {
+    debugLog('startup-map-detection-failed', {
+      error: error instanceof Error ? error.message : String(error),
+      response: lastMapDetection
+    })
+  }
 }
 
 clearDebugButton.addEventListener('click', () => {

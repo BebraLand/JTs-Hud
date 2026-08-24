@@ -97,6 +97,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   sceneAdvisoryEnabled: true,
   geometryAdvisoryEnabled: true,
   mlAdvisoryEnabled: true,
+  aerialPresentationEnabled: false,
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}

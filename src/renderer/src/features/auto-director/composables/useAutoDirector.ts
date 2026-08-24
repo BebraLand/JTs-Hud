@@ -13,6 +13,7 @@ const emptyStatus = (): AutoDirectorStatus => ({
     sceneAdvisoryEnabled: true,
     geometryAdvisoryEnabled: true,
     mlAdvisoryEnabled: true,
+    aerialPresentationEnabled: false,
     scoringIntervalMs: 100,
     manualOverrideSteamId: null,
     customWeights: {}
@@ -54,6 +55,18 @@ const emptyStatus = (): AutoDirectorStatus => ({
       portalCount: 0,
       message: 'No map requested'
     }
+  },
+  aerial: {
+    enabled: false,
+    mapName: null,
+    state: 'missing',
+    anchorCount: 0,
+    message: 'No map requested',
+    activeAnchorId: null,
+    activeAnchorLabel: null,
+    activeUntil: null,
+    reason: 'Aerial presentation disabled',
+    visibleSteamIds: []
   }
 })
 

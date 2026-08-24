@@ -5,6 +5,7 @@ import { simulateObserverSlotKey } from '../src/main/camera/keySimulation'
 import { CameraController } from '../src/main/server/domains/auto-director/cameraController'
 import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from '../src/main/server/domains/auto-director/autoDirector.config'
 import type { PlayerScore } from '../src/main/server/domains/auto-director/autoDirector.types'
+import type { AerialCameraAnchor } from '../src/main/server/domains/auto-director/aerial/aerialCameraRegistry'
 
 const server = net.createServer((socket) => {
   socket.setEncoding('utf8')
@@ -81,8 +82,37 @@ const main = async (): Promise<void> => {
     assert.equal(fallback.transport, 'keyboard')
     assert.equal(keyboardCalls, 1)
 
+    let aerialCommand = ''
+    const aerialController = new CameraController(
+      async () => ({ host: '127.0.0.1', port: address.port }),
+      async (commands) => {
+        aerialCommand = commands
+        return { response: 'fixture-ack', acknowledged: true }
+      },
+      async () => {
+        throw new Error('Aerial must never use keyboard fallback')
+      }
+    )
+    const anchor: AerialCameraAnchor = {
+      id: 'fixture-aerial',
+      label: 'Fixture Aerial',
+      kind: 'mid',
+      position: [1.25, -2.5, 3.75],
+      angles: [12, 180, 0]
+    }
+    const aerialResult = await aerialController.moveToAerial(anchor)
+    assert.equal(aerialResult.ok, true)
+    assert.equal(aerialResult.transport, 'telnet')
+    assert.equal(aerialCommand, 'setpos_exact 1.25 -2.5 3.75\nsetang_exact 12 180 0')
+    const invalidAerial = await aerialController.moveToAerial({
+      ...anchor,
+      position: [Number.NaN, 0, 0]
+    })
+    assert.equal(invalidAerial.ok, false)
+    assert.match(invalidAerial.message, /invalid pose/)
+
     console.log(
-      'Camera transport fixture passed: acknowledgement, shared settings, fallback opt-in and platform guard'
+      'Camera transport fixture passed: acknowledgement, shared settings, Aerial pose safety, fallback opt-in and platform guard'
     )
   } finally {
     await new Promise<void>((resolve, reject) => {

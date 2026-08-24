@@ -82,8 +82,10 @@ export const syncGSITeams = async () => {
 }
 
 let lastGSIState: CSGORaw | null = null
+let lastGSIStateAt: string | null = null
 
 export const getLastGSIState = (): CSGORaw | null => lastGSIState
+export const getLastGSIStateAt = (): string | null => lastGSIStateAt
 
 // Spectator slot map
 // Populated via PUT /api/spectator/slots from the Spectator Binds page
@@ -98,6 +100,18 @@ export const setSpectatorSlots = (slots: Record<number, string>): void => {
 
 export const setupGSI = (io: Server) => {
   const router = Router()
+
+  // Read-only local snapshot for standalone tools such as Aerial Capture.
+  // CS2 posts live payloads to /cs2/input; tools must not need a second GSI listener.
+  router.get('/state', (_req: Request, res: Response) => {
+    if (!lastGSIState) {
+      res.status(204).end()
+      return
+    }
+
+    if (lastGSIStateAt) res.setHeader('x-jts-gsi-state-at', lastGSIStateAt)
+    res.status(200).json(lastGSIState)
+  })
 
   // Sync teams whenever the map changes (reverseSide may differ per map)
   GSI.on('data', (data) => {
@@ -286,6 +300,16 @@ export const setupGSI = (io: Server) => {
   })
 
   // --- GSI HTTP endpoint ---
+  router.get('/state', (_req: Request, res: Response) => {
+    if (!lastGSIState) {
+      res.status(204).send()
+      return
+    }
+    res.setHeader('cache-control', 'no-store')
+    if (lastGSIStateAt) res.setHeader('x-jts-gsi-state-at', lastGSIStateAt)
+    res.status(200).json(lastGSIState)
+  })
+
   router.post('/input', (req: Request, res: Response) => {
     try {
       // --- Dead player position preservation ---
@@ -323,6 +347,7 @@ export const setupGSI = (io: Server) => {
       }
 
       lastGSIState = req.body
+      lastGSIStateAt = new Date().toISOString()
 
       // Build payload for for HUDs
       let hudPayload = req.body

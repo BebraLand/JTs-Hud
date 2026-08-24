@@ -16,7 +16,7 @@
         </div>
         <div class="top-actions">
           <button class="button secondary" id="import-button">Import JSON</button>
-          <button class="button primary" id="export-button">Export verified JSON</button>
+          <button class="button primary" id="export-button">Export all saved maps</button>
         </div>
       </header>
 
@@ -43,7 +43,7 @@
           </select>
         </div>
         <button class="button secondary detect-map-button" id="detect-map">
-          Try read map from CS2 status
+          Read map from JTs-Hud GSI
         </button>
         <div class="connection-status" id="connection-status">
           <span class="status-dot"></span>
@@ -140,10 +140,8 @@
       </main>
 
       <footer class="footer-note">
-        <span
-          >Standalone pose tool: CS2 Telnet <code>getpos</code> / <code>setpos_exact</code></span
-        >
-        <span>Presentation layer only, no memory access or hooks</span>
+        <span>Map source: CS2 GSI, pose source: CS2 Telnet</span>
+        <span>No memory access or hooks</span>
       </footer>
     </div>
     <script src="./app.js"></script>

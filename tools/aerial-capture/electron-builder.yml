@@ -17,4 +17,4 @@ win:
         - x64
   executableName: JTs Aerial Capture
 portable:
-  artifactName: JTs-Aerial-Capture-${version}-portable.${ext}
+  artifactName: JTs-Aerial-Capture-${version}-gsi-state-fix-portable.${ext}

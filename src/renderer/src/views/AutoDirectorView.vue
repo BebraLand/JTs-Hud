@@ -358,21 +358,21 @@ const healthClass = (state: string) =>
                   {{ current?.threatScenePeekCount ?? 0 }} peekable ·
                   {{ Math.round((current?.threatSceneActionableCoverage ?? 0) * 100) }}% actionable
                   · entry {{ Math.round((current?.routeEntryRelevance ?? 0) * 100) }}% · incoming
- {{ Math.round((current?.incomingGroupPressure ?? 0) * 100) }}%
- </p>
- <p class="mt-1 text-[11px] text-zinc-600">
- {{ current?.topologyPlantSite ?? 'route' }} ·
- {{ current?.topologyCallout ?? 'unknown area' }} ·
- {{ current?.topologyRoutePortalChokepoint ? 'chokepoint' : 'portal' }}
- {{ current?.topologyRoutePortalId ?? 'none' }} · control
- {{ Math.round((current?.topologyPortalControlScore ?? 0) * 100) }}% ·
- {{
-   current?.topologyPredictedFightMs !== null &&
-   current?.topologyPredictedFightMs !== undefined
-     ? `fight ~${Math.round(current.topologyPredictedFightMs)} ms`
-     : 'fight timing unknown'
- }}
- </p>
+                  {{ Math.round((current?.incomingGroupPressure ?? 0) * 100) }}%
+                </p>
+                <p class="mt-1 text-[11px] text-zinc-600">
+                  {{ current?.topologyPlantSite ?? 'route' }} ·
+                  {{ current?.topologyCallout ?? 'unknown area' }} ·
+                  {{ current?.topologyRoutePortalChokepoint ? 'chokepoint' : 'portal' }}
+                  {{ current?.topologyRoutePortalId ?? 'none' }} · control
+                  {{ Math.round((current?.topologyPortalControlScore ?? 0) * 100) }}% ·
+                  {{
+                    current?.topologyPredictedFightMs !== null &&
+                    current?.topologyPredictedFightMs !== undefined
+                      ? `fight ~${Math.round(current.topologyPredictedFightMs)} ms`
+                      : 'fight timing unknown'
+                  }}
+                </p>
               </div>
             </div>
 
@@ -459,9 +459,45 @@ const healthClass = (state: string) =>
                 />
                 Enable ML advisory ranking
               </label>
+              <label class="mt-2 flex items-start gap-2 text-[10px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  :checked="status.settings.aerialPresentationEnabled"
+                  :disabled="
+                    status.aerial.state !== 'loaded' || status.ml.geometry.state !== 'loaded'
+                  "
+                  @change="
+                    updateSettings({
+                      aerialPresentationEnabled: ($event.target as HTMLInputElement).checked
+                    })
+                  "
+                  class="mt-0.5 accent-sky-400"
+                />
+                <span>
+                  <span class="block font-semibold text-sky-300"
+                    >Enable calibrated Aerial presentation</span
+                  >
+                  <span class="mt-0.5 block text-[10px] text-zinc-500">
+                    Uses validated map anchors only in presentation-safe windows. First-person
+                    locks, action switches and manual control always win.
+                  </span>
+                </span>
+              </label>
               <p class="mt-2 text-[10px] text-zinc-600">
                 {{ status.ml.modelMessage }} · {{ status.ml.geometry.message }}
               </p>
+              <div class="mt-2 rounded border border-sky-500/15 bg-sky-500/[0.03] p-2 text-[10px]">
+                <p class="font-semibold text-sky-200">
+                  Aerial {{ status.aerial.state }} · {{ status.aerial.anchorCount }} anchors
+                  <span v-if="status.aerial.mapName">· {{ status.aerial.mapName }}</span>
+                </p>
+                <p class="mt-1 text-zinc-500">{{ status.aerial.message }}</p>
+                <p class="mt-1 text-zinc-400">{{ status.aerial.reason }}</p>
+                <p v-if="status.aerial.activeAnchorLabel" class="mt-1 text-sky-300">
+                  LIVE: {{ status.aerial.activeAnchorLabel }} · visible
+                  {{ status.aerial.visibleSteamIds.length }} players
+                </p>
+              </div>
             </div>
             <div class="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
               <p class="text-xs font-semibold text-zinc-200">Telnet</p>

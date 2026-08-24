@@ -155,6 +155,7 @@ export interface AutoDirectorSettings {
   sceneAdvisoryEnabled: boolean
   geometryAdvisoryEnabled: boolean
   mlAdvisoryEnabled: boolean
+  aerialPresentationEnabled: boolean
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Partial<AutoDirectorProfile['weights']>
@@ -212,7 +213,7 @@ export interface TransportHealth {
 
 export interface DirectorHistoryEntry {
   at: number
-  type: 'decision' | 'switch' | 'transport-error' | 'operator'
+  type: 'decision' | 'switch' | 'presentation' | 'transport-error' | 'operator'
   message: string
   fromSteamId?: string | null
   toSteamId?: string | null
@@ -245,6 +246,18 @@ export interface AutoDirectorStatus {
       portalCount: number
       message: string
     }
+  }
+  aerial: {
+    enabled: boolean
+    mapName: string | null
+    state: 'missing' | 'loaded' | 'error'
+    anchorCount: number
+    message: string
+    activeAnchorId: string | null
+    activeAnchorLabel: string | null
+    activeUntil: number | null
+    reason: string
+    visibleSteamIds: string[]
   }
 }
 

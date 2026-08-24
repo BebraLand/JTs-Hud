@@ -2,12 +2,15 @@ const { app, BrowserWindow, dialog, ipcMain } = require('electron')
 const fs = require('node:fs/promises')
 const net = require('node:net')
 const path = require('node:path')
+const { parseGetposOutput, formatPoseCommand } = require('./netcon.cjs')
 const {
   MAP_PATTERN,
-  parseCurrentMap,
-  parseGetposOutput,
-  formatPoseCommand
-} = require('./netcon.cjs')
+  createAerialBundle,
+  getBundleManifests,
+  isAerialBundle,
+  isValidManifest
+} = require('./manifest.cjs')
+const { DEFAULT_GSI_STATE_URL, parseGsiMap, validateGsiStateUrl } = require('./gsi.cjs')
 const draftSaveQueues = new Map()
 
 const createWindow = () => {
@@ -104,31 +107,40 @@ const captureGetpos = async (options) => {
   }
 }
 
-const detectCurrentMap = async (options) => {
+const detectCurrentMap = async (options = {}) => {
   const errors = []
   const attempts = []
+  const endpoint = validateGsiStateUrl(options.url || DEFAULT_GSI_STATE_URL)
   try {
-    const result = await sendNetconCommand({ ...options, command: 'status' })
-    const map = parseCurrentMap(result.raw)
+    const response = await fetch(endpoint, { signal: AbortSignal.timeout(2500) })
+    if (response.status === 204) {
+      errors.push('JTs-Hud has not received a CS2 GSI payload yet')
+      attempts.push({ transport: 'jts-hud-gsi', endpoint, result: 'no-state' })
+      return { map: null, source: null, errors, attempts }
+    }
+    const body = await response.text()
+    if (!response.ok) throw new Error(`JTs-Hud GSI state returned HTTP ${response.status}`)
+    const payload = JSON.parse(body)
+    const map = parseGsiMap(payload)
     attempts.push({
-      transport: 'netcon',
-      endpoint: `${result.host}:${result.port}`,
-      command: result.command,
-      result: map || 'status did not expose a supported de_* map',
-      responseTail: result.raw.slice(-1800)
+      transport: 'jts-hud-gsi',
+      endpoint,
+      result: map || 'JTs-Hud payload has no supported de_* map',
+      stateAt: response.headers.get('x-jts-gsi-state-at')
     })
-    if (map) return { map, source: 'netcon', errors, attempts }
-    errors.push('CS2 status did not expose a supported de_* map; choose the map manually')
+    if (map) return { map, source: 'jts-hud-gsi', errors, attempts }
+    errors.push('JTs-Hud payload has no supported de_* map')
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    attempts.push({
-      transport: 'netcon',
-      endpoint: `${options.host}:${options.port}`,
-      error: message
-    })
-    errors.push(`NetCon: ${message}`)
+    errors.push(
+      `Cannot read JTs-Hud GSI state at ${endpoint}: ${error instanceof Error ? error.message : String(error)}`
+    )
+    attempts.push({ transport: 'jts-hud-gsi', endpoint, result: 'request-failed' })
   }
   return { map: null, source: null, errors, attempts }
+}
+
+const startApplication = async () => {
+  createWindow()
 }
 
 ipcMain.handle('capture-pose', async (_event, options) => captureGetpos(options))
@@ -157,16 +169,6 @@ const getDraftPath = (map) => {
   if (typeof map !== 'string' || !MAP_PATTERN.test(map)) throw new Error('Invalid map name')
   return path.join(app.getPath('userData'), 'aerial-drafts', `${map}.json`)
 }
-
-const isValidManifest = (manifest, map) =>
-  Boolean(
-    manifest &&
-    manifest.schemaVersion === 1 &&
-    MAP_PATTERN.test(manifest.map) &&
-    (!map || manifest.map === map) &&
-    manifest.anchors &&
-    typeof manifest.anchors === 'object'
-  )
 
 ipcMain.handle('load-draft', async (_event, map) => {
   const filePath = getDraftPath(map)
@@ -204,14 +206,21 @@ ipcMain.handle('save-draft', async (_event, manifest) => {
   }
 })
 
-ipcMain.handle('export-manifest', async (_event, { map, manifest }) => {
+ipcMain.handle('create-bundle', (_event, manifests) => createAerialBundle(manifests))
+ipcMain.handle('get-bundle-manifests', (_event, bundle) => getBundleManifests(bundle))
+ipcMain.handle('is-bundle', (_event, value) => isAerialBundle(value))
+
+ipcMain.handle('export-manifest', async (_event, { map, manifest, manifests, bundle }) => {
+  const exportBundle =
+    bundle || createAerialBundle(manifests || { [manifest?.map || map]: manifest })
+  if (!isAerialBundle(exportBundle)) throw new Error('Invalid Aerial export bundle')
   const result = await dialog.showSaveDialog({
-    title: `Export ${map} Aerial anchors`,
-    defaultPath: `${map}.aerial.json`,
+    title: 'Export Aerial anchors for all maps',
+    defaultPath: 'jts-aerial-anchors.json',
     filters: [{ name: 'Aerial manifest', extensions: ['json'] }]
   })
   if (result.canceled || !result.filePath) return { canceled: true }
-  await fs.writeFile(result.filePath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  await fs.writeFile(result.filePath, `${JSON.stringify(exportBundle, null, 2)}\n`, 'utf8')
   return { canceled: false, filePath: result.filePath }
 })
 
@@ -228,7 +237,7 @@ ipcMain.handle('import-manifest', async () => {
 })
 
 app.whenReady().then(() => {
-  createWindow()
+  void startApplication()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

@@ -6,6 +6,7 @@ import type {
   CameraTransport,
   PlayerScore
 } from './autoDirector.types'
+import type { AerialCameraAnchor } from './aerial/aerialCameraRegistry'
 
 const safePlayerName = (name: string): string =>
   name
@@ -87,6 +88,50 @@ export class CameraController {
           : keyboardError.message,
         at: Date.now(),
         attempts
+      }
+    }
+  }
+
+  /**
+   * Reuses the exact NetCon pose command produced by the calibration app.
+   * Keyboard fallback is deliberately unavailable for non-player presentation.
+   */
+  async moveToAerial(anchor: AerialCameraAnchor): Promise<CameraCommandResult> {
+    const values = [...anchor.position, ...anchor.angles]
+    if (values.some((value) => !Number.isFinite(value))) {
+      return {
+        ok: false,
+        transport: 'telnet',
+        message: `Aerial anchor ${anchor.id} has an invalid pose`,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message: 'Invalid Aerial pose' }]
+      }
+    }
+    try {
+      const telnet = await this.readTelnetSettings()
+      const position = anchor.position.map((value) => String(value)).join(' ')
+      const angles = anchor.angles.map((value) => String(value)).join(' ')
+      await this.sendTelnet(`setpos_exact ${position}\nsetang_exact ${angles}`, {
+        host: telnet.host,
+        port: telnet.port,
+        timeoutMs: 3000,
+        requireAck: true
+      })
+      return {
+        ok: true,
+        transport: 'telnet',
+        message: `Moved to calibrated Aerial camera: ${anchor.label}`,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: true, message: 'Aerial pose acknowledged' }]
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        transport: 'telnet',
+        message,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message }]
       }
     }
   }
