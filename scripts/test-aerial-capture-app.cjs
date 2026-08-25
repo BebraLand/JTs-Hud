@@ -65,10 +65,10 @@ test('parses a current de_* map from status output', () => {
   assert.equal(MAP_PATTERN.test('cache'), false)
 })
 
-test('formats a saved pose as exact teleport commands', () => {
+test('formats a saved pose as a free-camera teleport command', () => {
   assert.equal(
     formatPoseCommand({ position: [1, -2.5, 300], angles: [-10, 90, 0] }),
-    'setpos_exact 1 -2.5 300; setang_exact -10 90 0'
+    'spec_mode 5; spec_mode 6; spec_goto 1 -2.5 300 -10 90'
   )
   assert.throws(
     () => formatPoseCommand({ position: [1, 2], angles: [0, 0, 0] }),

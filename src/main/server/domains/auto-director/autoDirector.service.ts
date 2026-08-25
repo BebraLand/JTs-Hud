@@ -14,7 +14,10 @@ import {
 } from './autoDirector.engine'
 import { buildAutoDirectorMlFeatures } from './autoDirector.mlFeatures'
 import { LightGbmRanker, loadLightGbmRanker } from './autoDirector.ml'
-import { persistSettingsCandidate } from './autoDirector.settings'
+import {
+  persistSettingsCandidate,
+  sanitizeAerialPresentationPhases
+} from './autoDirector.settings'
 import { CameraController } from './cameraController'
 import { getAutoDirectorResourceDir } from '../../../paths'
 import { computeGeometryFeatures } from './geometry/geometryFeatures'
@@ -27,6 +30,7 @@ import {
   getAerialPresentationPhase,
   type AerialPresentationDecision
 } from './aerial/aerialPresentation'
+import { computeCameraDebugStatus, emptyCameraDebugStatus } from './cameraDebug'
 import type {
   AutoDirectorSettings,
   AutoDirectorStatus,
@@ -39,11 +43,14 @@ import type {
 const SETTINGS_KEY = 'autoDirectorSettings'
 const MAX_HISTORY = 200
 const AERIAL_MIN_CONFIRMATIONS = 2
-const AERIAL_MAX_HOLD_MS = 4500
+const AERIAL_MAX_HOLD_MS = 6000
 const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
 
-const sanitizeSettings = (input: Partial<AutoDirectorSettings>): Partial<AutoDirectorSettings> => {
+const sanitizeSettings = (
+  input: Partial<AutoDirectorSettings>,
+  aerialPresentationPhases = DEFAULT_AUTO_DIRECTOR_SETTINGS.aerialPresentationPhases
+): Partial<AutoDirectorSettings> => {
   const output: Partial<AutoDirectorSettings> = {}
   if (typeof input.enabled === 'boolean') output.enabled = input.enabled
   if (typeof input.paused === 'boolean') output.paused = input.paused
@@ -58,6 +65,12 @@ const sanitizeSettings = (input: Partial<AutoDirectorSettings>): Partial<AutoDir
     output.mlAdvisoryEnabled = input.mlAdvisoryEnabled
   if (typeof input.aerialPresentationEnabled === 'boolean') {
     output.aerialPresentationEnabled = input.aerialPresentationEnabled
+  }
+  if (input.aerialPresentationPhases && typeof input.aerialPresentationPhases === 'object') {
+    output.aerialPresentationPhases = sanitizeAerialPresentationPhases(
+      input.aerialPresentationPhases,
+      aerialPresentationPhases
+    )
   }
   if (input.scoringIntervalMs !== undefined) {
     const interval = Number(input.scoringIntervalMs)
@@ -141,6 +154,7 @@ export class AutoDirectorService {
   private aerialVisibleSteamIds: string[] = []
   private aerialSequencePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private aerialSequenceAnchorIds = new Set<string>()
+  private cameraDebug = emptyCameraDebugStatus()
 
   async initialize(io: Server): Promise<void> {
     this.io = io
@@ -233,12 +247,13 @@ export class AutoDirectorService {
         activeUntil: this.aerialActiveAnchor ? this.aerialActiveUntil : null,
         reason: this.aerialReason,
         visibleSteamIds: [...this.aerialVisibleSteamIds]
-      }
+      },
+      cameraDebug: structuredClone(this.cameraDebug)
     }
   }
 
   async updateSettings(input: Partial<AutoDirectorSettings>): Promise<AutoDirectorStatus> {
-    const next = sanitizeSettings(input)
+    const next = sanitizeSettings(input, this.settings.aerialPresentationPhases)
     const previousOverride = this.settings.manualOverrideSteamId
     const aerialReturnTarget =
       next.aerialPresentationEnabled === false && this.aerialActiveAnchor
@@ -411,6 +426,19 @@ export class AutoDirectorService {
       geometryFeatures ?? undefined,
       topologyFeatures ?? undefined
     )
+    this.cameraDebug = computeCameraDebugStatus({
+      mapName: payload.map?.name ? String(payload.map.name) : null,
+      at: now,
+      players,
+      scores: this.decision.scores,
+      geometryFeatures,
+      geometry: geometryMap,
+      anchors: aerialMap?.anchors ?? [],
+      currentPlayerSteamId: this.decision.currentSteamId,
+      candidatePlayerSteamId: this.decision.candidateSteamId,
+      activeAnchorId: this.aerialActiveAnchor?.id ?? null,
+      geometryMessage: this.geometry.getStatus().message
+    })
     this.previousTopologyPlayers = new Map(players.map((player) => [player.steamId, player]))
     this.recordDecision(this.decision, now)
 

@@ -58,7 +58,7 @@ Vertigo намеренно не включён: в MAT active pool исполь�
 11. Нажми **Teleport to this anchor**, чтобы вернуться к уже сохранённой точке и перепроверить композицию.
 12. Нажми **Export verified JSON**.
 
-Все capture, notes и custom anchors сохраняются в durable draft внутри Electron `userData` и переживают перезапуск приложения. Browser `localStorage` остаётся резервным fallback. После перезапуска уже записанные anchors снова видны в списке.
+Все capture, notes и custom anchors сохраняются в стабильный каталог Electron `userData/JTs-Aerial-Capture/aerial-drafts` и переживают перезапуск приложения. Dev-запуск и portable build используют один и тот же каталог. При первом запуске новая версия автоматически подхватывает drafts из старых dev/portable каталогов и переносит их в стабильное место. Browser `localStorage` остаётся резервным fallback. После перезапуска уже записанные anchors снова видны в списке.
 
 Кнопка **Read map from JTs-Hud GSI** читает последний payload из `GET http://127.0.0.1:23415/cs2/state`. Если JTs-Hud не запущен или CS2 ещё не отправил GSI, Aerial показывает диагностическую ошибку и позволяет выбрать карту вручную. Telnet `status` для определения карты не используется, потому что некоторые режимы CS2 возвращают там только `game`.
 

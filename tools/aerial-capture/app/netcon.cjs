@@ -35,7 +35,7 @@ const formatPoseCommand = (pose) => {
   }
   const position = pose.position.map((value) => String(Number(value))).join(' ')
   const angles = pose.angles.map((value) => String(Number(value)))
-  return `spec_mode 6; spec_goto ${position} ${angles[0]} ${angles[1]}`
+  return `spec_mode 5; spec_mode 6; spec_goto ${position} ${angles[0]} ${angles[1]}`
 }
 
 module.exports = {

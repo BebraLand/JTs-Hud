@@ -98,6 +98,11 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   geometryAdvisoryEnabled: true,
   mlAdvisoryEnabled: true,
   aerialPresentationEnabled: false,
+  aerialPresentationPhases: {
+    freezeTime: true,
+    midRound: true,
+    roundEnd: true
+  },
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}

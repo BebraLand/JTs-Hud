@@ -9,6 +9,7 @@ import LiveView from '../views/LiveView.vue'
 import HudsView from '../views/HudsView.vue'
 import SpectatorView from '../views/SpectatorView.vue'
 import AutoDirectorView from '../views/AutoDirectorView.vue'
+import CameraDebugView from '../views/CameraDebugView.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -23,7 +24,8 @@ const router = createRouter({
     { path: '/huds', name: 'Huds', component: HudsView },
     { path: '/huds/:hudId/panel', name: 'HudPanel', component: HudPanelView },
     { path: '/spectator', name: 'Spectator', component: SpectatorView },
-    { path: '/auto-director', name: 'AutoDirector', component: AutoDirectorView }
+    { path: '/auto-director', name: 'AutoDirector', component: AutoDirectorView },
+    { path: '/camera-debug', name: 'CameraDebug', component: CameraDebugView }
   ]
 })
 

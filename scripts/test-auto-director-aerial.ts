@@ -25,6 +25,11 @@ const settings: AutoDirectorSettings = {
   geometryAdvisoryEnabled: true,
   mlAdvisoryEnabled: true,
   aerialPresentationEnabled: true,
+  aerialPresentationPhases: {
+    freezeTime: true,
+    midRound: true,
+    roundEnd: true
+  },
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}
@@ -165,6 +170,54 @@ assert.equal(freezeNextAnchor.anchor?.id, 'ct_spawn')
 assert.equal(freezeNextAnchor.visibleCtCount, 3)
 assert.match(freezeNextAnchor.reason, /opposite-team visibility is not required/)
 
+const sparseFreezePlayers = [
+  player('ct-sparse', 'CT', [100, 0, 0]),
+  player('t-sparse', 'T', [140, -20, 0])
+]
+const sparseFreeze = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  sparseFreezePlayers,
+  decision(),
+  aerialMap,
+  geometry
+)
+assert.equal(sparseFreeze.eligible, true)
+assert.equal(sparseFreeze.anchor?.id, 't_spawn')
+const sparseFreezeCt = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  sparseFreezePlayers,
+  decision(),
+  aerialMap,
+  geometry,
+  { excludedAnchorIds: new Set(['t_spawn']) }
+)
+assert.equal(sparseFreezeCt.eligible, true)
+assert.equal(sparseFreezeCt.anchor?.id, 'ct_spawn')
+
+const geometryBlindFreeze = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  [],
+  decision(),
+  aerialMap,
+  geometry
+)
+assert.equal(geometryBlindFreeze.eligible, true)
+assert.equal(geometryBlindFreeze.anchor?.id, 't_spawn')
+const geometryBlindFreezeCt = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  settings,
+  [],
+  decision(),
+  aerialMap,
+  geometry,
+  { excludedAnchorIds: new Set(['t_spawn']) }
+)
+assert.equal(geometryBlindFreezeCt.eligible, true)
+assert.equal(geometryBlindFreezeCt.anchor?.id, 'ct_spawn')
+
 const freezeWithoutSpawns = decideAerialPresentation(
   { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
   settings,
@@ -175,7 +228,7 @@ const freezeWithoutSpawns = decideAerialPresentation(
   { excludedAnchorIds: new Set(['t_spawn', 'ct_spawn']) }
 )
 assert.equal(freezeWithoutSpawns.eligible, false)
-assert.match(freezeWithoutSpawns.reason, /freeze-time anchor/)
+assert.match(freezeWithoutSpawns.reason, /freeze-time/)
 
 const planted = decideAerialPresentation(
   { ...quietPayload, bomb: { state: 'planted' } },
@@ -247,6 +300,20 @@ const disabled = decideAerialPresentation(
 assert.equal(disabled.eligible, false)
 assert.match(disabled.reason, /disabled/)
 
+const freezeDisabled = decideAerialPresentation(
+  { map: { name: 'de_ancient', phase: 'live' }, round: { phase: 'freezetime' } },
+  {
+    ...settings,
+    aerialPresentationPhases: { ...settings.aerialPresentationPhases, freezeTime: false }
+  },
+  players,
+  decision(),
+  aerialMap,
+  geometry
+)
+assert.equal(freezeDisabled.eligible, false)
+assert.match(freezeDisabled.reason, /freeze-time/)
+
 const productionRegistry = new AerialCameraRegistry(
   path.resolve(process.cwd(), 'resources/auto-director/aerial')
 )
@@ -254,6 +321,9 @@ const calibratedAncient = productionRegistry.load('de_ancient')
 assert.ok(calibratedAncient)
 assert.ok(calibratedAncient.anchors.length >= 5)
 assert.ok(calibratedAncient.anchors.every((anchor) => anchor.position.every(Number.isFinite)))
+const calibratedDust2 = productionRegistry.load('de_dust2')
+assert.ok(calibratedDust2?.anchors.some((anchor) => anchor.id === 't_spawn'))
+assert.ok(calibratedDust2?.anchors.some((anchor) => anchor.id === 'ct_spawn'))
 
 const manifestDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jts-aerial-'))
 try {

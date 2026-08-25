@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from '../src/main/server/domains/auto-director/autoDirector.config'
-import { persistSettingsCandidate } from '../src/main/server/domains/auto-director/autoDirector.settings'
+import {
+  persistSettingsCandidate,
+  sanitizeAerialPresentationPhases
+} from '../src/main/server/domains/auto-director/autoDirector.settings'
 import {
   DEFAULT_TELNET_SETTINGS,
   resolveTelnetSettings
@@ -44,6 +47,18 @@ const main = async (): Promise<void> => {
   assert.equal(committed.enabled, true)
   assert.equal(committed.manualOverrideSteamId, '76561198000000000')
   assert.equal(current.enabled, false)
+
+  assert.deepEqual(
+    sanitizeAerialPresentationPhases(
+      { freezeTime: false },
+      { freezeTime: true, midRound: false, roundEnd: false }
+    ),
+    {
+      freezeTime: false,
+      midRound: false,
+      roundEnd: false
+    }
+  )
 
   console.log('Auto-director settings fixture passed: persistence succeeds before runtime commit')
 }

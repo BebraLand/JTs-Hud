@@ -119,7 +119,7 @@ export class CameraController {
       // by switchTo() with spec_mode 1.
       const pitch = String(presentationAngles[0])
       const yaw = String(presentationAngles[1])
-      await this.sendTelnet(`spec_mode 6\nspec_goto ${position} ${pitch} ${yaw}`, {
+      await this.sendTelnet(`spec_mode 5\nspec_mode 6\nspec_goto ${position} ${pitch} ${yaw}`, {
         host: telnet.host,
         port: telnet.port,
         timeoutMs: 3000,

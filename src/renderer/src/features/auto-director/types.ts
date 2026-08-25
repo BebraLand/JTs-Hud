@@ -77,6 +77,11 @@ export interface AutoDirectorSettings {
   geometryAdvisoryEnabled: boolean
   mlAdvisoryEnabled: boolean
   aerialPresentationEnabled: boolean
+  aerialPresentationPhases: {
+    freezeTime: boolean
+    midRound: boolean
+    roundEnd: boolean
+  }
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Record<string, number>
@@ -168,4 +173,50 @@ export interface AutoDirectorStatus {
     reason: string
     visibleSteamIds: string[]
   }
+  cameraDebug: CameraDebugStatus
+}
+
+export interface CameraDebugPlayer {
+  steamId: string
+  name: string
+  team: string
+  observerSlot: number
+  health: number
+  alive: boolean
+  position: [number, number, number] | null
+  forward: [number, number, number] | null
+  priorityScore: number
+  cameraScore: number
+  visibleEnemySteamIds: string[]
+  nearestEnemySteamId: string | null
+  nearestEnemyVisible: boolean
+  peekPotentialEnemySteamIds: string[]
+  forwardEnemySteamIds: string[]
+}
+
+export interface CameraDebugAnchor {
+  id: string
+  label: string
+  kind: string
+  position: [number, number, number]
+  angles: [number, number, number]
+  cameraScore: number
+  inFrustumSteamIds: string[]
+  visibleSteamIds: string[]
+  occludedSteamIds: string[]
+  reason: string
+  reasons: string[]
+}
+
+export interface CameraDebugStatus {
+  mapName: string | null
+  updatedAt: number | null
+  geometryAvailable: boolean
+  geometryMessage: string
+  players: CameraDebugPlayer[]
+  anchors: CameraDebugAnchor[]
+  currentPlayerSteamId: string | null
+  candidatePlayerSteamId: string | null
+  activeAnchorId: string | null
+  summary: string
 }

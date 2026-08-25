@@ -4,6 +4,7 @@ import type { GeometryMap, Vec3 } from './geometryMap'
 export interface PlayerGeometryFeatures {
   steamId: string
   visibleEnemyCount: number
+  nearestEnemySteamId: string | null
   nearestVisibleEnemySteamId: string | null
   nearestVisibleEnemyDistance: number | null
   nearestEnemyHasLineOfSight: boolean
@@ -147,6 +148,7 @@ export const computeGeometryFeatures = (
     result.set(player.steamId, {
       steamId: player.steamId,
       visibleEnemyCount: visible.length,
+      nearestEnemySteamId: enemies[0]?.enemy.steamId ?? null,
       nearestVisibleEnemySteamId: visible[0]?.enemy.steamId ?? null,
       nearestVisibleEnemyDistance: visible[0] ? Math.round(visible[0].distance) : null,
       nearestEnemyHasLineOfSight: enemies[0]?.visible ?? false,

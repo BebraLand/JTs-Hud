@@ -14,6 +14,11 @@ const emptyStatus = (): AutoDirectorStatus => ({
     geometryAdvisoryEnabled: true,
     mlAdvisoryEnabled: true,
     aerialPresentationEnabled: false,
+    aerialPresentationPhases: {
+      freezeTime: true,
+      midRound: true,
+      roundEnd: true
+    },
     scoringIntervalMs: 100,
     manualOverrideSteamId: null,
     customWeights: {}
@@ -67,6 +72,18 @@ const emptyStatus = (): AutoDirectorStatus => ({
     activeUntil: null,
     reason: 'Aerial presentation disabled',
     visibleSteamIds: []
+  },
+  cameraDebug: {
+    mapName: null,
+    updatedAt: null,
+    geometryAvailable: false,
+    geometryMessage: 'Waiting for GSI map data',
+    players: [],
+    anchors: [],
+    currentPlayerSteamId: null,
+    candidatePlayerSteamId: null,
+    activeAnchorId: null,
+    summary: 'Waiting for GSI state'
   }
 })
 

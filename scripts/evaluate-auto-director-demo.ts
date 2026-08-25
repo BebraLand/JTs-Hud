@@ -114,7 +114,12 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
     mode,
     geometryAdvisoryEnabled: hybrid?.geometryEnabled ?? false,
     mlAdvisoryEnabled: hybrid?.mlEnabled ?? false,
-    aerialPresentationEnabled: hybrid?.aerialEnabled ?? false
+    aerialPresentationEnabled: hybrid?.aerialEnabled ?? false,
+    aerialPresentationPhases: {
+      freezeTime: true,
+      midRound: true,
+      roundEnd: true
+    }
   }
   const samples: CameraSample[] = []
   const switches: Array<{ atMs: number; round: number }> = []

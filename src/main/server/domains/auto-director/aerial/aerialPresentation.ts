@@ -100,6 +100,16 @@ const spawnTeamForAnchor = (anchor: AerialCameraAnchor): 'CT' | 'T' | null =>
         ? 'T'
         : null
 
+const phaseEnabled = (
+  phase: AerialPresentationPhase,
+  settings: AutoDirectorSettings
+): boolean => {
+  const phases = settings.aerialPresentationPhases
+  if (phase === 'freeze-time') return phases.freezeTime
+  if (phase === 'post-round') return phases.roundEnd
+  return phases.midRound
+}
+
 const teamFramingAngles = (
   anchor: AerialCameraAnchor,
   team: 'CT' | 'T',
@@ -156,6 +166,9 @@ export const decideAerialPresentation = (
 
   const phase = getAerialPresentationPhase(payload)
   if (!phase) return emptyDecision('Round phase is not presentation-safe')
+  if (!phaseEnabled(phase, settings)) {
+    return emptyDecision(`Aerial presentation disabled for ${phase}`)
+  }
   const actionBlocked = directorDecision.scores.some((score) =>
     score.factors.some((factor) => ACTION_FACTOR_KEYS.has(factor.key))
   )
@@ -171,11 +184,26 @@ export const decideAerialPresentation = (
     score: number
   } | null = null
 
+  // Freeze-time is a broadcast package, not a geometry competition: every
+  // round must present both calibrated spawns in a deterministic T -> CT
+  // sequence. Static LOS can be conservative around spawn walls and must not
+  // make one side disappear from the show.
+  const completedSpawnIds = options.excludedAnchorIds ?? new Set<string>()
+  const requiredSpawnTeam =
+    phase === 'freeze-time'
+      ? completedSpawnIds.has('t_spawn')
+        ? completedSpawnIds.has('ct_spawn')
+          ? null
+          : 'CT'
+        : 'T'
+      : null
+
   for (const anchor of map.anchors) {
     if (options.excludedAnchorIds?.has(anchor.id)) continue
     const affinity = anchorAffinity(anchor, phase)
     if (affinity <= 0) continue
     const spawnTeam = phase === 'freeze-time' ? spawnTeamForAnchor(anchor) : null
+    if (phase === 'freeze-time' && spawnTeam !== requiredSpawnTeam) continue
     const presentationAngles = spawnTeam
       ? teamFramingAngles(anchor, spawnTeam, alivePlayers)
       : anchor.angles
@@ -193,18 +221,16 @@ export const decideAerialPresentation = (
     )
     const totalVisible = visibility.steamIds.length
     const crossTeam = visibility.ct > 0 && visibility.t > 0
-    const visibleSpawnTeamCount =
-      spawnTeam === 'CT' ? visibility.ct : spawnTeam === 'T' ? visibility.t : 0
     const eligible =
       phase === 'freeze-time'
-        ? spawnTeam !== null && visibleSpawnTeamCount >= 3
+        ? spawnTeam !== null
         : phase === 'post-round'
           ? totalVisible >= 2
           : phase === 'post-plant'
             ? totalVisible >= 2 && crossTeam
             : totalVisible >= 3 && crossTeam
     if (!eligible) continue
-    const freezeOrderBonus = phase === 'freeze-time' ? (anchor.id === 't_spawn' ? 1 : 0) : 0
+    const freezeOrderBonus = phase === 'freeze-time' ? 1000 : 0
     const score = affinity + totalVisible * 8 + (crossTeam ? 12 : 0) + freezeOrderBonus
     if (
       !selected ||
@@ -216,7 +242,11 @@ export const decideAerialPresentation = (
   }
 
   if (!selected) {
-    return emptyDecision(`No ${phase} anchor has enough geometry-visible living players`)
+    return emptyDecision(
+      phase === 'freeze-time'
+        ? 'No calibrated freeze-time spawn anchor is available'
+        : `No ${phase} anchor has enough geometry-visible living players`
+    )
   }
   const totalVisible = selected.visibility.steamIds.length
   const selectedSpawnSide =
