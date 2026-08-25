@@ -23,7 +23,10 @@ export const setupSockets = (io: Server) => {
         try {
           // Mark socket as a HUD so GSI updates can be filtered for it
           socket.join('huds')
-          const hudId = getActiveHudId() || hudName
+          // Prefer the id reported by the registering HUD. The global active id
+          // belongs to the Electron overlay and may be stale for browser URLs
+          // such as /huds/bebraland/index.html?variant=vertical.
+          const hudId = hudName || getActiveHudId() || 'default'
           const config = await getHudConfig(hudId)
           socket.emit('hud_config', config)
         } catch (e) {
