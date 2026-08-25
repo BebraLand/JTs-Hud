@@ -92,17 +92,7 @@ const getRawHudConfig = async (hudId: string): Promise<Record<string, any>> => {
 // Enriched config (IDs resolved to full objects) — used by socket emissions to the HUD
 export const getHudConfig = async (hudId: string): Promise<Record<string, any>> => {
   const raw = await getRawHudConfig(hudId)
-  const enriched = await enrichHudConfig(hudId, raw)
-  if (hudId === 'bebraland') {
-    const sideMetadata = await dbGet('SELECT value FROM settings WHERE key = ?', [
-      'showSidePlayerMetadata'
-    ])
-    enriched.display_settings = {
-      ...(enriched.display_settings || {}),
-      show_side_player_metadata: sideMetadata?.value === 'true'
-    }
-  }
-  return enriched
+  return enrichHudConfig(hudId, raw)
 }
 
 const findThumbFile = (hudDir: string): string | null => {
@@ -330,9 +320,9 @@ const createHudRouter = (io: Server) => {
         'INSERT INTO hud_configs (hud_id, config_data) VALUES (?, ?) ON CONFLICT(hud_id) DO UPDATE SET config_data = excluded.config_data',
         [hudId, JSON.stringify(config)]
       )
-      // Emit the enriched config plus global BebraLand display settings.
-      const enriched = await getHudConfig(hudId as string)
-      io.to(`hud:${hudId}`).emit('hud_config', enriched)
+      // Emit enriched config (raw IDs → full objects) so the HUD receives the expected shape
+      const enriched = await enrichHudConfig(hudId as string, config)
+      io.emit('hud_config', enriched)
       res.json({ ok: true })
     } catch (e: any) {
       res.status(500).json({ error: e.message })

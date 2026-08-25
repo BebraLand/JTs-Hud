@@ -14,7 +14,7 @@ import createMatchRouter from './domains/matches/match.routes'
 import createPlayerRouter from './domains/players/player.routes'
 import createTeamRouter from './domains/teams/team.routes'
 import createHudRouter from './domains/huds/hud.routes'
-import settingsRoutes, { setSettingsSocket } from './domains/settings/settings.routes'
+import settingsRoutes from './domains/settings/settings.routes'
 import spectatorRoutes from './domains/spectator/spectator.routes'
 import autoDirectorRoutes from './domains/auto-director/autoDirector.routes'
 import { autoDirectorService } from './domains/auto-director/autoDirector.service'
@@ -65,7 +65,6 @@ app.use('/api/spectator', spectatorRoutes)
 app.use('/api/auto-director', autoDirectorRoutes)
 
 setupSockets(io)
-setSettingsSocket(io)
 
 // Setup GSI Listener Server (Port 23415)
 const gsiApp = express()

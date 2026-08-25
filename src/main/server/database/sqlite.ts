@@ -173,7 +173,6 @@ async function initializeTables() {
     // Default settings
     await dbRun(`INSERT OR IGNORE INTO settings (key, value) VALUES ('autoSwitchSides', 'true')`)
     await dbRun(`INSERT OR IGNORE INTO settings (key, value) VALUES ('autoRefreshHuds', 'true')`)
-    await dbRun(`INSERT OR IGNORE INTO settings (key, value) VALUES ('showSidePlayerMetadata', 'false')`)
 
     // Hud configs table: stores panel config per hud id
     await dbRun(`

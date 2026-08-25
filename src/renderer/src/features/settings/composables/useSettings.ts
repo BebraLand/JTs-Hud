@@ -4,7 +4,6 @@ import { API_URL } from '../../../index'
 export interface AppSettings {
   autoSwitchSides: boolean
   autoRefreshHuds: boolean
-  showSidePlayerMetadata: boolean
   telnetHost: string
   telnetPort: number
   matEnabled: boolean
@@ -25,7 +24,6 @@ export function useSettings() {
   const settings = ref<AppSettings>({
     autoSwitchSides: true,
     autoRefreshHuds: true,
-    showSidePlayerMetadata: false,
     telnetHost: '127.0.0.1',
     telnetPort: 2020,
     matEnabled: false,

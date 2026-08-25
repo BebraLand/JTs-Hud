@@ -1,21 +1,13 @@
 import { Router, Request, Response } from 'express'
 import { dbAll, dbRun } from '../../database/sqlite'
-import { Server } from 'socket.io'
-import { getHudConfig } from '../huds/hud.routes'
 import { matIntegrationService } from '../../integrations/mat.integration'
 import { resolveTelnetSettings } from './telnetSettings'
 
 const router = Router()
-let settingsSocket: Server | null = null
-
-export const setSettingsSocket = (io: Server) => {
-  settingsSocket = io
-}
 
 export interface AppSettings {
   autoSwitchSides: boolean
   autoRefreshHuds: boolean
-  showSidePlayerMetadata: boolean
   telnetHost: string
   telnetPort: number
   matEnabled: boolean
@@ -27,7 +19,6 @@ export interface AppSettings {
 const DEFAULT_SETTINGS: AppSettings = {
   autoSwitchSides: true,
   autoRefreshHuds: true,
-  showSidePlayerMetadata: false,
   telnetHost: '127.0.0.1',
   telnetPort: 2020,
   matEnabled: false,
@@ -50,10 +41,6 @@ export const getSettings = async (): Promise<AppSettings> => {
       map.autoRefreshHuds !== undefined
         ? map.autoRefreshHuds === 'true'
         : DEFAULT_SETTINGS.autoRefreshHuds,
-    showSidePlayerMetadata:
-      map.showSidePlayerMetadata !== undefined
-        ? map.showSidePlayerMetadata === 'true'
-        : DEFAULT_SETTINGS.showSidePlayerMetadata,
     telnetHost: telnet.host,
     telnetPort: telnet.port,
     matEnabled: map.matEnabled === 'true',
@@ -114,13 +101,7 @@ router.get('/', async (_req: Request, res: Response) => {
 router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
   try {
     const updates: Partial<AppSettings> = req.body
-    const localKeys = new Set([
-      'autoSwitchSides',
-      'autoRefreshHuds',
-      'showSidePlayerMetadata',
-      'telnetHost',
-      'telnetPort'
-    ])
+    const localKeys = new Set(['autoSwitchSides', 'autoRefreshHuds', 'telnetHost', 'telnetPort'])
     if (
       updates.telnetHost !== undefined &&
       (typeof updates.telnetHost !== 'string' || !updates.telnetHost.trim())
@@ -138,9 +119,6 @@ router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
         'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
         [key, key === 'telnetHost' ? String(value).trim() : String(value)]
       )
-    }
-    if (settingsSocket && updates.showSidePlayerMetadata !== undefined) {
-      settingsSocket.to('hud:bebraland').emit('hud_config', await getHudConfig('bebraland'))
     }
     return res.json(await getSettings())
   } catch (err: any) {
