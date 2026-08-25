@@ -144,7 +144,7 @@ const healthClass = (state: string) =>
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0b0b11] p-4 text-zinc-100 xl:p-5 2xl:p-6">
+  <div class="auto-director-page flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0b0b11] p-4 text-zinc-100 xl:p-5 2xl:p-6">
     <header class="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
       <div>
         <div class="flex items-center gap-3">
@@ -253,7 +253,7 @@ const healthClass = (state: string) =>
         </div>
       </section>
 
-      <div class="min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[340px_340px_minmax(0,1fr)]">
+      <div class="auto-director-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[340px_340px_minmax(0,1fr)]">
         <aside class="min-w-0 space-y-3 2xl:contents">
           <section
             class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 shadow-2xl shadow-black/20"
@@ -610,7 +610,7 @@ const healthClass = (state: string) =>
           </section>
         </aside>
 
-        <main class="min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_220px] gap-3 overflow-hidden">
+        <main class="auto-director-main min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_220px] gap-3 overflow-hidden">
           <section class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
             <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -633,7 +633,7 @@ const healthClass = (state: string) =>
             >
               Start CS2 or replay a GSI fixture to populate the board.
             </div>
-            <div v-else class="grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
+            <div v-else class="auto-director-player-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
               <article
                 v-for="(player, index) in players"
                 :key="player.steamId"
@@ -740,7 +740,7 @@ const healthClass = (state: string) =>
             </div>
           </section>
 
-          <section class="min-h-0 grid gap-3 overflow-hidden xl:grid-cols-2">
+          <section class="auto-director-bottom min-h-0 grid gap-3 overflow-hidden xl:grid-cols-2">
             <div class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
               <div class="mb-2 flex items-center justify-between">
                 <div>
@@ -776,7 +776,7 @@ const healthClass = (state: string) =>
               <h2 class="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
                 Decision History
               </h2>
-              <div class="h-full space-y-1 overflow-hidden pr-1">
+              <div class="auto-director-history h-full space-y-1 overflow-hidden pr-1">
                 <div v-if="!status.history.length" class="py-12 text-center text-xs text-zinc-600">
                   No camera decisions yet.
                 </div>
@@ -811,3 +811,62 @@ const healthClass = (state: string) =>
     </template>
   </div>
 </template>
+
+<style scoped>
+/* Compact mode is preserved for a tall/fullscreen viewport. A short window
+   must remain a normal scrollable document instead of clipping diagnostics. */
+@media (max-width: 1535px), (max-height: 899px) {
+  .auto-director-page {
+    display: block !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-y: auto !important;
+  }
+
+  .auto-director-layout {
+    display: grid !important;
+    flex: none !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-height: auto !important;
+  }
+
+  .auto-director-layout > aside {
+    display: block !important;
+    min-height: auto !important;
+  }
+
+  .auto-director-layout > aside > section,
+  .auto-director-main > section {
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .auto-director-main {
+    display: block !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .auto-director-player-list {
+    display: block !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .auto-director-bottom {
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .auto-director-bottom > div {
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .auto-director-history {
+    height: auto !important;
+    max-height: 18rem;
+    overflow-y: auto !important;
+  }
+}
+</style>

@@ -115,7 +115,7 @@ const selectAnchor = (id: string) => {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0b0b11] p-4 text-zinc-100 xl:p-5 2xl:p-6">
+  <div class="camera-debug-page flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0b0b11] p-4 text-zinc-100 xl:p-5 2xl:p-6">
     <header class="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
       <div>
         <div class="flex items-center gap-3">
@@ -169,8 +169,8 @@ const selectAnchor = (id: string) => {
         </div>
       </div>
 
-      <div class="min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(0,1fr)_390px]">
-        <section class="flex min-h-0 min-w-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3 sm:p-4">
+      <div class="camera-debug-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(0,1fr)_390px]">
+        <section class="camera-debug-radar-panel flex min-h-0 min-w-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3 sm:p-4">
           <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
             <div>
               <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Live radar</h2>
@@ -186,8 +186,8 @@ const selectAnchor = (id: string) => {
             </div>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-[#090b12]">
-            <svg :viewBox="radarConfig ? '0 0 1024 1024' : '0 0 1000 650'" preserveAspectRatio="xMidYMid meet" class="block h-full w-full" role="img" aria-label="Camera debug radar">
+          <div class="camera-debug-radar-surface min-h-0 flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-[#090b12]">
+            <svg :viewBox="radarConfig ? '0 0 1024 1024' : '0 0 1000 650'" preserveAspectRatio="xMidYMid meet" class="camera-debug-radar-svg block h-full w-full" role="img" aria-label="Camera debug radar">
               <defs>
                 <pattern id="radar-grid" width="50" height="50" patternUnits="userSpaceOnUse">
                   <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(148,163,184,0.08)" stroke-width="1" />
@@ -229,8 +229,8 @@ const selectAnchor = (id: string) => {
           </div>
         </section>
 
-        <aside class="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 overflow-hidden">
-          <section class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+        <aside class="camera-debug-sidebar grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 overflow-hidden">
+          <section class="camera-debug-sidebar-panel min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
             <div class="mb-2 flex items-center justify-between gap-2">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Saved cameras</h2>
@@ -239,7 +239,7 @@ const selectAnchor = (id: string) => {
               <span class="text-xs text-zinc-500">{{ debug.anchors.length }} anchors</span>
             </div>
             <div v-if="!debug.anchors.length" class="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-600">No calibrated Aerial anchors for this map.</div>
-            <div v-else class="grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
+            <div v-else class="camera-debug-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
               <button v-for="anchor in debug.anchors" :key="anchor.id" @click="selectAnchor(anchor.id)" :class="selectedAnchor?.id === anchor.id ? 'border-violet-400/60 bg-violet-400/10' : 'border-zinc-800 bg-black/10 hover:border-zinc-700'" class="w-full rounded-xl border p-2 text-left transition-colors">
                 <div class="flex items-center justify-between gap-3">
                   <span class="truncate text-xs font-semibold text-zinc-100">{{ anchor.label }}</span>
@@ -251,7 +251,7 @@ const selectAnchor = (id: string) => {
             </div>
           </section>
 
-          <section class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+          <section class="camera-debug-sidebar-panel min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
             <div class="mb-2 flex items-center justify-between gap-2">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Players</h2>
@@ -259,7 +259,7 @@ const selectAnchor = (id: string) => {
               </div>
               <span class="text-xs text-zinc-500">{{ alivePlayers.length }} alive · {{ debug.players.length }} tracked</span>
             </div>
-            <div class="grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
+            <div class="camera-debug-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
               <div v-for="player in debug.players" :key="player.steamId" :class="player.steamId === debug.currentPlayerSteamId ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-zinc-800 bg-black/10'" class="rounded-xl border p-2">
                 <div class="flex items-center justify-between gap-2">
                   <div class="min-w-0 flex items-center gap-1"><span :class="teamClass(player.team)" class="text-[9px] font-bold">{{ player.team }}</span><span class="truncate text-xs font-semibold" :class="player.alive ? 'text-zinc-100' : 'text-zinc-600'">{{ player.name }}</span></div>
@@ -290,3 +290,61 @@ const selectAnchor = (id: string) => {
     </template>
   </div>
 </template>
+
+<style scoped>
+/* Keep compact diagnostics only in a tall/fullscreen viewport. In a short
+   window, restore document flow so every diagnostic row remains reachable. */
+@media (max-width: 1535px), (max-height: 899px) {
+  .camera-debug-page {
+    display: block !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-y: auto !important;
+  }
+
+  .camera-debug-layout {
+    display: grid !important;
+    flex: none !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-height: auto !important;
+  }
+
+  .camera-debug-radar-panel {
+    min-height: auto !important;
+  }
+
+  .camera-debug-radar-surface {
+    flex: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .camera-debug-radar-svg {
+    height: auto !important;
+    min-height: 0 !important;
+    aspect-ratio: 1 / 1;
+  }
+
+  .camera-debug-sidebar {
+    display: block !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .camera-debug-sidebar-panel {
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .camera-debug-list {
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+}
+
+@media (min-width: 1536px) and (min-height: 900px) {
+  .camera-debug-sidebar {
+    grid-template-rows: minmax(0, 0.88fr) minmax(0, 1.12fr) auto;
+  }
+}
+</style>
