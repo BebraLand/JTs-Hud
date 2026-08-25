@@ -45,6 +45,12 @@
       },
       {
         "type": "checkbox",
+        "name": "show_side_player_metadata",
+        "label": "Show player details on side cards",
+        "default": false
+      },
+      {
+        "type": "checkbox",
         "name": "show_player_first_name",
         "label": "Show player first name",
         "default": true
