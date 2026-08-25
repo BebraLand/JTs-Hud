@@ -235,6 +235,7 @@ function render() {
     captureButton.disabled = true
     teleportButton.disabled = true
     removeCustomButton.disabled = true
+    removeCustomButton.textContent = 'Clear saved coordinates'
     return
   }
 
@@ -248,7 +249,9 @@ function render() {
   notesInput.value = anchor.notes || ''
   captureButton.disabled = false
   teleportButton.disabled = !isCaptured(anchor)
-  removeCustomButton.disabled = anchor.kind !== 'custom'
+  removeCustomButton.disabled = anchor.kind !== 'custom' && !isCaptured(anchor)
+  removeCustomButton.textContent =
+    anchor.kind === 'custom' ? 'Delete custom anchor' : 'Clear saved coordinates'
 }
 
 function selectAnchor(id) {
@@ -436,9 +439,23 @@ function addCustomAnchor() {
   render()
 }
 
-function removeCustomAnchor() {
+function removeSelectedAnchorData() {
   const anchor = selectedId ? manifest.anchors[selectedId] : null
-  if (!anchor || anchor.kind !== 'custom') return
+  if (!anchor) return
+
+  if (anchor.kind !== 'custom') {
+    if (!isCaptured(anchor) && !anchor.notes?.trim()) return
+    if (!window.confirm(`Clear saved coordinates for "${anchor.label}"?`)) return
+
+    const { name, label, kind, required, hint } = anchor
+    manifest.anchors[selectedId] = { name, label, kind, required, hint }
+    saveDraft()
+    resultOutput.className = 'capture-result'
+    resultOutput.textContent = `Cleared saved coordinates for ${label}.`
+    render()
+    return
+  }
+
   if (!window.confirm(`Delete custom anchor "${anchor.label}"?`)) return
 
   const removedLabel = anchor.label
@@ -543,7 +560,7 @@ notesInput.addEventListener('input', () => {
 captureButton.addEventListener('click', captureSelected)
 teleportButton.addEventListener('click', teleportSelected)
 $('add-custom').addEventListener('click', addCustomAnchor)
-$('remove-custom').addEventListener('click', removeCustomAnchor)
+$('remove-custom').addEventListener('click', removeSelectedAnchorData)
 $('custom-anchor').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') addCustomAnchor()
 })
