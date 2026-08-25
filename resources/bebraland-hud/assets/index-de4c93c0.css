@@ -4,12 +4,12 @@
 /* Keep the side roster identical to the default HUD; metadata belongs to the observed-player card. */
 .teambox.layout-vertical .player .player_data .top-row .name-stats .bebraland-player-meta{display:none}
 .teambox.layout-horizontal .player-horizontal-card.vertical-flow .card-info-section .username-row,.teambox.layout-horizontal .player-horizontal-card.vertical-flow .card-info-section .bebraland-player-name-block{min-width:0}
-.teambox.layout-horizontal .player-horizontal-card.vertical-flow .card-info-section .bebraland-player-meta{min-width:0;max-width:100%;height:11px;min-height:11px;line-height:11px;font-size:10px;gap:4px;box-sizing:border-box}
+.teambox.layout-horizontal .player-horizontal-card.vertical-flow .card-info-section .bebraland-player-meta{display:none;min-width:0;max-width:100%;height:11px;min-height:11px;line-height:11px;font-size:10px;gap:4px;box-sizing:border-box}
 .teambox.layout-horizontal .player-horizontal-card.vertical-flow .card-info-section .bebraland-player-real-name{min-width:0;flex:1 1 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .teambox.layout-horizontal .player-horizontal-card.vertical-flow .card-info-section .bebraland-player-country-flag{width:16px;height:11px}
 .observed .info_container{min-width:0}
 .observed .bebraland-observed-player-info{width:100%;min-width:0;max-width:100%;overflow:hidden}
 .observed .bebraland-observed-player-info .username{width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.observed .bebraland-observed-player-info .bebraland-player-meta{width:100%;max-width:100%;min-width:0;height:12px;min-height:12px;line-height:12px;font-size:11px;gap:4px;box-sizing:border-box}
-.observed .bebraland-observed-player-info .bebraland-player-real-name{min-width:0;flex:0 1 auto;width:auto;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.observed .bebraland-observed-player-info .bebraland-player-meta{width:100%;max-width:100%;min-width:0;height:13px;min-height:13px;line-height:13px;font-size:11px;gap:4px;box-sizing:border-box;overflow:visible}
+.observed .bebraland-observed-player-info .bebraland-player-real-name{display:block;min-width:0;flex:0 1 auto;width:auto;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:13px}
 .observed .bebraland-observed-player-info .bebraland-player-country-flag{width:16px;height:12px}
