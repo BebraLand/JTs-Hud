@@ -813,9 +813,23 @@ const healthClass = (state: string) =>
 </template>
 
 <style scoped>
+.auto-director-control-strip > div:first-child {
+  min-width: 0;
+}
+
+.auto-director-control-strip button {
+  min-width: 0;
+}
+
+.auto-director-control-strip button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Compact mode is preserved for a tall/fullscreen viewport. A short window
    must remain a normal scrollable document instead of clipping diagnostics. */
-@media (min-width: 1536px) and (min-height: 900px) {
+@media (min-width: 1800px) and (min-height: 900px) {
   .auto-director-settings {
     min-height: 0;
   }
@@ -846,12 +860,26 @@ const healthClass = (state: string) =>
   }
 }
 
-@media (max-width: 1535px), (max-height: 899px) {
+@media (max-width: 1799px), (max-height: 899px) {
   .auto-director-page {
     display: block !important;
     height: auto !important;
     min-height: 100% !important;
     overflow-y: auto !important;
+  }
+
+  .auto-director-control-strip > div:first-child {
+    min-width: 0;
+  }
+
+  .auto-director-control-strip button {
+    min-width: 0;
+  }
+
+  .auto-director-control-strip button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .auto-director-control-strip {

@@ -294,7 +294,7 @@ const selectAnchor = (id: string) => {
 <style scoped>
 /* Keep compact diagnostics only in a tall/fullscreen viewport. In a short
    window, restore document flow so every diagnostic row remains reachable. */
-@media (max-width: 1535px), (max-height: 899px) {
+@media (max-width: 1799px), (max-height: 899px) {
   .camera-debug-page {
     display: block !important;
     height: auto !important;
@@ -342,7 +342,7 @@ const selectAnchor = (id: string) => {
   }
 }
 
-@media (min-width: 1536px) and (min-height: 900px) {
+@media (min-width: 1800px) and (min-height: 900px) {
   .camera-debug-sidebar {
     grid-template-rows: minmax(0, 0.84fr) minmax(0, 1.16fr) auto;
   }
