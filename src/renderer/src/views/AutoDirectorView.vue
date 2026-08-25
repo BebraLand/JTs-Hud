@@ -213,7 +213,7 @@ const healthClass = (state: string) =>
     </div>
 
     <template v-else>
-      <section class="mb-3 min-w-0 shrink-0 grid gap-2 lg:grid-cols-[1fr_auto]">
+      <section class="auto-director-control-strip mb-3 min-w-0 shrink-0 grid gap-2 lg:grid-cols-[1fr_auto]">
         <div class="grid gap-2 sm:grid-cols-3">
           <button
             v-for="mode in modes"
@@ -253,8 +253,8 @@ const healthClass = (state: string) =>
         </div>
       </section>
 
-      <div class="auto-director-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[340px_340px_minmax(0,1fr)]">
-        <aside class="min-w-0 space-y-3 2xl:contents">
+      <div class="auto-director-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(430px,520px)_minmax(0,1fr)]">
+        <aside class="auto-director-settings min-w-0 space-y-3 2xl:overflow-y-auto 2xl:pr-1">
           <section
             class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 shadow-2xl shadow-black/20"
           >
@@ -608,10 +608,41 @@ const healthClass = (state: string) =>
               >: {{ status.lastCommand.message }}
             </div>
           </section>
+
+          <section class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+            <div class="mb-2 flex items-center justify-between">
+              <div>
+                <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+                  Scoring Weights
+                </h2>
+                <p class="mt-1 text-xs text-zinc-600">Profile defaults plus local overrides</p>
+              </div>
+              <button @click="resetWeights" class="text-xs text-zinc-500 hover:text-cyan-300">
+                Reset mode defaults
+              </button>
+            </div>
+            <div class="auto-director-weight-list grid gap-2">
+              <label v-for="[key, label] in weightDefinitions" :key="key" class="block">
+                <span class="flex justify-between text-[11px] text-zinc-500"
+                  ><span>{{ label }}</span
+                  ><strong class="text-zinc-300">{{ effectiveWeight(key) }}</strong></span
+                >
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  :value="effectiveWeight(key)"
+                  @change="setWeight(key, Number(($event.target as HTMLInputElement).value))"
+                  class="mt-1 w-full accent-cyan-400"
+                />
+              </label>
+            </div>
+          </section>
         </aside>
 
-        <main class="auto-director-main min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_220px] gap-3 overflow-hidden">
-          <section class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+        <main class="auto-director-main min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_150px] gap-3 overflow-hidden">
+          <section class="auto-director-player-board min-h-0 flex flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
             <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
@@ -633,7 +664,7 @@ const healthClass = (state: string) =>
             >
               Start CS2 or replay a GSI fixture to populate the board.
             </div>
-            <div v-else class="auto-director-player-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
+            <div v-else class="auto-director-player-list grid min-h-0 min-w-0 grid-cols-1 gap-2 overflow-y-auto pr-1">
               <article
                 v-for="(player, index) in players"
                 :key="player.steamId"
@@ -643,10 +674,10 @@ const healthClass = (state: string) =>
                     : 'border-zinc-800 bg-black/20',
                   !player.alive ? 'opacity-45' : ''
                 ]"
-                class="rounded-xl border p-2 transition-colors"
+                class="auto-director-player-card rounded-xl border p-2 transition-colors"
               >
                 <div
-                  class="grid items-center gap-2 xl:grid-cols-[34px_minmax(100px,0.8fr)_90px_minmax(180px,2fr)_auto]"
+                  class="auto-director-player-row grid items-center gap-3"
                 >
                   <div
                     class="grid size-7 place-items-center rounded-lg bg-zinc-800 text-xs font-bold text-zinc-400"
@@ -740,39 +771,8 @@ const healthClass = (state: string) =>
             </div>
           </section>
 
-          <section class="auto-director-bottom min-h-0 grid gap-3 overflow-hidden xl:grid-cols-2">
-            <div class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
-              <div class="mb-2 flex items-center justify-between">
-                <div>
-                  <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
-                    Scoring Weights
-                  </h2>
-                  <p class="mt-1 text-xs text-zinc-600">Profile defaults plus local overrides</p>
-                </div>
-                <button @click="resetWeights" class="text-xs text-zinc-500 hover:text-cyan-300">
-                  Reset mode defaults
-                </button>
-              </div>
-              <div class="grid gap-x-3 gap-y-2 sm:grid-cols-2">
-                <label v-for="[key, label] in weightDefinitions" :key="key" class="block">
-                  <span class="flex justify-between text-[11px] text-zinc-500"
-                    ><span>{{ label }}</span
-                    ><strong class="text-zinc-300">{{ effectiveWeight(key) }}</strong></span
-                  >
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    :value="effectiveWeight(key)"
-                    @change="setWeight(key, Number(($event.target as HTMLInputElement).value))"
-                    class="mt-1 w-full accent-cyan-400"
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+          <section class="auto-director-bottom min-h-0 overflow-hidden">
+            <div class="min-h-0 h-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
               <h2 class="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
                 Decision History
               </h2>
@@ -815,12 +815,51 @@ const healthClass = (state: string) =>
 <style scoped>
 /* Compact mode is preserved for a tall/fullscreen viewport. A short window
    must remain a normal scrollable document instead of clipping diagnostics. */
+@media (min-width: 1536px) and (min-height: 900px) {
+  .auto-director-settings {
+    min-height: 0;
+  }
+
+  .auto-director-player-board {
+    min-width: 0;
+  }
+
+  .auto-director-player-list {
+    flex: 1 1 auto;
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .auto-director-player-card {
+    min-width: 0;
+  }
+
+  .auto-director-player-row {
+    grid-template-columns: 34px minmax(180px, 0.85fr) 130px minmax(220px, 1.5fr) auto;
+  }
+
+  .auto-director-history {
+    height: auto;
+    max-height: none;
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 1535px), (max-height: 899px) {
   .auto-director-page {
     display: block !important;
     height: auto !important;
     min-height: 100% !important;
     overflow-y: auto !important;
+  }
+
+  .auto-director-control-strip {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .auto-director-control-strip > div:last-child {
+    justify-content: flex-start;
   }
 
   .auto-director-layout {

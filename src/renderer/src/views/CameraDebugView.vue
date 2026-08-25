@@ -251,7 +251,7 @@ const selectAnchor = (id: string) => {
             </div>
           </section>
 
-          <section class="camera-debug-sidebar-panel min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+          <section class="camera-debug-sidebar-panel camera-debug-players-panel min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
             <div class="mb-2 flex items-center justify-between gap-2">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Players</h2>
@@ -259,7 +259,7 @@ const selectAnchor = (id: string) => {
               </div>
               <span class="text-xs text-zinc-500">{{ alivePlayers.length }} alive · {{ debug.players.length }} tracked</span>
             </div>
-            <div class="camera-debug-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
+            <div class="camera-debug-list camera-debug-players-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
               <div v-for="player in debug.players" :key="player.steamId" :class="player.steamId === debug.currentPlayerSteamId ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-zinc-800 bg-black/10'" class="rounded-xl border p-2">
                 <div class="flex items-center justify-between gap-2">
                   <div class="min-w-0 flex items-center gap-1"><span :class="teamClass(player.team)" class="text-[9px] font-bold">{{ player.team }}</span><span class="truncate text-xs font-semibold" :class="player.alive ? 'text-zinc-100' : 'text-zinc-600'">{{ player.name }}</span></div>
@@ -344,7 +344,20 @@ const selectAnchor = (id: string) => {
 
 @media (min-width: 1536px) and (min-height: 900px) {
   .camera-debug-sidebar {
-    grid-template-rows: minmax(0, 0.88fr) minmax(0, 1.12fr) auto;
+    grid-template-rows: minmax(0, 0.84fr) minmax(0, 1.16fr) auto;
+  }
+
+  .camera-debug-players-panel {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .camera-debug-players-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    align-content: start;
   }
 }
 </style>
