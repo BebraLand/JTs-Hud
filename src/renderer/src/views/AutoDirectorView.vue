@@ -815,6 +815,7 @@ const healthClass = (state: string) =>
 <style scoped>
 .auto-director-control-strip > div:first-child {
   min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .auto-director-control-strip button {
