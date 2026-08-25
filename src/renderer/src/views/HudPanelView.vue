@@ -13,6 +13,7 @@ const {
   sectionStatus,
   activeTab,
   activeSection,
+  matEnabled,
   livePlayerSteamIds,
   showOnlyActivePlayers,
   playersForSection,
@@ -50,6 +51,7 @@ const {
           :show-only-active-players="showOnlyActivePlayers[activeSection.name] ?? false"
           :live-data-available="livePlayerSteamIds.size > 0"
           :status="sectionStatus[activeSection.name]"
+          :mat-enabled="matEnabled"
           @save="saveSectionConfig(activeSection.name)"
           @fire-action="(name, val) => fireAction(name, val)"
           @upload-image="(inputName, file) => uploadImage(activeSection.name, inputName, file)"

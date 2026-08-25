@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io'
 import { getHudConfig } from './domains/huds/hud.routes'
 import { getActiveHudId } from './server'
 import { getHudRefreshState, refreshAllHuds } from './hudRefresh'
+import { matIntegrationService } from './integrations/mat.integration'
 
 export const resolveRegisteredHudId = (
   hudName: string | null | undefined,
@@ -37,6 +38,7 @@ export const setupSockets = (io: Server) => {
           const hudId = resolveRegisteredHudId(hudName, getActiveHudId())
           const config = await getHudConfig(hudId)
           socket.emit('hud_config', config)
+          socket.emit('mat:labels', matIntegrationService.getHudLabels())
         } catch (e) {
           console.error('Failed to push hud_config on register:', e)
         }

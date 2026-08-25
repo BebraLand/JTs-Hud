@@ -25,6 +25,15 @@ type MatSettingsUpdate = {
   pollIntervalSeconds?: number
 }
 
+export type MatHudLabels = {
+  enabled: boolean
+  available: boolean
+  state: MatIntegrationStatus['state']
+  tournamentName: string
+  tournamentStage: string
+  revision: string | null
+}
+
 function normalizeMatUrl(value: string): string {
   const parsed = new URL(value.trim())
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -140,6 +149,17 @@ class MatIntegrationService {
 
   getProjection(): MatHudProjectionV1 | null {
     return this.projection ? structuredClone(this.projection) : null
+  }
+
+  getHudLabels(): MatHudLabels {
+    return {
+      enabled: this.enabled,
+      available: this.projection !== null,
+      state: this.status.state,
+      tournamentName: this.projection?.tournament?.name ?? '',
+      tournamentStage: this.projection?.match?.roundLabel ?? '',
+      revision: this.projection?.revision ?? null
+    }
   }
 
   async updateSettings(input: MatSettingsUpdate): Promise<MatIntegrationPublicSettings> {
@@ -389,6 +409,7 @@ class MatIntegrationService {
   }
 
   private emitLocalUpdates(): void {
+    this.localIo?.emit('mat:labels', this.getHudLabels())
     this.emitStatus()
     this.localIo?.emit('match')
     this.localIo?.emit('teams')

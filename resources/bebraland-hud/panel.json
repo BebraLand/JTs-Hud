@@ -14,6 +14,20 @@
         "label": "Tournament Stage"
       },
       {
+        "type": "checkbox",
+        "name": "sync_tournament_name_from_mat",
+        "label": "Sync tournament name from MAT",
+        "default": false,
+        "requires": "mat"
+      },
+      {
+        "type": "checkbox",
+        "name": "sync_tournament_stage_from_mat",
+        "label": "Sync tournament stage from MAT",
+        "default": false,
+        "requires": "mat"
+      },
+      {
         "type": "text",
         "name": "ct_color",
         "label": "CT color (hex)"

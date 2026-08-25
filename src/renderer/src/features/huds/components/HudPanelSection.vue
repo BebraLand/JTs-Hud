@@ -15,6 +15,7 @@ const props = defineProps<{
   matches: any[];
   showOnlyActivePlayers: boolean;
   liveDataAvailable: boolean;
+  matEnabled: boolean;
   status: 'idle' | 'saving' | 'saved' | 'error' | undefined;
 }>();
 
@@ -28,8 +29,11 @@ const emit = defineEmits<{
   'toggle-active-players': [];
 }>();
 
-const hasNonActionInputs = computed(() => props.section.inputs.some(i => i.type !== 'action'));
-const hasPlayerInput = computed(() => props.section.inputs.some(i => i.type === 'player'));
+const visibleInputs = computed(() =>
+  props.section.inputs.filter(input => input.requires !== 'mat' || props.matEnabled)
+);
+const hasNonActionInputs = computed(() => visibleInputs.value.some(i => i.type !== 'action'));
+const hasPlayerInput = computed(() => visibleInputs.value.some(i => i.type === 'player'));
 
 const onFileChange = (inputName: string, e: Event, multi: boolean) => {
   const file = (e.target as HTMLInputElement).files?.[0];
@@ -94,7 +98,7 @@ const matchOptions = computed((): SelectOption[] =>
 
     <!-- Inputs -->
     <div class="p-5 grid grid-cols-2 gap-4">
-      <div v-for="input in section.inputs" :key="input.name">
+      <div v-for="input in visibleInputs" :key="input.name">
 
         <!-- TEXT -->
         <template v-if="input.type === 'text'">

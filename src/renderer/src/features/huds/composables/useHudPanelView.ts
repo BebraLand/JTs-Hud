@@ -11,6 +11,7 @@ export type PanelInput = {
   name: string
   label: string
   default?: boolean
+  requires?: 'mat'
   values?: { name: string; label: string }[]
 }
 
@@ -35,6 +36,7 @@ export function useHudPanelView() {
   const config = ref<Record<string, Record<string, any>>>({})
   const sectionStatus = ref<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({})
   const activeTab = ref<string>('')
+  const matEnabled = ref(false)
 
   const activeSection = computed<PanelSection>(
     () => panel.value.find((s) => s.name === activeTab.value) ?? EMPTY_SECTION
@@ -51,6 +53,10 @@ export function useHudPanelView() {
 
   const onGSIUpdate = (data: any) => {
     livePlayerSteamIds.value = data?.allplayers ? new Set(Object.keys(data.allplayers)) : new Set()
+  }
+
+  const onMatStatus = (status: { state?: string } | null) => {
+    if (status?.state) matEnabled.value = status.state !== 'disabled'
   }
 
   const playersForSection = (sectionName: string) => {
@@ -70,6 +76,11 @@ export function useHudPanelView() {
   const loadConfig = async () => {
     const res = await fetch(`${API_URL}/huds/${hudId}/config`)
     if (res.ok) config.value = await res.json()
+  }
+
+  const loadMatSettings = async () => {
+    const res = await fetch(`${API_URL}/settings`)
+    if (res.ok) matEnabled.value = (await res.json()).matEnabled === true
   }
 
   const seedConfig = () => {
@@ -94,7 +105,8 @@ export function useHudPanelView() {
 
   onMounted(async () => {
     socket.on('update', onGSIUpdate)
-    await Promise.all([fetchTeams(), fetchPlayers(), fetchMatches()])
+    socket.on('mat:status', onMatStatus)
+    await Promise.all([fetchTeams(), fetchPlayers(), fetchMatches(), loadMatSettings()])
     await loadPanel()
     if (panel.value.length) activeTab.value = panel.value[0].name
     seedConfig()
@@ -104,6 +116,7 @@ export function useHudPanelView() {
 
   onUnmounted(() => {
     socket.off('update', onGSIUpdate)
+    socket.off('mat:status', onMatStatus)
   })
 
   // --- Save section config ---
@@ -194,6 +207,7 @@ export function useHudPanelView() {
     sectionStatus,
     activeTab,
     activeSection,
+    matEnabled,
     hasNonActionInputs,
     hasPlayerInput,
     livePlayerSteamIds,
