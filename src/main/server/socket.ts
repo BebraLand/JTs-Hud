@@ -3,6 +3,14 @@ import { getHudConfig } from './domains/huds/hud.routes'
 import { getActiveHudId } from './server'
 import { getHudRefreshState, refreshAllHuds } from './hudRefresh'
 
+export const resolveRegisteredHudId = (
+  hudName: string | null | undefined,
+  activeHudId: string | null | undefined
+): string => {
+  const registeredHudId = typeof hudName === 'string' ? hudName.trim() : ''
+  return registeredHudId || activeHudId || 'default'
+}
+
 export const setupSockets = (io: Server) => {
   io.on('connection', (socket: Socket) => {
     socket.emit('hud:refresh-state', getHudRefreshState())
@@ -26,7 +34,7 @@ export const setupSockets = (io: Server) => {
           // Prefer the id reported by the registering HUD. The global active id
           // belongs to the Electron overlay and may be stale for browser URLs
           // such as /huds/bebraland/index.html?variant=vertical.
-          const hudId = hudName || getActiveHudId() || 'default'
+          const hudId = resolveRegisteredHudId(hudName, getActiveHudId())
           const config = await getHudConfig(hudId)
           socket.emit('hud_config', config)
         } catch (e) {
