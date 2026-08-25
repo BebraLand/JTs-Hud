@@ -47,6 +47,8 @@ watch(
 
 const persistAutoSwitch = () => saveSettings({ autoSwitchSides: settings.value.autoSwitchSides })
 const persistAutoRefresh = () => saveSettings({ autoRefreshHuds: settings.value.autoRefreshHuds })
+const persistSidePlayerMetadata = () =>
+  saveSettings({ showSidePlayerMetadata: settings.value.showSidePlayerMetadata })
 
 const saveTelnet = async () => {
   const saved = await saveSettings({ telnetHost: telnetHost.value, telnetPort: telnetPort.value })
@@ -200,6 +202,21 @@ const installGsiCfg = async () => {
                   size="md"
                   class="text-primary"
                   @update:model-value="persistAutoRefresh"
+                />
+              </div>
+              <div class="flex items-center justify-between mt-4">
+                <div>
+                  <p class="text-sm font-medium text-zinc-200">Show player details on side cards</p>
+                  <p class="text-xs text-zinc-500 mt-0.5">
+                    Show first name, last name, and country flag in the side player cards
+                  </p>
+                </div>
+                <BaseCheckbox
+                  v-model="settings.showSidePlayerMetadata"
+                  :disabled="isSaving"
+                  size="md"
+                  class="text-primary"
+                  @update:model-value="persistSidePlayerMetadata"
                 />
               </div>
             </div>
