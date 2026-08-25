@@ -317,10 +317,21 @@ assert.match(freezeDisabled.reason, /freeze-time/)
 const productionRegistry = new AerialCameraRegistry(
   path.resolve(process.cwd(), 'resources/auto-director/aerial')
 )
-const calibratedAncient = productionRegistry.load('de_ancient')
-assert.ok(calibratedAncient)
-assert.ok(calibratedAncient.anchors.length >= 5)
-assert.ok(calibratedAncient.anchors.every((anchor) => anchor.position.every(Number.isFinite)))
+const importedProductionMaps = [
+  'de_ancient',
+  'de_anubis',
+  'de_cache',
+  'de_dust2',
+  'de_inferno',
+  'de_mirage',
+  'de_nuke'
+]
+for (const mapName of importedProductionMaps) {
+  const calibrated = productionRegistry.load(mapName)
+  assert.ok(calibrated, `Expected imported Aerial map ${mapName}`)
+  assert.ok(calibrated.anchors.length > 0, `Expected anchors for ${mapName}`)
+  assert.ok(calibrated.anchors.every((anchor) => anchor.position.every(Number.isFinite)))
+}
 const calibratedDust2 = productionRegistry.load('de_dust2')
 assert.ok(calibratedDust2?.anchors.some((anchor) => anchor.id === 't_spawn'))
 assert.ok(calibratedDust2?.anchors.some((anchor) => anchor.id === 'ct_spawn'))
