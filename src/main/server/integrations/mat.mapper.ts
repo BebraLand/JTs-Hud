@@ -3,26 +3,36 @@ import type { Team } from '../domains/teams/team.types'
 import type { Player } from '../domains/players/player.types'
 import type { MatHudProjectionV1 } from './mat.types'
 
-export function mapTeam(team: NonNullable<MatHudProjectionV1['match']>['team1']): Team {
+function resolveMatAssetUrl(url: string | null, matUrl?: string): string {
+  if (!url) return ''
+  if (/^(?:https?:|data:|blob:)/i.test(url) || !matUrl) return url
+  return new URL(url, `${matUrl}/`).toString()
+}
+
+export function mapTeam(
+  team: NonNullable<MatHudProjectionV1['match']>['team1'],
+  matUrl?: string
+): Team {
   return {
     _id: team.id,
     name: team.name,
     country: team.countryCode || '',
     shortName: team.tag,
-    logo: team.logoUrl || '',
+    logo: resolveMatAssetUrl(team.logoUrl, matUrl),
     extra: { source: 'mat' }
   }
 }
 
 export function mapPlayer(
-  player: NonNullable<MatHudProjectionV1['match']>['team1']['players'][number]
+  player: NonNullable<MatHudProjectionV1['match']>['team1']['players'][number],
+  matUrl?: string
 ): Player {
   return {
     _id: player.id,
     firstName: player.firstName || '',
     lastName: player.lastName || '',
     username: player.nickname,
-    avatar: player.photoUrl || player.avatarUrl || '',
+    avatar: resolveMatAssetUrl(player.photoUrl || player.avatarUrl, matUrl),
     country: player.countryCode || '',
     steamid: player.steamId,
     team: player.teamId,

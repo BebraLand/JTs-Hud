@@ -93,10 +93,20 @@ assert.equal(mappedPlayer.username, 'aurum')
 assert.equal(mappedPlayer.avatar, player.photoUrl)
 assert.equal(mappedPlayer.country, 'LT')
 assert.equal(mappedPlayer.team, 'team-a')
+assert.equal(
+  mapPlayer({ ...player, photoUrl: '/broadcast-assets/players/player.webp' }, 'http://localhost:3069')
+    .avatar,
+  'http://localhost:3069/broadcast-assets/players/player.webp'
+)
 
 const mappedTeam = mapTeam(team1)
 assert.equal(mappedTeam.shortName, 'BEBRA')
 assert.equal(mappedTeam.logo, team1.logoUrl)
+assert.equal(
+  mapTeam({ ...team1, logoUrl: '/broadcast-assets/teams/team-a.webp' }, 'http://localhost:3069')
+    .logo,
+  'http://localhost:3069/broadcast-assets/teams/team-a.webp'
+)
 
 const match = mapMatch(projection)
 if (!match) throw new Error('Expected MAT match to map')

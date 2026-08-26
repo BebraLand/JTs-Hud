@@ -355,10 +355,12 @@ class MatIntegrationService {
       this.projection = projection
       this.match = mapMatch(projection)
       this.teams = projection.match
-        ? [mapTeam(projection.match.team1), mapTeam(projection.match.team2)]
+        ? [mapTeam(projection.match.team1, settings.url), mapTeam(projection.match.team2, settings.url)]
         : []
       this.players = projection.match
-        ? [...projection.match.team1.players, ...projection.match.team2.players].map(mapPlayer)
+        ? [...projection.match.team1.players, ...projection.match.team2.players].map((player) =>
+            mapPlayer(player, settings.url)
+          )
         : []
       this.status = {
         state: 'connected',
