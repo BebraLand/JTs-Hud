@@ -233,4 +233,23 @@ export class GeometryMap {
     const hit = this.firstIntersectionDistance(from, to)
     return hit === null || hit >= targetDistance - INTERSECTION_EPSILON
   }
+
+  /** Return a GPU-friendly render artifact for the opt-in viewer. */
+  toRenderArtifact(maxTriangles = 400000): GeometryArtifact {
+    const stride = Math.max(1, Math.ceil(this.triangleCount / maxTriangles))
+    const triangles: number[] = []
+    for (let triangle = 0; triangle < this.triangleCount; triangle += stride) {
+      for (let offset = 0; offset < 9; offset += 1) {
+        triangles.push(this.triangles[triangle * 9 + offset])
+      }
+    }
+    return {
+      schemaVersion: 1,
+      mapName: this.mapName,
+      sourceSha256: this.sourceSha256,
+      coordinateSystem: 'source2-hammer-units',
+      sourceTriangleCount: this.triangleCount,
+      triangles
+    }
+  }
 }

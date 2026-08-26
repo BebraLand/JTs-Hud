@@ -252,6 +252,11 @@ export class AutoDirectorService {
     }
   }
 
+  getGeometryRenderData(mapName: string) {
+    const geometry = this.geometry.load(mapName)
+    return geometry?.toRenderArtifact() ?? null
+  }
+
   async updateSettings(input: Partial<AutoDirectorSettings>): Promise<AutoDirectorStatus> {
     const next = sanitizeSettings(input, this.settings.aerialPresentationPhases)
     const previousOverride = this.settings.manualOverrideSteamId

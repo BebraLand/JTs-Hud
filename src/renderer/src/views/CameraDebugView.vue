@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useAutoDirector } from '../features/auto-director/composables/useAutoDirector'
 import { API_URL } from '../index'
 import { getRadarMapConfig, worldToRadar } from '../features/auto-director/radar'
+import type { CameraDebugGeometry } from '../features/auto-director/types'
+import CameraDebug3DView from './CameraDebug3DView.vue'
 
 const { status, loading, error } = useAutoDirector()
 const selectedAnchorId = ref<string | null>(null)
+const viewMode = ref<'radar' | '3d'>('radar')
+const geometry3d = ref<CameraDebugGeometry | null>(null)
+const geometry3dLoading = ref(false)
+const geometry3dError = ref<string | null>(null)
+let geometryRequestId = 0
+const geometry3dTriangleCount = computed(() => Math.floor((geometry3d.value?.triangles.length ?? 0) / 9))
 
 type Point = { x: number; y: number }
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number }
@@ -112,6 +120,27 @@ const teamClass = (team: string) => (team === 'CT' ? 'text-sky-300' : 'text-ambe
 const selectAnchor = (id: string) => {
   selectedAnchorId.value = selectedAnchorId.value === id ? null : id
 }
+
+const load3dGeometry = async () => {
+  const mapName = debug.value.mapName
+  const requestId = ++geometryRequestId
+  geometry3dError.value = null
+  geometry3d.value = null
+  if (viewMode.value !== '3d' || !mapName || !debug.value.geometryAvailable) return
+  geometry3dLoading.value = true
+  try {
+    const response = await fetch(`${API_URL}/auto-director/geometry/${encodeURIComponent(mapName)}`)
+    const body = await response.json()
+    if (!response.ok) throw new Error(body?.error ?? `Geometry request failed (${response.status})`)
+    if (requestId === geometryRequestId) geometry3d.value = body as CameraDebugGeometry
+  } catch (cause) {
+    if (requestId === geometryRequestId) geometry3dError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    if (requestId === geometryRequestId) geometry3dLoading.value = false
+  }
+}
+
+watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
 </script>
 
 <template>
@@ -173,21 +202,32 @@ const selectAnchor = (id: string) => {
         <section class="camera-debug-radar-panel flex min-h-0 min-w-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3 sm:p-4">
           <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Live radar</h2>
-              <p class="mt-1 text-xs text-zinc-600">Player direction, estimated visibility and selected Aerial coverage.</p>
+              <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">{{ viewMode === 'radar' ? 'Live radar' : '3D camera debug' }}</h2>
+              <p class="mt-1 text-xs text-zinc-600">{{ viewMode === 'radar' ? 'Player direction, estimated visibility and selected Aerial coverage.' : 'Lightweight map mesh, player positions and camera visibility in perspective.' }}</p>
             </div>
-            <div class="flex flex-wrap gap-3 text-[10px] text-zinc-500">
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <div class="flex rounded-lg border border-zinc-700 bg-black/20 p-0.5 text-[10px] font-bold uppercase tracking-wider">
+                <button :class="viewMode === 'radar' ? 'bg-violet-400/15 text-violet-200' : 'text-zinc-500 hover:text-zinc-300'" class="rounded-md px-2.5 py-1.5" @click="viewMode = 'radar'">Radar</button>
+                <button :class="viewMode === '3d' ? 'bg-violet-400/15 text-violet-200' : 'text-zinc-500 hover:text-zinc-300'" class="rounded-md px-2.5 py-1.5" @click="viewMode = '3d'">3D</button>
+              </div>
+              <div v-if="viewMode === 'radar'" class="flex flex-wrap justify-end gap-3 text-[10px] text-zinc-500">
               <span><i class="mr-1 inline-block size-2 rounded-full bg-cyan-300" />current</span>
               <span><i class="mr-1 inline-block size-2 rounded-full bg-violet-300" />Aerial</span>
               <span><i class="mr-1 inline-block size-2 rounded-full bg-emerald-400" />camera visible</span>
               <span><i class="mr-1 inline-block size-2 rounded-full bg-orange-400" />camera blocked</span>
               <span><i class="mr-1 inline-block h-px w-3 border-t border-dashed border-violet-300" />FOV guide</span>
               <span><i class="mr-1 inline-block h-px w-3 border-t border-dashed border-red-400" />LOS blocked</span>
+              </div>
             </div>
           </div>
 
           <div class="camera-debug-radar-surface min-h-0 flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-[#090b12]">
-            <svg :viewBox="radarConfig ? '0 0 1024 1024' : '0 0 1000 650'" preserveAspectRatio="xMidYMid meet" class="camera-debug-radar-svg block h-full w-full" role="img" aria-label="Camera debug radar">
+            <div v-if="viewMode === '3d'" class="flex h-full min-h-[420px] flex-col">
+              <div v-if="geometry3dLoading" class="grid min-h-0 flex-1 place-items-center text-sm text-zinc-500">Loading lightweight map mesh…</div>
+              <div v-else-if="geometry3dError" class="grid min-h-0 flex-1 place-items-center p-6 text-center text-sm text-red-300">{{ geometry3dError }}</div>
+              <CameraDebug3DView v-else :debug="debug" :geometry="geometry3d" :selected-anchor-id="selectedAnchorId" @select-anchor="selectAnchor" />
+            </div>
+            <svg v-else :viewBox="radarConfig ? '0 0 1024 1024' : '0 0 1000 650'" preserveAspectRatio="xMidYMid meet" class="camera-debug-radar-svg block h-full w-full" role="img" aria-label="Camera debug radar">
               <defs>
                 <pattern id="radar-grid" width="50" height="50" patternUnits="userSpaceOnUse">
                   <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(148,163,184,0.08)" stroke-width="1" />
@@ -224,8 +264,8 @@ const selectAnchor = (id: string) => {
             </svg>
           </div>
           <div class="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-600">
-            <span>{{ debug.geometryMessage }}</span>
-            <span>Cones are approximate 90° horizontal FOV projections.</span>
+            <span>{{ viewMode === '3d' ? (geometry3d ? `${geometry3dTriangleCount.toLocaleString()} full triangles loaded` : debug.geometryMessage) : debug.geometryMessage }}</span>
+            <span>{{ viewMode === '3d' ? '3D mesh is loaded only after switching to this mode.' : 'Cones are approximate 90° horizontal FOV projections.' }}</span>
           </div>
         </section>
 

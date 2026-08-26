@@ -220,3 +220,12 @@ export interface CameraDebugStatus {
   activeAnchorId: string | null
   summary: string
 }
+
+export interface CameraDebugGeometry {
+  schemaVersion: 1
+  mapName: string
+  sourceSha256: string
+  coordinateSystem: 'source2-hammer-units'
+  sourceTriangleCount?: number
+  triangles: number[]
+}

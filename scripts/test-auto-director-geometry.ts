@@ -28,6 +28,8 @@ assert.equal(geometry.hasLineOfSight([0, 0, 4], [10, 0, 4]), true)
 assert.equal(geometry.hasLineOfSight([0, 0, 1.6], [4, 0, 1.6]), true)
 assert.equal(geometry.hasLineOfSight([6, 0, 1.6], [10, 0, 1.6]), true)
 assert.ok(Math.abs(geometry.firstIntersectionDistance([0, 0, 1.6], [10, 0, 1.6])! - 5) < 1e-6)
+assert.equal(geometry.toRenderArtifact(1).triangles.length, 9)
+assert.equal(geometry.toRenderArtifact(1).sourceTriangleCount, 2)
 
 assert.throws(() => new GeometryMap({ ...wallArtifact, schemaVersion: 2 as 1 }), /schema version/)
 assert.throws(() => new GeometryMap({ ...wallArtifact, triangles: [0, 1, 2] }), /complete XYZ/)

@@ -28,6 +28,16 @@ router.get('/', (_req: Request, res: Response) => {
   res.json(autoDirectorService.getStatus())
 })
 
+router.get('/geometry/:mapName', (req: Request, res: Response) => {
+  const mapName = String(req.params.mapName ?? '').toLowerCase()
+  if (!/^de_[a-z0-9_]+$/.test(mapName)) {
+    return res.status(400).json({ error: 'Invalid geometry map name' })
+  }
+  const geometry = autoDirectorService.getGeometryRenderData(mapName)
+  if (!geometry) return res.status(404).json({ error: `No geometry artifact for ${mapName}` })
+  return res.json(geometry)
+})
+
 router.put(
   '/settings',
   requireControlToken,
