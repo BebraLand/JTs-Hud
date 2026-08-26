@@ -35,6 +35,11 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      - name: Build portable Windows executable
+        run: npm run build:win:portable
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
       - name: Smoke-test packaged Windows runtime
         shell: pwsh
         run: |
@@ -160,10 +165,12 @@ jobs:
         shell: pwsh
         run: |
           $artifacts = @(Get-ChildItem dist -File | Where-Object {
-            $_.Name -like '*-setup.exe' -or $_.Name -like '*-windows-portable.zip'
+            $_.Name -like '*-setup.exe' -or
+            $_.Name -like '*-auto-director-experimental-portable.exe' -or
+            $_.Name -like '*-windows-portable.zip'
           })
-          if ($artifacts.Count -lt 2) {
-            throw 'Expected both installer and portable ZIP before checksum generation.'
+          if ($artifacts.Count -lt 3) {
+            throw 'Expected installer, portable EXE, and portable ZIP before checksum generation.'
           }
           $lines = $artifacts | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -179,5 +186,7 @@ jobs:
           retention-days: 14
           path: |
             dist/*-setup.exe
+            dist/*-auto-director-experimental-portable.exe
             dist/*-windows-portable.zip
+            dist/*-auto-director-experimental-portable.exe.sha256.txt
             dist/SHA256SUMS.txt
