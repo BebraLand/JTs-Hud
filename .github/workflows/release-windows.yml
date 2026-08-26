@@ -1,0 +1,105 @@
+name: Release JTs-Hud (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version increment
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jts-hud-windows-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Bump version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm version '${{ inputs.bump }}' --no-git-tag-version
+          $version = node -p "require('./package.json').version"
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Preparing release v$version"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build Windows installer
+        run: npm run build:win -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Build portable Windows executable
+        run: npm run build:win:portable
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $artifacts = @(Get-ChildItem dist -File | Where-Object {
+            $_.Name -like '*-setup.exe' -or $_.Name -like '*-portable.exe'
+          })
+          if ($artifacts.Count -ne 2) {
+            throw 'Expected exactly one installer and one portable executable.'
+          }
+          $lines = $artifacts | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          Set-Content -Path 'dist\SHA256SUMS.txt' -Value $lines -Encoding ascii
+
+      - name: Commit version and create tag
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git commit -m "Release $env:TAG"
+          git push origin HEAD:main
+          git tag -a $env:TAG -m "JTs Hud $env:TAG"
+          git push origin $env:TAG
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release create $env:TAG `
+            "dist\JTs-Hud-$env:VERSION-setup.exe" `
+            "dist\JTs-Hud-$env:VERSION-portable.exe" `
+            'dist\SHA256SUMS.txt' `
+            --title "JTs Hud $env:TAG" `
+            --generate-notes

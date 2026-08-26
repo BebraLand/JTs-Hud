@@ -29,12 +29,12 @@ win:
   executableName: JTs Hud Manager
   icon: icon.ico
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: JTs-Hud-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 portable:
-  artifactName: ${name}-${version}-auto-director-experimental-portable.${ext}
+  artifactName: JTs-Hud-${version}-portable.${ext}
 mac:
   entitlementsInherit: entitlements.mac.plist
   extendInfo:

@@ -166,7 +166,7 @@ jobs:
         run: |
           $artifacts = @(Get-ChildItem dist -File | Where-Object {
             $_.Name -like '*-setup.exe' -or
-            $_.Name -like '*-auto-director-experimental-portable.exe' -or
+            $_.Name -like '*-portable.exe' -or
             $_.Name -like '*-windows-portable.zip'
           })
           if ($artifacts.Count -lt 3) {
@@ -186,7 +186,7 @@ jobs:
           retention-days: 14
           path: |
             dist/*-setup.exe
-            dist/*-auto-director-experimental-portable.exe
+            dist/*-portable.exe
             dist/*-windows-portable.zip
-            dist/*-auto-director-experimental-portable.exe.sha256.txt
+            dist/*-portable.exe.sha256.txt
             dist/SHA256SUMS.txt

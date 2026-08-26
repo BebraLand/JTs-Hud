@@ -10,7 +10,7 @@ const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const nativeRelativePath = join('node_modules', 'sqlite3', 'build', 'Release', 'node_sqlite3.node')
 const nativePath = join(root, nativeRelativePath)
-const artifactName = `${packageJson.name}-${packageJson.version}-auto-director-experimental-portable.exe`
+const artifactName = `JTs-Hud-${packageJson.version}-portable.exe`
 const packagedNativePath = join(
   root,
   'dist',
