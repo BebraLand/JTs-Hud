@@ -70,10 +70,7 @@ try {
   }
 
   const asarPath = join(root, 'dist', 'win-unpacked', 'resources', 'app.asar')
-  const listing = execFileSync(npx, ['asar', 'list', asarPath], {
-    cwd: root,
-    encoding: 'utf8'
-  })
+  const listing = run(npx, ['asar', 'list', asarPath], { encoding: 'utf8', stdio: 'pipe' })
   const requiredEntries = [
     '/resources/auto-director/models/auto-director-lightgbm.json',
     '/resources/auto-director/geometry/de_mirage.jgeo.json.gz',
