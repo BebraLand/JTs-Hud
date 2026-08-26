@@ -19,6 +19,13 @@ const packagedNativePath = join(
   'app.asar.unpacked',
   nativeRelativePath
 )
+const packagedAutoDirectorResourceDir = join(
+  root,
+  'dist',
+  'win-unpacked',
+  'resources',
+  'auto-director'
+)
 const artifactPath = join(root, 'dist', artifactName)
 const checksumPath = `${artifactPath}.sha256.txt`
 
@@ -40,8 +47,8 @@ const isWindowsPe = (path) => {
 
 run(npm, ['run', 'build'])
 
-const originalNative = readFileSync(nativePath)
-const originalMode = statSync(nativePath).mode
+const originalNative = process.platform === 'win32' ? undefined : readFileSync(nativePath)
+const originalMode = process.platform === 'win32' ? undefined : statSync(nativePath).mode
 
 try {
   if (process.platform !== 'win32') {
@@ -71,15 +78,15 @@ try {
 
   const asarPath = join(root, 'dist', 'win-unpacked', 'resources', 'app.asar')
   const listing = run(npx, ['asar', 'list', asarPath], { encoding: 'utf8', stdio: 'pipe' })
-  const requiredEntries = [
-    '/resources/auto-director/models/auto-director-lightgbm.json',
-    '/resources/auto-director/geometry/de_mirage.jgeo.json.gz',
-    '/resources/auto-director/geometry/de_inferno.jgeo.json.gz',
-    '/resources/auto-director/geometry/de_cache.jgeo.json.gz'
+  const requiredResources = [
+    'models/auto-director-lightgbm.json',
+    'geometry/de_mirage.jgeo.json.gz',
+    'geometry/de_inferno.jgeo.json.gz',
+    'geometry/de_cache.jgeo.json.gz'
   ]
-  for (const entry of requiredEntries) {
-    if (!listing.split('\n').some((line) => line === entry)) {
-      throw new Error(`Auto Director asset missing from app.asar: ${entry}`)
+  for (const relativePath of requiredResources) {
+    if (!existsSync(join(packagedAutoDirectorResourceDir, relativePath))) {
+      throw new Error(`Auto Director asset missing from packaged resources: ${relativePath}`)
     }
   }
   const forbiddenEntries = [
@@ -102,5 +109,6 @@ try {
   console.log(`Checksum file: ${checksumPath}`)
   console.log(`SHA-256: ${digest}`)
 } finally {
-  writeFileSync(nativePath, originalNative, { mode: originalMode })
+  if (originalNative !== undefined)
+    writeFileSync(nativePath, originalNative, { mode: originalMode })
 }

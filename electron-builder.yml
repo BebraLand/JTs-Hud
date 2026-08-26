@@ -14,9 +14,13 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,knowledgebase.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  - 'resources/default-hud/**/*'
-  - 'resources/bebraland-hud/**/*'
-  - 'resources/auto-director/**/*'
+extraResources:
+  - from: resources/default-hud
+    to: default-hud
+  - from: resources/bebraland-hud
+    to: bebraland-hud
+  - from: resources/auto-director
+    to: auto-director
 protocols:
   name: jtshudhmanager
   schemes:
