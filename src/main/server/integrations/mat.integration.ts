@@ -8,7 +8,8 @@ import type { Player } from '../domains/players/player.types'
 import type {
   MatHudProjectionV1,
   MatIntegrationPublicSettings,
-  MatIntegrationStatus
+  MatIntegrationStatus,
+  MatTokenMode
 } from './mat.types'
 import { mapMatch, mapPlayer, mapTeam } from './mat.mapper'
 import { notifyHudDataChanged } from '../hudRefresh'
@@ -23,6 +24,11 @@ type MatSettingsUpdate = {
   url?: string
   token?: string
   pollIntervalSeconds?: number
+}
+
+type MatProjectionResponse = {
+  projection: MatHudProjectionV1
+  tokenMode: MatTokenMode
 }
 
 export type MatHudLabels = {
@@ -53,7 +59,8 @@ class MatIntegrationService {
     message: 'MAT integration is disabled',
     lastSyncAt: null,
     revision: null,
-    currentMatchSlug: null
+    currentMatchSlug: null,
+    tokenMode: null
   }
   private localIo: Server | null = null
   private matSocket: Socket | null = null
@@ -61,6 +68,7 @@ class MatIntegrationService {
   private refreshInFlight: Promise<void> | null = null
   private refreshGeneration = 0
   private settingsUpdateQueue: Promise<void> = Promise.resolve()
+  private observedSteamIds: string[] = []
 
   private async readStoredSettings(): Promise<StoredSettings> {
     const rows = (await dbAll('SELECT key, value FROM settings')) as Array<{
@@ -241,15 +249,19 @@ class MatIntegrationService {
       throw new Error('Enter a token when testing a MAT URL different from the saved URL')
     }
     const token = suppliedToken || this.decryptToken(stored.encryptedToken)
-    const projection = await this.fetchProjection(url, token)
+    const response = await this.fetchProjection(url, token)
+    const projection = response.projection
     return {
       state: 'connected',
       message: projection.match
         ? `Connected to MAT: ${projection.match.team1.name} vs ${projection.match.team2.name}`
-        : 'Connected to MAT; no broadcast match is selected',
+        : response.tokenMode === 'automatic'
+          ? 'Connected to MAT; automatic match not detected'
+          : 'Connected to MAT; no broadcast match is selected',
       lastSyncAt: new Date().toISOString(),
       revision: projection.revision,
-      currentMatchSlug: projection.match?.slug || null
+      currentMatchSlug: projection.match?.slug || null,
+      tokenMode: response.tokenMode
     }
   }
 
@@ -282,7 +294,8 @@ class MatIntegrationService {
         message: 'MAT integration is disabled',
         lastSyncAt: null,
         revision: null,
-        currentMatchSlug: null
+        currentMatchSlug: null,
+        tokenMode: null
       }
       this.emitLocalUpdates()
       return
@@ -293,7 +306,8 @@ class MatIntegrationService {
         message: 'MAT URL and read-only HUD token are required',
         lastSyncAt: null,
         revision: null,
-        currentMatchSlug: null
+        currentMatchSlug: null,
+        tokenMode: null
       }
       this.emitStatus()
       this.emitLocalUpdates()
@@ -333,6 +347,18 @@ class MatIntegrationService {
     return this.refreshNowUnfenced()
   }
 
+  setObservedSteamIds(steamIds: string[]): void {
+    const next = Array.from(new Set(steamIds.filter(Boolean))).sort()
+    if (
+      next.length === this.observedSteamIds.length &&
+      next.every((id, index) => id === this.observedSteamIds[index])
+    ) {
+      return
+    }
+    this.observedSteamIds = next
+    if (this.enabled) void this.refreshNow()
+  }
+
   private async refreshNowUnfenced(): Promise<void> {
     if (this.refreshInFlight) return this.refreshInFlight
     const generation = this.refreshGeneration
@@ -349,13 +375,17 @@ class MatIntegrationService {
       const settings = await this.readStoredSettings()
       if (!settings.enabled || generation !== this.refreshGeneration) return
       const token = this.decryptToken(settings.encryptedToken)
-      const projection = await this.fetchProjection(settings.url, token)
+      const response = await this.fetchProjection(settings.url, token)
+      const projection = response.projection
       if (generation !== this.refreshGeneration) return
       const changed = projection.revision !== this.projection?.revision
       this.projection = projection
       this.match = mapMatch(projection)
       this.teams = projection.match
-        ? [mapTeam(projection.match.team1, settings.url), mapTeam(projection.match.team2, settings.url)]
+        ? [
+            mapTeam(projection.match.team1, settings.url),
+            mapTeam(projection.match.team2, settings.url)
+          ]
         : []
       this.players = projection.match
         ? [...projection.match.team1.players, ...projection.match.team2.players].map((player) =>
@@ -366,10 +396,13 @@ class MatIntegrationService {
         state: 'connected',
         message: projection.match
           ? `Synced ${projection.match.team1.name} vs ${projection.match.team2.name}`
-          : 'Connected; no MAT broadcast match selected',
+          : response.tokenMode === 'automatic'
+            ? 'Connected; automatic match not detected'
+            : 'Connected; no MAT broadcast match selected',
         lastSyncAt: new Date().toISOString(),
         revision: projection.revision,
-        currentMatchSlug: projection.match?.slug || null
+        currentMatchSlug: projection.match?.slug || null,
+        tokenMode: response.tokenMode
       }
       if (changed) this.emitLocalUpdates()
       else this.emitStatus()
@@ -385,9 +418,13 @@ class MatIntegrationService {
     }
   }
 
-  private async fetchProjection(url: string, token: string): Promise<MatHudProjectionV1> {
+  private async fetchProjection(url: string, token: string): Promise<MatProjectionResponse> {
     if (!url || !token) throw new Error('MAT URL and HUD token are required')
-    const response = await fetch(`${normalizeMatUrl(url)}/api/integrations/jts-hud/v1/current`, {
+    const endpoint = new URL(`${normalizeMatUrl(url)}/api/integrations/jts-hud/v1/current`)
+    if (this.observedSteamIds.length > 0) {
+      endpoint.searchParams.set('steamIds', this.observedSteamIds.join(','))
+    }
+    const response = await fetch(endpoint, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(10_000),
       redirect: 'error'
@@ -403,7 +440,11 @@ class MatIntegrationService {
     if (projection.contract !== 'bebraland-mat-hud' || projection.version !== 1) {
       throw new Error('MAT returned an unsupported HUD contract')
     }
-    return projection
+    const tokenMode = response.headers.get('x-mat-hud-token-mode')
+    return {
+      projection,
+      tokenMode: tokenMode === 'automatic' ? 'automatic' : 'manual'
+    }
   }
 
   private emitStatus(): void {

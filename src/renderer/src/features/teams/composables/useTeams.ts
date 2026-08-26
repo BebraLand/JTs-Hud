@@ -1,6 +1,7 @@
-import { ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { API_URL } from '../../../index'
 import { useConfirmation } from '../../../composables/useConfirmation'
+import { socket } from '../../../socket'
 
 export function useTeams() {
   const teams = ref<any[]>([])
@@ -47,6 +48,10 @@ export function useTeams() {
   }
 
   const { confirmChoice } = useConfirmation()
+
+  const onTeamsEvent = () => void fetchTeams()
+  onMounted(() => socket.on('teams', onTeamsEvent))
+  onUnmounted(() => socket.off('teams', onTeamsEvent))
 
   const deleteTeam = async (id: string) => {
     const choice = await confirmChoice(

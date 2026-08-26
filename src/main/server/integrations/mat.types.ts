@@ -80,10 +80,13 @@ export interface MatIntegrationPublicSettings {
   pollIntervalSeconds: number
 }
 
+export type MatTokenMode = 'manual' | 'automatic'
+
 export interface MatIntegrationStatus {
   state: 'disabled' | 'connecting' | 'connected' | 'stale' | 'error'
   message: string
   lastSyncAt: string | null
   revision: string | null
   currentMatchSlug: string | null
+  tokenMode: MatTokenMode | null
 }

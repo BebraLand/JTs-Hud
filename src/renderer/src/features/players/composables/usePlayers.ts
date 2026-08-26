@@ -1,6 +1,7 @@
-import { ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { API_URL } from '../../../index'
 import { useConfirmation } from '../../../composables/useConfirmation'
+import { socket } from '../../../socket'
 
 export function usePlayers() {
   const players = ref<any[]>([])
@@ -47,6 +48,10 @@ export function usePlayers() {
   }
 
   const { confirm } = useConfirmation()
+
+  const onPlayersEvent = () => void fetchPlayers()
+  onMounted(() => socket.on('players', onPlayersEvent))
+  onUnmounted(() => socket.off('players', onPlayersEvent))
 
   const deletePlayer = async (id: string) => {
     if (!(await confirm('This player will be permanently deleted.'))) return false

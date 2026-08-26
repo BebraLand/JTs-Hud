@@ -18,6 +18,7 @@ export interface MatStatus {
   lastSyncAt: string | null
   revision: string | null
   currentMatchSlug: string | null
+  tokenMode: 'manual' | 'automatic' | null
 }
 
 export function useSettings() {

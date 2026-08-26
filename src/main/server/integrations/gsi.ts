@@ -348,6 +348,9 @@ export const setupGSI = (io: Server) => {
 
       lastGSIState = req.body
       lastGSIStateAt = new Date().toISOString()
+      matIntegrationService.setObservedSteamIds(
+        req.body?.allplayers ? Object.keys(req.body.allplayers) : []
+      )
 
       // Build payload for for HUDs
       let hudPayload = req.body
