@@ -152,6 +152,7 @@ export class AutoDirectorService {
   private aerialCandidateConfirmations = 0
   private aerialReason = 'Aerial presentation disabled'
   private aerialVisibleSteamIds: string[] = []
+  private aerialActivePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private aerialSequencePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private aerialSequenceAnchorIds = new Set<string>()
   private cameraDebug = emptyCameraDebugStatus()
@@ -525,6 +526,18 @@ export class AutoDirectorService {
     this.aerialVisibleSteamIds = decision.visibleSteamIds
 
     if (this.aerialActiveAnchor) {
+      if (this.commandInFlight) return true
+      const phaseChanged =
+        decision.eligible && decision.phase !== this.aerialActivePhase && decision.anchor !== null
+      if (phaseChanged && decision.anchor) {
+        void this.transitionAerial(
+          decision.anchor,
+          decision,
+          now,
+          `${this.aerialActivePhase ?? 'unknown'} → ${decision.phase ?? 'unknown'}`
+        )
+        return true
+      }
       const exitReason = !decision.eligible
         ? decision.reason
         : now >= this.aerialActiveUntil
@@ -586,6 +599,7 @@ export class AutoDirectorService {
       if (this.lastCommand.ok) {
         this.aerialActiveAnchor = anchor
         this.aerialActiveUntil = now + AERIAL_MAX_HOLD_MS
+        this.aerialActivePhase = decision.phase
         this.aerialSequenceAnchorIds.add(anchor.id)
         this.aerialSequencePhase = decision.phase
         this.aerialReason = decision.reason
@@ -604,6 +618,48 @@ export class AutoDirectorService {
           at: this.lastCommand.at,
           type: 'transport-error',
           message: `Aerial camera ${anchor.label}: ${this.lastCommand.message}`,
+          transport: this.lastCommand.transport
+        })
+      }
+    } finally {
+      this.commandInFlight = false
+      this.emitStatus()
+    }
+  }
+
+  private async transitionAerial(
+    anchor: AerialCameraAnchor,
+    decision: AerialPresentationDecision,
+    now: number,
+    reason: string
+  ): Promise<void> {
+    const fromLabel = this.aerialActiveAnchor?.label ?? 'Aerial camera'
+    this.commandInFlight = true
+    try {
+      this.lastCommand = await this.camera.moveToAerial(
+        anchor,
+        decision.presentationAngles ?? anchor.angles
+      )
+      this.updateTransportHealth(this.lastCommand)
+      if (this.lastCommand.ok) {
+        this.aerialActiveAnchor = anchor
+        this.aerialActiveUntil = now + AERIAL_MAX_HOLD_MS
+        this.aerialActivePhase = decision.phase
+        this.aerialSequenceAnchorIds.add(anchor.id)
+        this.aerialReason = decision.reason
+        this.aerialVisibleSteamIds = decision.visibleSteamIds
+        this.addHistory({
+          at: this.lastCommand.at,
+          type: 'presentation',
+          message: `Aerial transition ${fromLabel} → ${anchor.label}: ${reason}`,
+          transport: this.lastCommand.transport
+        })
+      } else {
+        this.aerialReason = `Could not transition Aerial camera: ${this.lastCommand.message}`
+        this.addHistory({
+          at: this.lastCommand.at,
+          type: 'transport-error',
+          message: this.aerialReason,
           transport: this.lastCommand.transport
         })
       }
@@ -660,6 +716,7 @@ export class AutoDirectorService {
   private clearAerialPresentation(now: number, reason: string, continueSequence = false): void {
     this.aerialActiveAnchor = null
     this.aerialActiveUntil = 0
+    this.aerialActivePhase = null
     this.aerialCandidateId = null
     this.aerialCandidateConfirmations = 0
     this.aerialCooldownUntil =
