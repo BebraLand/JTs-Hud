@@ -87,7 +87,7 @@ def weapon_type(name: str) -> str:
         return "Knife"
     if any(token in normalized for token in ("grenade", "flashbang", "molotov", "incendiary", "smoke", "decoy")):
         return "Grenade"
-    if any(token in normalized for token in ("c4", "explosive")):
+    if "c4" in normalized:
         return "C4"
     return "Rifle"
 
@@ -218,7 +218,7 @@ def main() -> None:
                     active_weapon = str(row.get("active_weapon_name") or "unknown")
                     inventory = row.get("inventory")
                     has_bomb = isinstance(inventory, list) and any(
-                        "c4" in str(item).lower() or "explosive" in str(item).lower()
+                        "c4" in str(item).lower()
                         for item in inventory
                     )
                     weapons = {
