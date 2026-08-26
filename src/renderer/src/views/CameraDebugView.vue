@@ -198,7 +198,7 @@ watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
         </div>
       </div>
 
-      <div class="camera-debug-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(0,1fr)_390px]">
+      <div class="camera-debug-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(0,1fr)_520px]">
         <section class="camera-debug-radar-panel flex min-h-0 min-w-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3 sm:p-4">
           <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
             <div>
@@ -279,14 +279,14 @@ watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
               <span class="text-xs text-zinc-500">{{ debug.anchors.length }} anchors</span>
             </div>
             <div v-if="!debug.anchors.length" class="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-600">No calibrated Aerial anchors for this map.</div>
-            <div v-else class="camera-debug-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
-              <button v-for="anchor in debug.anchors" :key="anchor.id" @click="selectAnchor(anchor.id)" :class="selectedAnchor?.id === anchor.id ? 'border-violet-400/60 bg-violet-400/10' : 'border-zinc-800 bg-black/10 hover:border-zinc-700'" class="w-full rounded-xl border p-2 text-left transition-colors">
-                <div class="flex items-center justify-between gap-3">
-                  <span class="truncate text-xs font-semibold text-zinc-100">{{ anchor.label }}</span>
-                  <span class="font-mono text-xs font-bold text-violet-300">{{ formatScore(anchor.cameraScore) }}</span>
+            <div v-else class="camera-debug-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-visible 2xl:grid-cols-3">
+              <button v-for="anchor in debug.anchors" :key="anchor.id" @click="selectAnchor(anchor.id)" :title="anchor.label" :class="selectedAnchor?.id === anchor.id ? 'border-violet-400/60 bg-violet-400/10' : 'border-zinc-800 bg-black/10 hover:border-zinc-700'" class="w-full min-w-0 rounded-xl border p-1.5 text-left transition-colors 2xl:p-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="min-w-0 truncate text-xs font-semibold text-zinc-100">{{ anchor.label }}</span>
+                  <span class="shrink-0 font-mono text-xs font-bold text-violet-300">{{ formatScore(anchor.cameraScore) }}</span>
                 </div>
                 <div class="mt-1 h-1 overflow-hidden rounded-full bg-zinc-800"><div class="h-full rounded-full bg-violet-400" :style="{ width: scoreWidth(anchor.cameraScore) }" /></div>
-                <div class="mt-1 flex items-center justify-between text-[9px] text-zinc-500"><span>{{ anchor.kind }} · {{ anchor.visibleSteamIds.length }} visible</span><span>{{ anchor.occludedSteamIds.length }} blocked</span></div>
+                <div class="mt-1 flex items-center justify-between gap-2 text-[9px] text-zinc-500"><span class="truncate">{{ anchor.kind }} · {{ anchor.visibleSteamIds.length }} visible</span><span class="shrink-0">{{ anchor.occludedSteamIds.length }} blocked</span></div>
               </button>
             </div>
           </section>
@@ -299,7 +299,7 @@ watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
               </div>
               <span class="text-xs text-zinc-500">{{ alivePlayers.length }} alive · {{ debug.players.length }} tracked</span>
             </div>
-            <div class="camera-debug-list camera-debug-players-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden">
+            <div class="camera-debug-list camera-debug-players-list grid min-h-0 min-w-0 grid-cols-2 gap-2 overflow-hidden 2xl:grid-cols-3">
               <div v-for="player in debug.players" :key="player.steamId" :class="player.steamId === debug.currentPlayerSteamId ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-zinc-800 bg-black/10'" class="rounded-xl border p-2">
                 <div class="flex items-center justify-between gap-2">
                   <div class="min-w-0 flex items-center gap-1"><span :class="teamClass(player.team)" class="text-[9px] font-bold">{{ player.team }}</span><span class="truncate text-xs font-semibold" :class="player.alive ? 'text-zinc-100' : 'text-zinc-600'">{{ player.name }}</span></div>
@@ -384,7 +384,7 @@ watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
 
 @media (min-width: 1800px) and (min-height: 900px) {
   .camera-debug-sidebar {
-    grid-template-rows: minmax(0, 0.84fr) minmax(0, 1.16fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .camera-debug-players-panel {
