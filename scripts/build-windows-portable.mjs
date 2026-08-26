@@ -23,12 +23,15 @@ const artifactPath = join(root, 'dist', artifactName)
 const checksumPath = `${artifactPath}.sha256.txt`
 
 const run = (command, args, options = {}) =>
-  execFileSync(command, args, {
-    cwd: root,
-    env: process.env,
-    stdio: 'inherit',
-    ...options
-  })
+  execFileSync(
+    process.platform === 'win32' && command.endsWith('.cmd')
+      ? process.env.ComSpec || 'cmd.exe'
+      : command,
+    process.platform === 'win32' && command.endsWith('.cmd')
+      ? ['/d', '/s', '/c', command, ...args]
+      : args,
+    { cwd: root, env: process.env, stdio: 'inherit', ...options }
+  )
 
 const isWindowsPe = (path) => {
   const header = readFileSync(path).subarray(0, 2)
