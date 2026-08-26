@@ -15,6 +15,7 @@ export const resolveRegisteredHudId = (
 export const setupSockets = (io: Server) => {
   io.on('connection', (socket: Socket) => {
     socket.emit('hud:refresh-state', getHudRefreshState())
+    socket.emit('mat:status', matIntegrationService.getStatus())
 
     socket.on('request-hud-refresh', () => {
       refreshAllHuds(io)

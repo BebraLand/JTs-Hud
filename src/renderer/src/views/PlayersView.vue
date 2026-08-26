@@ -1,30 +1,49 @@
 <script setup lang="ts">
-import BaseModal from '../components/base/BaseModal.vue';
-import BaseTable from '../components/base/BaseTable.vue';
-import BaseBadge from '../components/base/BaseBadge.vue';
-import PlayerForm from '../features/players/components/PlayerForm.vue';
-import PlayersPageHeader from '../features/players/components/PlayersPageHeader.vue';
-import PlayersBulkBar from '../features/players/components/PlayersBulkBar.vue';
-import { usePlayersView } from '../features/players/composables/usePlayersView';
-import { API_URL } from '../index';
-import { resolveAssetUrl } from '../utils/assetUrl';
+import BaseModal from '../components/base/BaseModal.vue'
+import BaseTable from '../components/base/BaseTable.vue'
+import BaseBadge from '../components/base/BaseBadge.vue'
+import PlayerForm from '../features/players/components/PlayerForm.vue'
+import PlayersPageHeader from '../features/players/components/PlayersPageHeader.vue'
+import PlayersBulkBar from '../features/players/components/PlayersBulkBar.vue'
+import { usePlayersView } from '../features/players/composables/usePlayersView'
+import { API_URL } from '../index'
+import { resolveAssetUrl } from '../utils/assetUrl'
+import { useMatReadOnly } from '../features/settings/composables/useMatReadOnly'
 
 const {
-  players, availableTeams, isPlayersLoading, sortedPlayers, teamMap, tableHeaders,
-  sortKey, sortDir, handleSort,
-  selectedPlayerIds, handleSelectionChange, handleDeleteSelected, handleDeleteAll,
-  isModalOpen, isEditing, formData, handleSave, openCreateModal, openEditModal,
-  exportPlayers, importPlayers, deletePlayer,
-} = usePlayersView();
+  players,
+  availableTeams,
+  isPlayersLoading,
+  sortedPlayers,
+  teamMap,
+  tableHeaders,
+  sortKey,
+  sortDir,
+  handleSort,
+  selectedPlayerIds,
+  handleSelectionChange,
+  handleDeleteSelected,
+  handleDeleteAll,
+  isModalOpen,
+  isEditing,
+  formData,
+  handleSave,
+  openCreateModal,
+  openEditModal,
+  exportPlayers,
+  importPlayers,
+  deletePlayer
+} = usePlayersView()
+const { isMatReadOnly } = useMatReadOnly()
 
-const baseUrl = API_URL.replace('/api', '');
-
+const baseUrl = API_URL.replace('/api', '')
 </script>
 
 <template>
   <div class="p-6 bg-surface text-zinc-200 min-h-screen">
     <PlayersPageHeader
       :players-count="players.length"
+      :read-only="isMatReadOnly"
       @import="importPlayers"
       @export="exportPlayers(players)"
       @delete-all="handleDeleteAll"
@@ -32,7 +51,7 @@ const baseUrl = API_URL.replace('/api', '');
     />
 
     <PlayersBulkBar
-      v-if="selectedPlayerIds.length > 0"
+      v-if="selectedPlayerIds.length > 0 && !isMatReadOnly"
       :selected-count="selectedPlayerIds.length"
       @delete-selected="handleDeleteSelected"
     />
@@ -41,7 +60,8 @@ const baseUrl = API_URL.replace('/api', '');
       :headers="tableHeaders"
       :items="sortedPlayers"
       :is-loading="isPlayersLoading"
-      :selectable="true"
+      :selectable="!isMatReadOnly"
+      :read-only="isMatReadOnly"
       :sort-key="sortKey"
       :sort-dir="sortDir"
       @edit="openEditModal"
@@ -51,7 +71,11 @@ const baseUrl = API_URL.replace('/api', '');
     >
       <template #cell-avatar="{ item }">
         <div class="size-14">
-          <img v-if="item.avatar" :src="resolveAssetUrl(item.avatar, baseUrl)" class="size-12 object-cover" />
+          <img
+            v-if="item.avatar"
+            :src="resolveAssetUrl(item.avatar, baseUrl)"
+            class="size-12 object-cover"
+          />
         </div>
       </template>
 
@@ -66,8 +90,14 @@ const baseUrl = API_URL.replace('/api', '');
       <template #cell-team="{ item }">
         <div v-if="teamMap[item.team]" class="flex items-center gap-2.5">
           <div class="size-10 flex items-center justify-center overflow-hidden shrink-0">
-            <img v-if="teamMap[item.team].logo" :src="resolveAssetUrl(teamMap[item.team].logo, baseUrl)" class="w-full h-full object-contain" />
-            <span v-else class="text-xs font-bold text-zinc-500">{{ teamMap[item.team].shortName }}</span>
+            <img
+              v-if="teamMap[item.team].logo"
+              :src="resolveAssetUrl(teamMap[item.team].logo, baseUrl)"
+              class="w-full h-full object-contain"
+            />
+            <span v-else class="text-xs font-bold text-zinc-500">{{
+              teamMap[item.team].shortName
+            }}</span>
           </div>
         </div>
         <span v-else class="text-zinc-600 italic text-xs">No team</span>
@@ -79,6 +109,7 @@ const baseUrl = API_URL.replace('/api', '');
       :title="isEditing ? 'Edit Player' : 'Add New Player'"
       form-id="playerForm"
       max-width-class="max-w-xl"
+      :read-only="isMatReadOnly"
       @close="isModalOpen = false"
       @cancel="isModalOpen = false"
     >
@@ -86,6 +117,7 @@ const baseUrl = API_URL.replace('/api', '');
         :initial-data="formData"
         :teams="availableTeams"
         :is-editing="isEditing"
+        :read-only="isMatReadOnly"
         @submit="handleSave"
       />
     </BaseModal>

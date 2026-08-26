@@ -1,28 +1,46 @@
 <script setup lang="ts">
-import BaseModal from '../components/base/BaseModal.vue';
-import BaseTable from '../components/base/BaseTable.vue';
-import TeamForm from '../features/teams/components/TeamForm.vue';
-import TeamsPageHeader from '../features/teams/components/TeamsPageHeader.vue';
-import TeamsBulkBar from '../features/teams/components/TeamsBulkBar.vue';
-import { useTeamsView } from '../features/teams/composables/useTeamsView';
-import { API_URL } from '../index';
-import { resolveAssetUrl } from '../utils/assetUrl';
+import BaseModal from '../components/base/BaseModal.vue'
+import BaseTable from '../components/base/BaseTable.vue'
+import TeamForm from '../features/teams/components/TeamForm.vue'
+import TeamsPageHeader from '../features/teams/components/TeamsPageHeader.vue'
+import TeamsBulkBar from '../features/teams/components/TeamsBulkBar.vue'
+import { useTeamsView } from '../features/teams/composables/useTeamsView'
+import { API_URL } from '../index'
+import { resolveAssetUrl } from '../utils/assetUrl'
+import { useMatReadOnly } from '../features/settings/composables/useMatReadOnly'
 
 const {
-  teams, isLoading, sortedTeams, tableHeaders,
-  sortKey, sortDir, handleSort,
-  selectedTeamIds, handleSelectionChange, handleDeleteSelected, handleDeleteAll,
-  isModalOpen, isEditing, formData, handleSave, openCreateModal, openEditModal,
-  exportTeams, importTeams, deleteTeam,
-} = useTeamsView();
+  teams,
+  isLoading,
+  sortedTeams,
+  tableHeaders,
+  sortKey,
+  sortDir,
+  handleSort,
+  selectedTeamIds,
+  handleSelectionChange,
+  handleDeleteSelected,
+  handleDeleteAll,
+  isModalOpen,
+  isEditing,
+  formData,
+  handleSave,
+  openCreateModal,
+  openEditModal,
+  exportTeams,
+  importTeams,
+  deleteTeam
+} = useTeamsView()
+const { isMatReadOnly } = useMatReadOnly()
 
-const baseUrl = API_URL.replace('/api', '');
+const baseUrl = API_URL.replace('/api', '')
 </script>
 
 <template>
   <div class="p-6 bg-surface text-zinc-200 min-h-screen relative">
     <TeamsPageHeader
       :teams-count="teams.length"
+      :read-only="isMatReadOnly"
       @import="importTeams"
       @export="exportTeams(teams)"
       @delete-all="handleDeleteAll"
@@ -30,7 +48,7 @@ const baseUrl = API_URL.replace('/api', '');
     />
 
     <TeamsBulkBar
-      v-if="selectedTeamIds.length > 0"
+      v-if="selectedTeamIds.length > 0 && !isMatReadOnly"
       :selected-count="selectedTeamIds.length"
       @delete-selected="handleDeleteSelected"
     />
@@ -39,7 +57,8 @@ const baseUrl = API_URL.replace('/api', '');
       :headers="tableHeaders"
       :items="sortedTeams"
       :is-loading="isLoading"
-      :selectable="true"
+      :selectable="!isMatReadOnly"
+      :read-only="isMatReadOnly"
       :sort-key="sortKey"
       :sort-dir="sortDir"
       search-placeholder="Search teams..."
@@ -50,7 +69,11 @@ const baseUrl = API_URL.replace('/api', '');
     >
       <template #cell-logo="{ item }">
         <div class="size-12 flex items-center justify-center">
-          <img v-if="item.logo" :src="resolveAssetUrl(item.logo, baseUrl)" class="w-full h-full object-contain" />
+          <img
+            v-if="item.logo"
+            :src="resolveAssetUrl(item.logo, baseUrl)"
+            class="w-full h-full object-contain"
+          />
           <span v-else class="text-xs font-bold text-zinc-500">{{ item.shortName }}</span>
         </div>
       </template>
@@ -61,12 +84,14 @@ const baseUrl = API_URL.replace('/api', '');
       :title="isEditing ? 'Edit Team' : 'Add Team'"
       form-id="teamForm"
       max-width-class="max-w-lg"
+      :read-only="isMatReadOnly"
       @close="isModalOpen = false"
       @cancel="isModalOpen = false"
     >
       <TeamForm
         :initial-data="formData"
         :is-editing="isEditing"
+        :read-only="isMatReadOnly"
         @submit="handleSave"
       />
     </BaseModal>

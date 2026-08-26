@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import BaseButton from '../../../components/base/BaseButton.vue';
+import BaseButton from '../../../components/base/BaseButton.vue'
+
+defineProps<{
+  readOnly?: boolean
+}>()
 
 defineEmits<{
-  create: [];
-}>();
+  create: []
+}>()
 </script>
 
 <template>
@@ -13,8 +17,15 @@ defineEmits<{
       <p class="text-zinc-400 text-sm mt-1">Manage all matches in the database.</p>
     </div>
     <div class="flex gap-3">
-      <BaseButton variant="primary" @click="$emit('create')">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <BaseButton variant="primary" :disabled="readOnly" @click="$emit('create')">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
         </svg>
         Create Match

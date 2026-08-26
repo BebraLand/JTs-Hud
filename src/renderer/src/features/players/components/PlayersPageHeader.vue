@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import BaseButton from '../../../components/base/BaseButton.vue';
+import BaseButton from '../../../components/base/BaseButton.vue'
 
 defineProps<{
-  playersCount: number;
-}>();
+  playersCount: number
+  readOnly?: boolean
+}>()
 
 defineEmits<{
-  import: [];
-  export: [];
-  deleteAll: [];
-  add: [];
-}>();
+  import: []
+  export: []
+  deleteAll: []
+  add: []
+}>()
 </script>
 
 <template>
@@ -20,25 +21,62 @@ defineEmits<{
       <p class="text-zinc-400 text-sm mt-1">Manage all players in the database.</p>
     </div>
     <div class="flex gap-3">
-      <BaseButton @click="$emit('import')">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      <BaseButton :disabled="readOnly" @click="$emit('import')">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+          />
         </svg>
         Import
       </BaseButton>
       <BaseButton @click="$emit('export')">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+          />
         </svg>
         Export
       </BaseButton>
-      <BaseButton variant="danger" :disabled="playersCount === 0" @click="$emit('deleteAll')">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+      <BaseButton
+        variant="danger"
+        :disabled="readOnly || playersCount === 0"
+        @click="$emit('deleteAll')"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+          />
         </svg>
         Delete All
       </BaseButton>
-      <BaseButton variant="primary" @click="$emit('add')">
+      <BaseButton variant="primary" :disabled="readOnly" @click="$emit('add')">
         + Add Player
       </BaseButton>
     </div>
