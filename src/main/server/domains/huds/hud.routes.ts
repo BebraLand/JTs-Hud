@@ -101,8 +101,12 @@ export const getHudConfig = async (hudId: string): Promise<Record<string, any>> 
     ...enriched,
     display_settings: {
       ...display,
-      ...(labels.tournamentName ? { tournament_name: labels.tournamentName } : {}),
-      ...(labels.tournamentStage ? { tournament_stage: labels.tournamentStage } : {})
+      ...(labels.tournamentName && display.sync_tournament_name_from_mat !== false
+        ? { tournament_name: labels.tournamentName }
+        : {}),
+      ...(labels.tournamentStage && display.sync_tournament_stage_from_mat !== false
+        ? { tournament_stage: labels.tournamentStage }
+        : {})
     }
   }
 }
