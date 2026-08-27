@@ -13,6 +13,7 @@ import type {
 } from './mat.types'
 import { mapMatch, mapPlayer, mapTeam } from './mat.mapper'
 import { notifyHudDataChanged } from '../hudRefresh'
+import { publishTournamentLabels } from './tournamentLabels'
 
 const DEFAULT_POLL_SECONDS = 5
 const MIN_POLL_SECONDS = 2
@@ -69,6 +70,8 @@ class MatIntegrationService {
   private refreshGeneration = 0
   private settingsUpdateQueue: Promise<void> = Promise.resolve()
   private observedSteamIds: string[] = []
+  private forceLocalUpdate = false
+  private teamAssetVersion = 0
 
   private async readStoredSettings(): Promise<StoredSettings> {
     const rows = (await dbAll('SELECT key, value FROM settings')) as Array<{
@@ -288,6 +291,8 @@ class MatIntegrationService {
     this.teams = []
     this.players = []
     this.match = null
+    this.forceLocalUpdate = false
+    this.teamAssetVersion = 0
     if (!settings.enabled) {
       this.status = {
         state: 'disabled',
@@ -326,7 +331,9 @@ class MatIntegrationService {
       reconnection: true
     })
     this.matSocket.on('hud:projection-invalidated', () => {
-      if (generation === this.refreshGeneration) void this.refreshNow()
+      if (generation !== this.refreshGeneration) return
+      this.forceLocalUpdate = true
+      void this.refreshNow()
     })
     this.matSocket.on('connect_error', () => {
       if (generation !== this.refreshGeneration) return
@@ -378,13 +385,16 @@ class MatIntegrationService {
       const response = await this.fetchProjection(settings.url, token)
       const projection = response.projection
       if (generation !== this.refreshGeneration) return
-      const changed = projection.revision !== this.projection?.revision
+      const changed = this.forceLocalUpdate || projection.revision !== this.projection?.revision
+      if (changed && this.projection) {
+        this.teamAssetVersion = Math.max(Date.now(), this.teamAssetVersion + 1)
+      }
       this.projection = projection
       this.match = mapMatch(projection)
       this.teams = projection.match
         ? [
-            mapTeam(projection.match.team1, settings.url),
-            mapTeam(projection.match.team2, settings.url)
+            mapTeam(projection.match.team1, settings.url, this.teamAssetVersion),
+            mapTeam(projection.match.team2, settings.url, this.teamAssetVersion)
           ]
         : []
       this.players = projection.match
@@ -404,8 +414,12 @@ class MatIntegrationService {
         currentMatchSlug: projection.match?.slug || null,
         tokenMode: response.tokenMode
       }
-      if (changed) this.emitLocalUpdates()
-      else this.emitStatus()
+      if (changed) {
+        this.forceLocalUpdate = false
+        this.emitLocalUpdates()
+      } else {
+        this.emitStatus()
+      }
     } catch (error) {
       if (generation !== this.refreshGeneration) return
       const message = error instanceof Error ? error.message : 'Unknown MAT connection error'
@@ -452,7 +466,7 @@ class MatIntegrationService {
   }
 
   private emitLocalUpdates(): void {
-    this.localIo?.emit('mat:labels', this.getHudLabels())
+    if (this.localIo) void publishTournamentLabels(this.localIo, 'mat', this.getHudLabels())
     this.emitStatus()
     this.localIo?.emit('match')
     this.localIo?.emit('teams')

@@ -10,6 +10,7 @@ import { TeamRepository } from '../teams/team.repository'
 import { MatchRepository } from '../matches/match.repository'
 import { getHudsDir, getBuiltinHudDir, getHudDir } from '../../../paths'
 import { SignatureVerifier } from './signature.verifier'
+import { getResolvedTournamentLabels } from '../../integrations/tournamentLabels'
 
 // --- Lots of AI generated functions in here, be careful ---
 
@@ -92,7 +93,22 @@ const getRawHudConfig = async (hudId: string): Promise<Record<string, any>> => {
 // Enriched config (IDs resolved to full objects) — used by socket emissions to the HUD
 export const getHudConfig = async (hudId: string): Promise<Record<string, any>> => {
   const raw = await getRawHudConfig(hudId)
-  return enrichHudConfig(hudId, raw)
+  const enriched = await enrichHudConfig(hudId, raw)
+  const labels = await getResolvedTournamentLabels()
+  const display = enriched.display_settings
+  if (!display || !labels.available) return enriched
+  return {
+    ...enriched,
+    display_settings: {
+      ...display,
+      ...(labels.tournamentName && display.sync_tournament_name_from_mat !== false
+        ? { tournament_name: labels.tournamentName }
+        : {}),
+      ...(labels.tournamentStage && display.sync_tournament_stage_from_mat !== false
+        ? { tournament_stage: labels.tournamentStage }
+        : {})
+    }
+  }
 }
 
 const findThumbFile = (hudDir: string): string | null => {
@@ -321,7 +337,7 @@ const createHudRouter = (io: Server) => {
         [hudId, JSON.stringify(config)]
       )
       // Emit enriched config (raw IDs → full objects) so the HUD receives the expected shape
-      const enriched = await enrichHudConfig(hudId as string, config)
+      const enriched = await getHudConfig(hudId as string)
       io.emit('hud_config', enriched)
       res.json({ ok: true })
     } catch (e: any) {

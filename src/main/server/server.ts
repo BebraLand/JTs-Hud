@@ -22,6 +22,7 @@ import { uploadsPath } from './utils/multer'
 import { getHudsDir, getBuiltinHudDir } from '../paths'
 import { signedHudMiddleware } from './middleware/signedHudMiddleware'
 import { matIntegrationService } from './integrations/mat.integration'
+import { challongeIntegrationService } from './integrations/challonge.integration'
 import { databaseReady } from './database/sqlite'
 
 // Track the currently active HUD id so the socket register handler can look up correct HUD
@@ -95,6 +96,7 @@ export function startServers(): void {
       .then(async () => {
         await autoDirectorService.initialize(io)
         await matIntegrationService.start(io)
+        await challongeIntegrationService.start(io)
       })
       .catch((error) => {
         console.error('[Server] Failed to initialize database-backed services:', error)
@@ -123,6 +125,7 @@ export function stopServers(): Promise<void> {
   if (!serversRunning) return Promise.resolve()
   serversRunning = false
   void matIntegrationService.stop()
+  void challongeIntegrationService.stop()
   return new Promise((resolve) => {
     const done = () => {
       activeGsiServer = null

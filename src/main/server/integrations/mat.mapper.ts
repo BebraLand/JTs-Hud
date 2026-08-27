@@ -3,22 +3,28 @@ import type { Team } from '../domains/teams/team.types'
 import type { Player } from '../domains/players/player.types'
 import type { MatHudProjectionV1 } from './mat.types'
 
-function resolveMatAssetUrl(url: string | null, matUrl?: string): string {
+function resolveMatAssetUrl(url: string | null, matUrl?: string, cacheBust?: number): string {
   if (!url) return ''
-  if (/^(?:https?:|data:|blob:)/i.test(url) || !matUrl) return url
-  return new URL(url, `${matUrl}/`).toString()
+  if (/^(?:data:|blob:)/i.test(url)) return url
+  const resolved =
+    /^(?:https?:)/i.test(url) || !matUrl ? url : new URL(url, matUrl + '/').toString()
+  if (!cacheBust || !/^https?:/i.test(resolved)) return resolved
+  const parsed = new URL(resolved)
+  parsed.searchParams.set('jtsHud', String(cacheBust))
+  return parsed.toString()
 }
 
 export function mapTeam(
   team: NonNullable<MatHudProjectionV1['match']>['team1'],
-  matUrl?: string
+  matUrl?: string,
+  cacheBust?: number
 ): Team {
   return {
     _id: team.id,
     name: team.name,
     country: team.countryCode || '',
     shortName: team.tag,
-    logo: resolveMatAssetUrl(team.logoUrl, matUrl),
+    logo: resolveMatAssetUrl(team.logoUrl, matUrl, cacheBust),
     extra: { source: 'mat' }
   }
 }

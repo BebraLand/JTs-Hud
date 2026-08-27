@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express'
 import { dbAll, dbRun } from '../../database/sqlite'
 import { matIntegrationService } from '../../integrations/mat.integration'
+import { challongeIntegrationService } from '../../integrations/challonge.integration'
+import { refreshTournamentLabels } from '../../integrations/tournamentLabels'
 import { resolveTelnetSettings } from './telnetSettings'
 
 const router = Router()
@@ -14,6 +16,11 @@ export interface AppSettings {
   matUrl: string
   matTokenConfigured: boolean
   matPollIntervalSeconds: number
+  challongeEnabled: boolean
+  challongeTournament: string
+  challongeSourceConfigured: boolean
+  challongePollIntervalSeconds: number
+  tournamentIntegrationPriority: 'mat' | 'challonge'
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -24,7 +31,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   matEnabled: false,
   matUrl: '',
   matTokenConfigured: false,
-  matPollIntervalSeconds: 5
+  matPollIntervalSeconds: 5,
+  challongeEnabled: false,
+  challongeTournament: '',
+  challongeSourceConfigured: false,
+  challongePollIntervalSeconds: 10,
+  tournamentIntegrationPriority: 'challonge'
 }
 
 // Load all settings from the DB and return as a typed object
@@ -46,7 +58,12 @@ export const getSettings = async (): Promise<AppSettings> => {
     matEnabled: map.matEnabled === 'true',
     matUrl: map.matUrl || '',
     matTokenConfigured: Boolean(map.matTokenEncrypted || process.env.MAT_HUD_TOKEN),
-    matPollIntervalSeconds: Number(map.matPollIntervalSeconds || 5)
+    matPollIntervalSeconds: Number(map.matPollIntervalSeconds || 5),
+    challongeEnabled: map.challongeEnabled === 'true',
+    challongeTournament: map.challongeTournament || '',
+    challongeSourceConfigured: Boolean(map.challongeTournament),
+    challongePollIntervalSeconds: Number(map.challongePollIntervalSeconds || 10),
+    tournamentIntegrationPriority: map.tournamentIntegrationPriority === 'mat' ? 'mat' : 'challonge'
   }
 }
 
@@ -88,6 +105,32 @@ router.put('/mat', requireLocalOrigin, async (req: Request, res: Response) => {
   }
 })
 
+router.get('/challonge/status', async (_req: Request, res: Response) => {
+  res.json(challongeIntegrationService.getStatus())
+})
+
+router.post('/challonge/test', requireLocalOrigin, async (req: Request, res: Response) => {
+  try {
+    res.json(await challongeIntegrationService.testConnection(req.body))
+  } catch (err: any) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+router.post('/challonge/refresh', requireLocalOrigin, async (_req: Request, res: Response) => {
+  await challongeIntegrationService.refreshNow()
+  res.json(challongeIntegrationService.getStatus())
+})
+
+router.put('/challonge', requireLocalOrigin, async (req: Request, res: Response) => {
+  try {
+    const settings = await challongeIntegrationService.updateSettings(req.body)
+    res.json({ ...settings, status: challongeIntegrationService.getStatus() })
+  } catch (err: any) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
 // GET /api/settings — return all settings as a JSON object
 router.get('/', async (_req: Request, res: Response) => {
   try {
@@ -101,7 +144,13 @@ router.get('/', async (_req: Request, res: Response) => {
 router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
   try {
     const updates: Partial<AppSettings> = req.body
-    const localKeys = new Set(['autoSwitchSides', 'autoRefreshHuds', 'telnetHost', 'telnetPort'])
+    const localKeys = new Set([
+      'autoSwitchSides',
+      'autoRefreshHuds',
+      'telnetHost',
+      'telnetPort',
+      'tournamentIntegrationPriority'
+    ])
     if (
       updates.telnetHost !== undefined &&
       (typeof updates.telnetHost !== 'string' || !updates.telnetHost.trim())
@@ -115,11 +164,17 @@ router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
       }
     }
     for (const [key, value] of Object.entries(updates).filter(([key]) => localKeys.has(key))) {
+      if (key === 'tournamentIntegrationPriority' && value !== 'mat' && value !== 'challonge') {
+        return res
+          .status(400)
+          .json({ error: 'Tournament integration priority must be mat or challonge' })
+      }
       await dbRun(
         'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
         [key, key === 'telnetHost' ? String(value).trim() : String(value)]
       )
     }
+    await refreshTournamentLabels()
     return res.json(await getSettings())
   } catch (err: any) {
     return res.status(500).json({ error: err.message })

@@ -8,7 +8,7 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
-    "test": "npm run typecheck && npm run test:auto-director",
+    "test": "npm run typecheck && npm run test:auto-director && npm run test:challonge",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -26,6 +26,7 @@
     "test:e2e:headed": "electron-vite build && playwright test --headed",
     "test:e2e:smoke": "electron-vite build && playwright test e2e/app.spec.ts",
     "test:auto-director": "esbuild scripts/test-auto-director.ts scripts/test-auto-director-settings.ts scripts/test-camera-transports.ts scripts/test-auto-director-geometry.ts scripts/test-auto-director-aerial.ts scripts/test-auto-director-ml.ts scripts/test-camera-debug.ts --bundle --platform=node --format=cjs --outdir=out/tests && node out/tests/test-auto-director.js && node out/tests/test-auto-director-settings.js && node out/tests/test-camera-transports.js && node out/tests/test-auto-director-geometry.js && node out/tests/test-auto-director-aerial.js && node out/tests/test-auto-director-ml.js && node --test out/tests/test-camera-debug.js",
+    "test:challonge": "tsc --target ES2022 --module commonjs --esModuleInterop --skipLibCheck --outDir out/tests/challonge scripts/test-challonge.ts && node out/tests/challonge/scripts/test-challonge.js",
     "demo:extract": "python3 scripts/extract-auto-director-demo.py",
     "demo:evaluate": "esbuild scripts/evaluate-auto-director-demo.ts --bundle --platform=node --format=cjs --outfile=out/tests/evaluate-auto-director-demo.js && node out/tests/evaluate-auto-director-demo.js",
     "geometry:evaluate": "esbuild scripts/evaluate-auto-director-geometry.ts --bundle --platform=node --format=cjs --outfile=out/tests/evaluate-auto-director-geometry.js && node out/tests/evaluate-auto-director-geometry.js",

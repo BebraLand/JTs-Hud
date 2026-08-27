@@ -16,16 +16,14 @@
       {
         "type": "checkbox",
         "name": "sync_tournament_name_from_mat",
-        "label": "Sync tournament name from MAT",
-        "default": false,
-        "requires": "mat"
+        "label": "Sync tournament name from integration",
+        "default": true
       },
       {
         "type": "checkbox",
         "name": "sync_tournament_stage_from_mat",
-        "label": "Sync tournament stage from MAT",
-        "default": false,
-        "requires": "mat"
+        "label": "Sync tournament stage from integration",
+        "default": true
       },
       {
         "type": "text",

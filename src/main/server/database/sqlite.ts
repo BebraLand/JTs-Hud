@@ -173,6 +173,11 @@ async function initializeTables() {
     // Default settings
     await dbRun(`INSERT OR IGNORE INTO settings (key, value) VALUES ('autoSwitchSides', 'true')`)
     await dbRun(`INSERT OR IGNORE INTO settings (key, value) VALUES ('autoRefreshHuds', 'true')`)
+    // Challonge is deliberately opt-in on a fresh installation.
+    await dbRun(`INSERT OR IGNORE INTO settings (key, value) VALUES ('challongeEnabled', 'false')`)
+    await dbRun(
+      `INSERT OR IGNORE INTO settings (key, value) VALUES ('tournamentIntegrationPriority', 'challonge')`
+    )
 
     // Hud configs table: stores panel config per hud id
     await dbRun(`
