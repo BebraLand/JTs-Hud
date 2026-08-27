@@ -124,3 +124,134 @@ assert.deepEqual(
   ['Alpha', 'Beta']
 )
 console.log('Challonge module fixture passed: public HTML becomes a bracket without credentials')
+
+const twoStageBracket = parseChallongeModule(`
+  <title>Two Stage Test - Challonge</title>
+  <script>
+    window._initialStoreState [ "TournamentStore" ] = ${JSON.stringify({
+      tournament: { id: 99, tournament_type: 'single elimination' },
+      rounds: [
+        { number: 1, title: 'Semifinals' },
+        { number: 2, title: 'Finals' }
+      ],
+      matches_by_round: {
+        '1': [
+          {
+            identifier: 1,
+            raw_identifier: 'A',
+            round: 1,
+            state: 'pending',
+            player1: null,
+            player2: null
+          }
+        ],
+        '2': [
+          {
+            identifier: 2,
+            raw_identifier: 'B',
+            round: 2,
+            state: 'pending',
+            player1: null,
+            player2: null
+          }
+        ]
+      },
+      consolation_matches: [
+        {
+          identifier: 3,
+          raw_identifier: '3P',
+          round: 0,
+          state: 'pending',
+          player1: null,
+          player2: null
+        }
+      ],
+      groups: [
+        {
+          name: 'Group A',
+          tournament: { id: 100, tournament_type: 'swiss' },
+          rounds: [
+            { number: 1, title: 'Round 1' },
+            { number: 2, title: 'Round 2' }
+          ],
+          matches_by_round: {
+            '1': [
+              {
+                identifier: 1,
+                raw_identifier: 'A',
+                round: 1,
+                group_id: 'A',
+                state: 'open',
+                player1: { id: 11, display_name: 'spirit' },
+                player2: { id: 12, display_name: 'navi' }
+              }
+            ],
+            '2': [
+              {
+                identifier: 2,
+                raw_identifier: 'B',
+                round: 2,
+                state: 'pending',
+                player1: { id: 13, display_name: 'faze' },
+                player2: { id: 14, display_name: 'vitality' }
+              }
+            ]
+          }
+        }
+      ]
+    })};
+  </script>
+`)
+
+assert.equal(twoStageBracket.matches.length, 5)
+assert.equal(
+  twoStageBracket.matches.find((match) => match.player1Id === '11' && match.player2Id === '12')
+    ?.stageName,
+  'Round 1'
+)
+assert.equal(twoStageBracket.matches.find((match) => match.identifier === '3P')?.stageName, '3rd Place')
+assert.deepEqual(
+  twoStageBracket.participants.map(({ name }) => name),
+  ['spirit', 'navi', 'faze', 'vitality']
+)
+
+const swissRaw = {
+  map: { team_ct: { name: 'spirit' }, team_t: { name: 'navi' } },
+  allplayers: {}
+} as any
+const swissResolved = resolveChallongeMatch(twoStageBracket, swissRaw)
+assert.ok(swissResolved)
+assert.equal(swissResolved.stage, 'Round 1 · Match A')
+
+const ambiguousBracket: ChallongeBracket = {
+  tournamentName: 'Ambiguous Test',
+  tournamentType: 'single elimination',
+  participants: [
+    { id: '1', name: 'spirit' },
+    { id: '2', name: 'navi' }
+  ],
+  matches: [
+    {
+      id: 'swiss-open',
+      state: 'open',
+      round: 1,
+      identifier: 'A',
+      stageName: 'Round 1',
+      winnerId: null,
+      player1Id: '1',
+      player2Id: '2'
+    },
+    {
+      id: 'playoff-open',
+      state: 'open',
+      round: 1,
+      identifier: 'A',
+      stageName: 'Semifinals',
+      winnerId: null,
+      player1Id: '1',
+      player2Id: '2'
+    }
+  ]
+}
+assert.equal(resolveChallongeMatch(ambiguousBracket, swissRaw), null)
+console.log('Challonge two-stage fixture passed: nested Swiss, playoff and 3rd-place data are handled safely')

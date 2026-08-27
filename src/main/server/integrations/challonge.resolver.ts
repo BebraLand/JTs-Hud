@@ -54,6 +54,10 @@ type PublicModuleStore = {
   }
   rounds?: Array<{ number?: number | null; title?: string | null }>
   matches_by_round?: Record<string, PublicModuleMatch[]>
+  groups?: PublicModuleStore[]
+  consolation_matches?: PublicModuleMatch[]
+  third_place_match?: PublicModuleMatch | null
+  name?: string | null
 }
 
 export interface ResolvedChallongeMatch {
@@ -146,12 +150,16 @@ const participantScore = (
 }
 
 const stageLabel = (match: ChallongeMatch, tournamentType: string | null): string => {
-  if (match.groupId)
-    return `Group ${match.groupId}${match.identifier ? ` · Match ${match.identifier}` : ''}`
-  if (match.round === null)
-    return match.identifier ? `Match ${match.identifier}` : 'Tournament Match'
   if (match.stageName)
     return `${match.stageName}${match.identifier ? ` · Match ${match.identifier}` : ''}`
+  if (match.round === null)
+    return match.groupId
+      ? `Group ${match.groupId}${match.identifier ? ` · Match ${match.identifier}` : ''}`
+      : match.identifier
+        ? `Match ${match.identifier}`
+        : 'Tournament Match'
+  if (match.groupId)
+    return `Group ${match.groupId}${match.identifier ? ` · Match ${match.identifier}` : ''}`
   if (match.round < 0) {
     return `Lower Bracket · Round ${Math.abs(match.round)}${match.identifier ? ` · Match ${match.identifier}` : ''}`
   }
@@ -205,6 +213,12 @@ export const resolveChallongeMatch = (
 
   const selected = candidates[0]
   if (!selected) return null
+  const selectedPriority = matchPriority(selected.match)
+  if (candidates.filter(({ match }) => matchPriority(match) === selectedPriority).length > 1) {
+    // The GSI roster cannot distinguish two same-status matches with the same teams.
+    // Returning null is safer than publishing the wrong stage.
+    return null
+  }
   const team1 = bracket.participants.find(
     (participant) => participant.id === selected.match.player1Id
   )
@@ -251,45 +265,74 @@ const readJsonObject = (source: string, start: number): unknown => {
 }
 
 export const parseChallongeModule = (html: string, fallbackName = ''): ChallongeBracket => {
-  const marker = "window._initialStoreState['TournamentStore']"
-  const markerIndex = html.indexOf(marker)
+  const markerMatch = html.match(
+    /window\._initialStoreState\s*\[\s*(['"])TournamentStore\1\s*\]\s*=/
+  )
+  const markerIndex = markerMatch?.index ?? -1
   if (markerIndex < 0) throw new Error('Challonge public bracket data was not found')
   const objectStart = html.indexOf('{', markerIndex)
   if (objectStart < 0) throw new Error('Challonge public bracket data was not found')
 
   const store = readJsonObject(html, objectStart) as PublicModuleStore
   const tournamentId = String(store.tournament?.id ?? 'public')
-  const stageNames = new Map(
-    (store.rounds || [])
-      .filter((round) => round.number !== null && round.number !== undefined && round.title)
-      .map((round) => [String(round.number), String(round.title)])
-  )
   const participants = new Map<string, ChallongeParticipant>()
-  const matches = Object.values(store.matches_by_round || {})
-    .flat()
-    .map((record, index): ChallongeMatch => {
-      const addParticipant = (player: PublicModulePlayer | null | undefined): string | null => {
-        if (player?.id === null || player?.id === undefined) return null
-        const id = String(player.id)
-        participants.set(id, {
-          id,
-          name: String(player.display_name || player.name || ''),
-          misc: player.misc ?? null
-        })
-        return id
-      }
+  const matches: ChallongeMatch[] = []
+  const seenMatchIds = new Set<string>()
+  const addParticipant = (player: PublicModulePlayer | null | undefined): string | null => {
+    if (player?.id === null || player?.id === undefined) return null
+    const id = String(player.id)
+    participants.set(id, {
+      id,
+      name: String(player.display_name || player.name || ''),
+      misc: player.misc ?? null
+    })
+    return id
+  }
 
-      return {
-        id: String(record.id ?? `${tournamentId}:${record.identifier ?? index}`),
+  const appendStore = (current: PublicModuleStore, scope: string): void => {
+    const currentTournamentId = String(current.tournament?.id ?? tournamentId)
+    const stageNames = new Map(
+      (current.rounds || [])
+        .filter((round) => round.number !== null && round.number !== undefined && round.title)
+        .map((round) => [String(round.number), String(round.title)])
+    )
+    const isGroupStage =
+      current.tournament?.tournament_type?.toLowerCase().includes('swiss') ||
+      current.name?.toLowerCase().startsWith('group')
+    const appendMatch = (
+      record: PublicModuleMatch,
+      index: number,
+      matchScope: string,
+      isPlacementMatch = false
+    ): void => {
+      const baseId = String(
+        record.id ??
+          `${currentTournamentId}:${matchScope}:${record.raw_identifier ?? record.identifier ?? index}`
+      )
+      const id = seenMatchIds.has(baseId) ? `${scope}:${baseId}` : baseId
+      if (seenMatchIds.has(id)) return
+      seenMatchIds.add(id)
+      const round = record.round === null || record.round === undefined ? null : Number(record.round)
+      const rawIdentifier =
+        record.raw_identifier !== null && record.raw_identifier !== undefined
+          ? String(record.raw_identifier)
+          : record.identifier === null || record.identifier === undefined
+            ? null
+            : String(record.identifier)
+      const normalizedIdentifier = normalize(rawIdentifier)
+      const isThirdPlace =
+        isPlacementMatch ||
+        normalizedIdentifier === '3p' ||
+        normalizedIdentifier === 'thirdplace' ||
+        normalizedIdentifier === 'thirdplacematch'
+      matches.push({
+        id,
         state: String(record.state || 'pending'),
-        round: record.round === null || record.round === undefined ? null : Number(record.round),
-        identifier:
-          record.raw_identifier !== null && record.raw_identifier !== undefined
-            ? String(record.raw_identifier)
-            : record.identifier === null || record.identifier === undefined
-              ? null
-              : String(record.identifier),
-        stageName: stageNames.get(String(record.round)) || null,
+        round,
+        identifier: rawIdentifier,
+        stageName:
+          stageNames.get(String(record.round)) ||
+          (isThirdPlace ? '3rd Place' : isGroupStage && round !== null ? `Round ${round}` : null),
         winnerId:
           record.winner_id === null || record.winner_id === undefined
             ? null
@@ -298,8 +341,23 @@ export const parseChallongeModule = (html: string, fallbackName = ''): Challonge
         player2Id: addParticipant(record.player2),
         groupId:
           record.group_id === null || record.group_id === undefined ? null : String(record.group_id)
-      }
-    })
+      })
+    }
+
+    for (const [roundKey, records] of Object.entries(current.matches_by_round || {})) {
+      records.forEach((record, index) => appendMatch(record, index, `${scope}:round:${roundKey}`))
+    }
+    ;(current.consolation_matches || []).forEach((record, index) =>
+      appendMatch(record, index, `${scope}:consolation`, true)
+    )
+    if (current.third_place_match)
+      appendMatch(current.third_place_match, 0, `${scope}:third-place`, true)
+    ;(current.groups || []).forEach((group, index) =>
+      appendStore(group, `${scope}:group:${group.name || index}`)
+    )
+  }
+
+  appendStore(store, 'main')
 
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
   const tournamentName = (title || '').replace(/\s*-\s*Challonge\s*$/i, '').trim() || fallbackName

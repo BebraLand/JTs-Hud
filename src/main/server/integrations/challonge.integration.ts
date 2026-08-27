@@ -308,7 +308,7 @@ class ChallongeIntegrationService {
           : `Challonge request failed with HTTP ${response.status}`
       )
     }
-    return parseChallongeModule(await response.text())
+    return parseChallongeModule(await response.text(), tournament)
   }
 
   async testConnection(input: { tournament: string }): Promise<ChallongeStatus> {
