@@ -183,23 +183,10 @@ const matchPriority = (match: ChallongeMatch): number => {
   }
 }
 
-export const resolveChallongeMatch = (
+const selectResolvedMatch = (
   bracket: ChallongeBracket,
-  raw: CSGORaw,
-  players: Player[] = [],
-  teams: Team[] = []
+  participantScores: Map<string, [number, number]>
 ): ResolvedChallongeMatch | null => {
-  const liveSides = [
-    buildLiveSide(raw, 'CT', players, teams),
-    buildLiveSide(raw, 'T', players, teams)
-  ]
-  const participantScores = new Map(
-    bracket.participants.map((participant) => [
-      participant.id,
-      liveSides.map((live) => participantScore(participant, live, teams))
-    ])
-  )
-
   const candidates = bracket.matches
     .map((match) => {
       const first = match.player1Id ? participantScores.get(match.player1Id)?.[0] || 0 : 0
@@ -232,6 +219,44 @@ export const resolveChallongeMatch = (
     team2,
     stage: stageLabel(selected.match, bracket.tournamentType)
   }
+}
+
+export const resolveChallongeMatch = (
+  bracket: ChallongeBracket,
+  raw: CSGORaw,
+  players: Player[] = [],
+  teams: Team[] = []
+): ResolvedChallongeMatch | null => {
+  const liveSides = [
+    buildLiveSide(raw, 'CT', players, teams),
+    buildLiveSide(raw, 'T', players, teams)
+  ]
+  const participantScores = new Map(
+    bracket.participants.map((participant) => [
+      participant.id,
+      liveSides.map((live) => participantScore(participant, live, teams)) as [number, number]
+    ])
+  )
+  return selectResolvedMatch(bracket, participantScores)
+}
+
+export const resolveChallongeMatchByTeamNames = (
+  bracket: ChallongeBracket,
+  team1Names: string[],
+  team2Names: string[]
+): ResolvedChallongeMatch | null => {
+  const score = (participant: ChallongeParticipant, names: string[]): number =>
+    names.some((name) => nameMatches(name, participant.name)) ? 100 : 0
+  const participantScores = new Map(
+    bracket.participants.map(
+      (participant) =>
+        [participant.id, [score(participant, team1Names), score(participant, team2Names)]] as [
+          string,
+          [number, number]
+        ]
+    )
+  )
+  return selectResolvedMatch(bracket, participantScores)
 }
 
 export const normalizeChallongeResponseRecord = (record: any): any => {
@@ -309,10 +334,13 @@ export const parseChallongeModule = (html: string, fallbackName = ''): Challonge
         record.id ??
           `${currentTournamentId}:${matchScope}:${record.raw_identifier ?? record.identifier ?? index}`
       )
-      const id = seenMatchIds.has(baseId) ? `${scope}:${baseId}` : baseId
-      if (seenMatchIds.has(id)) return
-      seenMatchIds.add(id)
-      const round = record.round === null || record.round === undefined ? null : Number(record.round)
+      // Challonge exposes placement matches in both consolation_matches and
+      // third_place_match. Treat the shared match id as one match.
+      if (seenMatchIds.has(baseId)) return
+      seenMatchIds.add(baseId)
+      const id = baseId
+      const round =
+        record.round === null || record.round === undefined ? null : Number(record.round)
       const rawIdentifier =
         record.raw_identifier !== null && record.raw_identifier !== undefined
           ? String(record.raw_identifier)

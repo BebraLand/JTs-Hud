@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   parseChallongeModule,
   resolveChallongeMatch,
+  resolveChallongeMatchByTeamNames,
   type ChallongeBracket
 } from '../src/main/server/integrations/challonge.resolver'
 
@@ -158,14 +159,24 @@ const twoStageBracket = parseChallongeModule(`
       },
       consolation_matches: [
         {
+          id: 50,
           identifier: 3,
           raw_identifier: '3P',
           round: 0,
           state: 'pending',
-          player1: null,
-          player2: null
+          player1: { id: 30, display_name: 'falcons' },
+          player2: { id: 31, display_name: 'furia' }
         }
       ],
+      third_place_match: {
+        id: 50,
+        identifier: 3,
+        raw_identifier: '3P',
+        round: 0,
+        state: 'pending',
+        player1: { id: 30, display_name: 'falcons' },
+        player2: { id: 31, display_name: 'furia' }
+      },
       groups: [
         {
           name: 'Group A',
@@ -209,10 +220,13 @@ assert.equal(
     ?.stageName,
   'Round 1'
 )
-assert.equal(twoStageBracket.matches.find((match) => match.identifier === '3P')?.stageName, '3rd Place')
+assert.equal(
+  twoStageBracket.matches.find((match) => match.identifier === '3P')?.stageName,
+  '3rd Place'
+)
 assert.deepEqual(
   twoStageBracket.participants.map(({ name }) => name),
-  ['spirit', 'navi', 'faze', 'vitality']
+  ['falcons', 'furia', 'spirit', 'navi', 'faze', 'vitality']
 )
 
 const swissRaw = {
@@ -254,4 +268,15 @@ const ambiguousBracket: ChallongeBracket = {
   ]
 }
 assert.equal(resolveChallongeMatch(ambiguousBracket, swissRaw), null)
-console.log('Challonge two-stage fixture passed: nested Swiss, playoff and 3rd-place data are handled safely')
+assert.equal(
+  resolveChallongeMatchByTeamNames(twoStageBracket, ['faze'], ['vitality'])?.stage,
+  'Round 2 · Match B'
+)
+assert.equal(
+  resolveChallongeMatchByTeamNames(twoStageBracket, ['falcons'], ['furia'])?.stage,
+  '3rd Place · Match 3P'
+)
+assert.equal(resolveChallongeMatchByTeamNames(ambiguousBracket, ['spirit'], ['navi']), null)
+console.log(
+  'Challonge two-stage fixture passed: nested Swiss, playoff and 3rd-place data are handled safely'
+)

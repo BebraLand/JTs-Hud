@@ -7,6 +7,7 @@ import { TeamRepository } from '../domains/teams/team.repository'
 import {
   parseChallongeModule,
   resolveChallongeMatch,
+  resolveChallongeMatchByTeamNames,
   type ChallongeBracket,
   type ChallongeMatch,
   type ChallongeParticipant,
@@ -17,6 +18,7 @@ import {
   refreshTournamentLabels,
   type TournamentHudLabels
 } from './tournamentLabels'
+import { matIntegrationService } from './mat.integration'
 
 const DEFAULT_POLL_SECONDS = 10
 const MIN_POLL_SECONDS = 5
@@ -138,7 +140,9 @@ class ChallongeIntegrationService {
   getHudLabels(): Omit<TournamentHudLabels, 'source'> {
     return {
       enabled: this.enabled,
-      available: Boolean(this.bracket && this.resolvedMatch),
+      // The bracket itself is enough to provide the tournament name. The
+      // stage can be empty while no current match has been identified.
+      available: Boolean(this.bracket),
       state: this.status.state,
       tournamentName: this.bracket?.tournamentName || '',
       tournamentStage: this.resolvedMatch?.stage || '',
@@ -332,16 +336,30 @@ class ChallongeIntegrationService {
   }
 
   private async resolveLatestGsi(): Promise<void> {
-    if (!this.latestGsi || !this.bracket || !this.localIo) return
+    if (!this.bracket || !this.localIo) return
     const raw = this.latestGsi
     const operation = (async () => {
-      const steamIds = Object.keys(raw.allplayers || {})
-      const players = steamIds.length ? await playerRepo.getPlayers(steamIds) : []
-      if (Date.now() - this.cachedTeamsAt > 10_000) {
-        this.cachedTeams = await teamRepo.getTeams()
-        this.cachedTeamsAt = Date.now()
+      const matMatch = matIntegrationService.getProjection()?.match
+      let resolved: ResolvedChallongeMatch | null = null
+
+      // MAT is the authoritative match selector, including manually created
+      // matches. This lets Challonge identify the same teams without requiring
+      // those teams to be present in the live GSI payload.
+      if (matMatch) {
+        resolved = resolveChallongeMatchByTeamNames(
+          this.bracket!,
+          [matMatch.team1.name, matMatch.team1.tag],
+          [matMatch.team2.name, matMatch.team2.tag]
+        )
+      } else if (raw) {
+        const steamIds = Object.keys(raw.allplayers || {})
+        const players = steamIds.length ? await playerRepo.getPlayers(steamIds) : []
+        if (Date.now() - this.cachedTeamsAt > 10_000) {
+          this.cachedTeams = await teamRepo.getTeams()
+          this.cachedTeamsAt = Date.now()
+        }
+        resolved = resolveChallongeMatch(this.bracket!, raw, players, this.cachedTeams)
       }
-      const resolved = resolveChallongeMatch(this.bracket!, raw, players, this.cachedTeams)
       this.status.currentMatchId = resolved?.match.id || null
       this.status.currentStage = resolved?.stage || null
       this.resolvedMatch = resolved
@@ -360,6 +378,13 @@ class ChallongeIntegrationService {
     })
     this.resolveInFlight = tracked
     return tracked
+  }
+
+  async refreshMatchResolution(): Promise<void> {
+    if (!this.enabled || !this.bracket || !this.localIo) return
+    if (this.resolveInFlight) await this.resolveInFlight.catch(() => undefined)
+    if (!this.enabled || !this.bracket || !this.localIo) return
+    await this.resolveLatestGsi()
   }
 
   private emitStatus(): void {

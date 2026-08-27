@@ -473,6 +473,13 @@ class MatIntegrationService {
 
   private emitLocalUpdates(): void {
     if (this.localIo) void publishTournamentLabels(this.localIo, 'mat', this.getHudLabels())
+    // A manually selected MAT match can change without a new GSI packet.
+    // Ask Challonge to re-resolve its stage from the new MAT teams.
+    void import('./challonge.integration')
+      .then(({ challongeIntegrationService }) =>
+        challongeIntegrationService.refreshMatchResolution()
+      )
+      .catch(() => undefined)
     this.emitStatus()
     this.localIo?.emit('match')
     this.localIo?.emit('teams')
