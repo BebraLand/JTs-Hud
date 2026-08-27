@@ -10,6 +10,7 @@ import { matIntegrationService } from './mat.integration'
 import { autoDirectorService } from '../domains/auto-director/autoDirector.service'
 import { databaseReady } from '../database/sqlite'
 import { normalizeObserverSlot } from './observerSlot'
+import { challongeIntegrationService } from './challonge.integration'
 
 const matchService = new MatchService()
 const teamService = new TeamService()
@@ -391,6 +392,9 @@ export const setupGSI = (io: Server) => {
       }
 
       autoDirectorService.processGsi(hudPayload)
+      // Challonge only resolves the current tournament match from GSI; it never
+      // becomes the MatchZy/MAT match source or writes match results.
+      challongeIntegrationService.processGsi(req.body as CSGORaw)
 
       // Feed raw payload into CSGOGSI so backend listeners fire
       GSI.digest(req.body)

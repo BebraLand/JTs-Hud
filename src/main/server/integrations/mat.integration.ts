@@ -13,6 +13,7 @@ import type {
 } from './mat.types'
 import { mapMatch, mapPlayer, mapTeam } from './mat.mapper'
 import { notifyHudDataChanged } from '../hudRefresh'
+import { publishTournamentLabels } from './tournamentLabels'
 
 const DEFAULT_POLL_SECONDS = 5
 const MIN_POLL_SECONDS = 2
@@ -452,7 +453,7 @@ class MatIntegrationService {
   }
 
   private emitLocalUpdates(): void {
-    this.localIo?.emit('mat:labels', this.getHudLabels())
+    if (this.localIo) void publishTournamentLabels(this.localIo, 'mat', this.getHudLabels())
     this.emitStatus()
     this.localIo?.emit('match')
     this.localIo?.emit('teams')

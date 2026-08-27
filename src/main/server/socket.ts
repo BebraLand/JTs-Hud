@@ -3,6 +3,8 @@ import { getHudConfig } from './domains/huds/hud.routes'
 import { getActiveHudId } from './server'
 import { getHudRefreshState, refreshAllHuds } from './hudRefresh'
 import { matIntegrationService } from './integrations/mat.integration'
+import { challongeIntegrationService } from './integrations/challonge.integration'
+import { getResolvedTournamentLabels } from './integrations/tournamentLabels'
 
 export const resolveRegisteredHudId = (
   hudName: string | null | undefined,
@@ -16,6 +18,11 @@ export const setupSockets = (io: Server) => {
   io.on('connection', (socket: Socket) => {
     socket.emit('hud:refresh-state', getHudRefreshState())
     socket.emit('mat:status', matIntegrationService.getStatus())
+    socket.emit('challonge:status', challongeIntegrationService.getStatus())
+    void getResolvedTournamentLabels().then((labels) => {
+      socket.emit('tournament:labels', labels)
+      socket.emit('mat:labels', labels)
+    })
 
     socket.on('request-hud-refresh', () => {
       refreshAllHuds(io)
@@ -39,7 +46,8 @@ export const setupSockets = (io: Server) => {
           const hudId = resolveRegisteredHudId(hudName, getActiveHudId())
           const config = await getHudConfig(hudId)
           socket.emit('hud_config', config)
-          socket.emit('mat:labels', matIntegrationService.getHudLabels())
+          const labels = await getResolvedTournamentLabels()
+          socket.emit('mat:labels', labels)
         } catch (e) {
           console.error('Failed to push hud_config on register:', e)
         }

@@ -19,13 +19,20 @@ const {
   saveSettings,
   saveMatSettings,
   testMatConnection,
-  refreshMat
+  refreshMat,
+  challongeStatus,
+  saveChallongeSettings,
+  testChallongeConnection,
+  refreshChallonge
 } = useSettings()
 
 const matEnabled = ref(false)
 const matUrl = ref('')
 const matToken = ref('')
 const matPollIntervalSeconds = ref(5)
+const challongeEnabled = ref(false)
+const challongeTournament = ref('')
+const challongePollIntervalSeconds = ref(10)
 const telnetHost = ref('127.0.0.1')
 const telnetPort = ref(2020)
 const telnetTesting = ref(false)
@@ -40,6 +47,9 @@ watch(
     matUrl.value = settings.value.matUrl
     matPollIntervalSeconds.value = settings.value.matPollIntervalSeconds
     matToken.value = ''
+    challongeEnabled.value = settings.value.challongeEnabled
+    challongeTournament.value = settings.value.challongeTournament
+    challongePollIntervalSeconds.value = settings.value.challongePollIntervalSeconds
     telnetHost.value = settings.value.telnetHost
     telnetPort.value = settings.value.telnetPort
   }
@@ -88,6 +98,20 @@ const saveMat = async () => {
 
 const testMat = async () => {
   await testMatConnection({ url: matUrl.value, token: matToken.value || undefined })
+}
+
+const saveChallonge = async () => {
+  await saveChallongeSettings({
+    enabled: challongeEnabled.value,
+    tournament: challongeTournament.value,
+    pollIntervalSeconds: challongePollIntervalSeconds.value
+  })
+}
+
+const testChallonge = async () => {
+  await testChallongeConnection({
+    tournament: challongeTournament.value
+  })
 }
 
 // --- GSI Config Installation ---
@@ -202,6 +226,27 @@ const installGsiCfg = async () => {
                   @update:model-value="persistAutoRefresh"
                 />
               </div>
+              <div class="flex items-center justify-between mt-4 gap-4">
+                <div>
+                  <p class="text-sm font-medium text-zinc-200">Tournament labels priority</p>
+                  <p class="text-xs text-zinc-500 mt-0.5">
+                    Used only when both MAT and Challonge are connected.
+                  </p>
+                </div>
+                <select
+                  v-model="settings.tournamentIntegrationPriority"
+                  class="w-32 bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-2"
+                  :disabled="isSaving"
+                  @change="
+                    saveSettings({
+                      tournamentIntegrationPriority: settings.tournamentIntegrationPriority
+                    })
+                  "
+                >
+                  <option value="challonge">Challonge</option>
+                  <option value="mat">MAT</option>
+                </select>
+              </div>
             </div>
 
             <div class="border-t border-border pt-4 flex flex-col gap-3">
@@ -300,6 +345,93 @@ const installGsiCfg = async () => {
                 class="text-xs rounded-lg px-3 py-2 bg-red-900/40 text-red-400 border border-red-800/50"
               >
                 {{ error }}
+              </div>
+            </div>
+
+            <div class="border-t border-border pt-4 flex flex-col gap-3">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs font-semibold capitalize text-zinc-500">Challonge</p>
+                  <p class="text-xs text-zinc-500 mt-1">
+                    Optional read-only bracket source. It matches the live GSI roster to a bracket
+                    match and fills Tournament Stage.
+                  </p>
+                </div>
+                <BaseCheckbox v-model="challongeEnabled" size="md" class="text-primary" />
+              </div>
+
+              <div
+                v-if="challongeStatus"
+                class="text-xs rounded-lg px-3 py-2 border"
+                :class="{
+                  'bg-emerald-900/30 text-emerald-300 border-emerald-800/50':
+                    challongeStatus.state === 'connected',
+                  'bg-amber-900/30 text-amber-300 border-amber-800/50':
+                    challongeStatus.state === 'connecting' || challongeStatus.state === 'stale',
+                  'bg-red-900/30 text-red-300 border-red-800/50': challongeStatus.state === 'error',
+                  'bg-zinc-800 text-zinc-400 border-zinc-700': challongeStatus.state === 'disabled'
+                }"
+              >
+                <span class="font-semibold uppercase">{{ challongeStatus.state }}</span>
+                <span class="ml-2">{{ challongeStatus.message }}</span>
+                <div v-if="challongeStatus.currentStage" class="mt-1 text-zinc-400">
+                  Stage: {{ challongeStatus.currentStage }}
+                </div>
+              </div>
+
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-zinc-400">Tournament URL or ID</span>
+                <input
+                  v-model="challongeTournament"
+                  type="text"
+                  placeholder="https://challonge.com/your-tournament"
+                  class="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+                />
+              </label>
+
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-zinc-400">
+                  Public bracket source
+                  <span v-if="settings.challongeSourceConfigured" class="text-emerald-400"
+                    >• ready</span
+                  >
+                </span>
+                <span class="text-xs text-zinc-500">
+                  Reads the public <code>/module</code> bracket. No API key or OAuth is required.
+                </span>
+              </label>
+
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-zinc-400">Polling fallback, seconds</span>
+                <input
+                  v-model.number="challongePollIntervalSeconds"
+                  type="number"
+                  min="5"
+                  max="120"
+                  class="w-28 bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+                />
+              </label>
+
+              <div class="flex gap-2">
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
+                  :disabled="isTesting || !challongeTournament"
+                  @click="testChallonge"
+                >
+                  {{ isTesting ? 'Testing…' : 'Test Connection' }}
+                </BaseButton>
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
+                  :disabled="!settings.challongeSourceConfigured || isSaving"
+                  @click="refreshChallonge"
+                >
+                  Sync Now
+                </BaseButton>
+                <BaseButton variant="primary" size="sm" :disabled="isSaving" @click="saveChallonge">
+                  {{ isSaving ? 'Saving…' : 'Save Challonge Settings' }}
+                </BaseButton>
               </div>
             </div>
 
