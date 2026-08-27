@@ -25,6 +25,7 @@ type MatSettingsUpdate = {
   url?: string
   token?: string
   pollIntervalSeconds?: number
+  useSteamAvatars?: boolean
 }
 
 type MatProjectionResponse = {
@@ -87,6 +88,7 @@ class MatIntegrationService {
       pollIntervalSeconds: Number.isFinite(poll)
         ? Math.min(MAX_POLL_SECONDS, Math.max(MIN_POLL_SECONDS, poll))
         : DEFAULT_POLL_SECONDS,
+      useSteamAvatars: values.matUseSteamAvatars === 'true',
       encryptedToken: values.matTokenEncrypted || ''
     }
   }
@@ -106,8 +108,9 @@ class MatIntegrationService {
   }
 
   async getPublicSettings(): Promise<MatIntegrationPublicSettings> {
-    const { enabled, url, tokenConfigured, pollIntervalSeconds } = await this.readStoredSettings()
-    return { enabled, url, tokenConfigured, pollIntervalSeconds }
+    const { enabled, url, tokenConfigured, pollIntervalSeconds, useSteamAvatars } =
+      await this.readStoredSettings()
+    return { enabled, url, tokenConfigured, pollIntervalSeconds, useSteamAvatars }
   }
 
   getStatus(): MatIntegrationStatus {
@@ -224,6 +227,9 @@ class MatIntegrationService {
       if (input.enabled !== undefined) await this.writeSetting('matEnabled', String(input.enabled))
       if (normalizedPoll !== undefined) {
         await this.writeSetting('matPollIntervalSeconds', String(normalizedPoll))
+      }
+      if (input.useSteamAvatars !== undefined) {
+        await this.writeSetting('matUseSteamAvatars', String(input.useSteamAvatars))
       }
       await dbRun('COMMIT')
       transactionOpen = false
@@ -399,7 +405,7 @@ class MatIntegrationService {
         : []
       this.players = projection.match
         ? [...projection.match.team1.players, ...projection.match.team2.players].map((player) =>
-            mapPlayer(player, settings.url)
+            mapPlayer(player, settings.url, settings.useSteamAvatars)
           )
         : []
       this.status = {

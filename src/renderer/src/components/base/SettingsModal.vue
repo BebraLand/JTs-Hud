@@ -30,6 +30,7 @@ const matEnabled = ref(false)
 const matUrl = ref('')
 const matToken = ref('')
 const matPollIntervalSeconds = ref(5)
+const matUseSteamAvatars = ref(false)
 const challongeEnabled = ref(false)
 const challongeTournament = ref('')
 const challongePollIntervalSeconds = ref(10)
@@ -46,6 +47,7 @@ watch(
     matEnabled.value = settings.value.matEnabled
     matUrl.value = settings.value.matUrl
     matPollIntervalSeconds.value = settings.value.matPollIntervalSeconds
+    matUseSteamAvatars.value = settings.value.matUseSteamAvatars
     matToken.value = ''
     challongeEnabled.value = settings.value.challongeEnabled
     challongeTournament.value = settings.value.challongeTournament
@@ -91,7 +93,8 @@ const saveMat = async () => {
     enabled: matEnabled.value,
     url: matUrl.value,
     token: matToken.value || undefined,
-    pollIntervalSeconds: matPollIntervalSeconds.value
+    pollIntervalSeconds: matPollIntervalSeconds.value,
+    useSteamAvatars: matUseSteamAvatars.value
   })
   if (saved) matToken.value = ''
 }
@@ -258,6 +261,21 @@ const installGsiCfg = async () => {
                   </p>
                 </div>
                 <BaseCheckbox v-model="matEnabled" size="md" class="text-primary" />
+              </div>
+
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-sm font-medium text-zinc-200">Use Steam avatars from MAT</p>
+                  <p class="text-xs text-zinc-500 mt-0.5">
+                    Use a MAT Steam avatar when the player has no custom JTs-Hud image
+                  </p>
+                </div>
+                <BaseCheckbox
+                  v-model="matUseSteamAvatars"
+                  :disabled="isSaving"
+                  size="md"
+                  class="text-primary"
+                />
               </div>
 
               <div

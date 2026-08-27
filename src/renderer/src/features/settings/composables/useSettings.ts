@@ -10,6 +10,7 @@ export interface AppSettings {
   matUrl: string
   matTokenConfigured: boolean
   matPollIntervalSeconds: number
+  matUseSteamAvatars: boolean
   challongeEnabled: boolean
   challongeTournament: string
   challongeSourceConfigured: boolean
@@ -46,6 +47,7 @@ export function useSettings() {
     matUrl: '',
     matTokenConfigured: false,
     matPollIntervalSeconds: 5,
+    matUseSteamAvatars: false,
     challongeEnabled: false,
     challongeTournament: '',
     challongeSourceConfigured: false,
@@ -171,6 +173,7 @@ export function useSettings() {
     url: string
     token?: string
     pollIntervalSeconds: number
+    useSteamAvatars: boolean
   }) => {
     isSaving.value = true
     error.value = ''
@@ -187,7 +190,8 @@ export function useSettings() {
         matEnabled: payload.enabled,
         matUrl: payload.url,
         matTokenConfigured: payload.tokenConfigured,
-        matPollIntervalSeconds: payload.pollIntervalSeconds
+        matPollIntervalSeconds: payload.pollIntervalSeconds,
+        matUseSteamAvatars: payload.useSteamAvatars
       }
       matStatus.value = payload.status
       return true

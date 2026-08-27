@@ -91,11 +91,15 @@ const projection: MatHudProjectionV1 = {
 const mappedPlayer = mapPlayer(player)
 assert.equal(mappedPlayer.username, 'aurum')
 assert.equal(mappedPlayer.avatar, player.photoUrl)
+assert.equal(mapPlayer({ ...player, photoUrl: null }, undefined, true).avatar, player.avatarUrl)
+assert.equal(mapPlayer({ ...player, photoUrl: null }).avatar, '')
 assert.equal(mappedPlayer.country, 'LT')
 assert.equal(mappedPlayer.team, 'team-a')
 assert.equal(
-  mapPlayer({ ...player, photoUrl: '/broadcast-assets/players/player.webp' }, 'http://localhost:3069')
-    .avatar,
+  mapPlayer(
+    { ...player, photoUrl: '/broadcast-assets/players/player.webp' },
+    'http://localhost:3069'
+  ).avatar,
   'http://localhost:3069/broadcast-assets/players/player.webp'
 )
 

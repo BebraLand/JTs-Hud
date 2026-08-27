@@ -78,6 +78,7 @@ export interface MatIntegrationPublicSettings {
   url: string
   tokenConfigured: boolean
   pollIntervalSeconds: number
+  useSteamAvatars: boolean
 }
 
 export type MatTokenMode = 'manual' | 'automatic'

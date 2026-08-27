@@ -16,6 +16,7 @@ export interface AppSettings {
   matUrl: string
   matTokenConfigured: boolean
   matPollIntervalSeconds: number
+  matUseSteamAvatars: boolean
   challongeEnabled: boolean
   challongeTournament: string
   challongeSourceConfigured: boolean
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   matUrl: '',
   matTokenConfigured: false,
   matPollIntervalSeconds: 5,
+  matUseSteamAvatars: false,
   challongeEnabled: false,
   challongeTournament: '',
   challongeSourceConfigured: false,
@@ -59,6 +61,7 @@ export const getSettings = async (): Promise<AppSettings> => {
     matUrl: map.matUrl || '',
     matTokenConfigured: Boolean(map.matTokenEncrypted || process.env.MAT_HUD_TOKEN),
     matPollIntervalSeconds: Number(map.matPollIntervalSeconds || 5),
+    matUseSteamAvatars: map.matUseSteamAvatars === 'true',
     challongeEnabled: map.challongeEnabled === 'true',
     challongeTournament: map.challongeTournament || '',
     challongeSourceConfigured: Boolean(map.challongeTournament),

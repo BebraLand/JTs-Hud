@@ -31,14 +31,18 @@ export function mapTeam(
 
 export function mapPlayer(
   player: NonNullable<MatHudProjectionV1['match']>['team1']['players'][number],
-  matUrl?: string
+  matUrl?: string,
+  useSteamAvatar = false
 ): Player {
   return {
     _id: player.id,
     firstName: player.firstName || '',
     lastName: player.lastName || '',
     username: player.nickname,
-    avatar: resolveMatAssetUrl(player.photoUrl || player.avatarUrl, matUrl),
+    avatar: resolveMatAssetUrl(
+      useSteamAvatar ? player.photoUrl || player.avatarUrl : player.photoUrl,
+      matUrl
+    ),
     country: player.countryCode || '',
     steamid: player.steamId,
     team: player.teamId,
