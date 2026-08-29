@@ -547,6 +547,7 @@ const healthClass = (state: string) =>
               <input
                 type="checkbox"
                 :checked="status.settings.autoFallback"
+                :disabled="saving || !status.settings.enabled"
                 @change="
                   updateSettings({ autoFallback: ($event.target as HTMLInputElement).checked })
                 "
@@ -582,14 +583,18 @@ const healthClass = (state: string) =>
             <div class="mt-4 grid grid-cols-2 gap-2">
               <button
                 @click="testTransport('telnet')"
-                :disabled="saving"
+                :disabled="saving || !status.settings.enabled"
                 class="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800"
               >
                 Test Telnet
               </button>
               <button
                 @click="testTransport('keyboard', candidate?.observerSlot ?? 1)"
-                :disabled="saving || status.transportHealth.keyboard.state === 'unsupported'"
+                :disabled="
+                  saving ||
+                  !status.settings.enabled ||
+                  status.transportHealth.keyboard.state === 'unsupported'
+                "
                 class="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800"
               >
                 Test Keys
@@ -752,7 +757,7 @@ const healthClass = (state: string) =>
                           : player.steamId
                       )
                     "
-                    :disabled="!player.alive || saving"
+                    :disabled="!player.alive || saving || !status.settings.enabled"
                     :class="
                       status.settings.manualOverrideSteamId === player.steamId
                         ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'

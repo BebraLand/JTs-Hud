@@ -99,6 +99,23 @@ const invalidSlotDecision = new AutoDirectorEngine().evaluate(
 assert.equal(invalidSlotDecision.scores[0]?.switchEligible, false)
 assert.equal(invalidSlotDecision.candidateSteamId, null)
 
+const disabledOverrideDecision = new AutoDirectorEngine().evaluate(
+  snapshot({
+    allplayers: {
+      anchor: player('Disabled anchor', 'CT', 1, '0, 0, 0', '1, 0, 0'),
+      target: player('Disabled target', 'T', 6, '1000, 0, 0', '-1, 0, 0')
+    }
+  }),
+  {
+    ...settings,
+    enabled: false,
+    manualOverrideSteamId: 'target'
+  },
+  600
+)
+assert.equal(disabledOverrideDecision.shouldSwitch, false)
+assert.match(disabledOverrideDecision.reason, /disabled/i)
+
 const sniperSightline = new AutoDirectorEngine().evaluate(
   snapshot({
     allplayers: {

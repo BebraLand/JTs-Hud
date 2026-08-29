@@ -260,26 +260,43 @@ export class AutoDirectorService {
 
   async updateSettings(input: Partial<AutoDirectorSettings>): Promise<AutoDirectorStatus> {
     const next = sanitizeSettings(input, this.settings.aerialPresentationPhases)
+    const directorDisabled = (next.enabled ?? this.settings.enabled) === false
+    if (directorDisabled) {
+      next.autoFallback = false
+      next.manualOverrideSteamId = null
+    }
     const previousOverride = this.settings.manualOverrideSteamId
     const aerialReturnTarget =
-      next.aerialPresentationEnabled === false && this.aerialActiveAnchor
+      (next.aerialPresentationEnabled === false || directorDisabled) && this.aerialActiveAnchor
         ? this.getAerialReturnTarget()
         : null
     this.settings = await persistSettingsCandidate(this.settings, next, (candidate) =>
       this.persistSettings(candidate)
     )
-    if (next.enabled === false) {
+    if (directorDisabled) {
       this.engine.setCurrent(null)
       this.pendingTargetSteamId = null
+      this.decision = null
+      this.cameraDebug = emptyCameraDebugStatus()
     }
     if (
-      next.aerialPresentationEnabled === false &&
+      (next.aerialPresentationEnabled === false || directorDisabled) &&
       this.aerialActiveAnchor &&
       !this.commandInFlight
     ) {
       if (aerialReturnTarget) {
-        void this.exitAerial(aerialReturnTarget, 'Operator disabled Aerial presentation')
-      } else this.clearAerialPresentation(Date.now(), 'Operator disabled Aerial presentation')
+        void this.exitAerial(
+          aerialReturnTarget,
+          directorDisabled ? 'Operator disabled Auto Director' : 'Operator disabled Aerial presentation'
+        )
+      } else {
+        this.clearAerialPresentation(
+          Date.now(),
+          directorDisabled ? 'Operator disabled Auto Director' : 'Operator disabled Aerial presentation'
+        )
+      }
+    } else if (directorDisabled) {
+      this.clearAerialPresentation(Date.now(), 'Operator disabled Auto Director')
     }
     if (
       next.manualOverrideSteamId !== undefined &&
@@ -301,7 +318,18 @@ export class AutoDirectorService {
     transport: CameraTransport,
     observerSlot?: number
   ): Promise<AutoDirectorStatus['lastCommand']> {
-    this.lastCommand = await this.camera.test(transport, this.settings, observerSlot)
+    if (!this.settings.enabled) {
+      const message = 'Auto-director is disabled'
+      this.lastCommand = {
+        ok: false,
+        transport,
+        message,
+        at: Date.now(),
+        attempts: [{ transport, ok: false, message }]
+      }
+    } else {
+      this.lastCommand = await this.camera.test(transport, this.settings, observerSlot)
+    }
     this.updateTransportHealth(this.lastCommand)
     this.addHistory({
       at: this.lastCommand.at,
@@ -316,6 +344,7 @@ export class AutoDirectorService {
   processGsi(payload: GsiLikePayload): void {
     const now = Date.now()
     this.lastGsiAt = now
+    if (!this.settings.enabled) return
     if (now - this.lastEvaluationAt < this.settings.scoringIntervalMs) return
     this.lastEvaluationAt = now
 
@@ -484,6 +513,7 @@ export class AutoDirectorService {
   private async executeSwitch(
     target: NonNullable<AutoDirectorStatus['decision']>['scores'][number]
   ): Promise<void> {
+    if (!this.settings.enabled) return
     this.commandInFlight = true
     const fromSteamId = this.decision?.currentSteamId ?? null
     try {

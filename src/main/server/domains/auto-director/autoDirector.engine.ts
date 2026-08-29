@@ -759,7 +759,9 @@ export class AutoDirectorEngine {
     const mapPhase = String(payload.map?.phase ?? '')
     const liveRound = mapPhase === 'live' && roundPhase === 'live'
 
-    if (requestedOverride) {
+    if (!settings.enabled) {
+      reason = 'Auto-director disabled'
+    } else if (requestedOverride) {
       shouldSwitch = requestedOverride.steamId !== this.currentSteamId
       reason = shouldSwitch
         ? `Operator forced ${requestedOverride.name}`
@@ -767,8 +769,6 @@ export class AutoDirectorEngine {
       lockKind = 'manual'
     } else if (!best) {
       shouldSwitch = false
-    } else if (!settings.enabled) {
-      reason = 'Auto-director disabled'
     } else if (settings.paused) {
       reason = 'Auto-director paused by operator'
     } else if (!liveRound) {
