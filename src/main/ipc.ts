@@ -14,11 +14,11 @@ const GSI_CFG_CONTENT = `"JTS_HUD_MANAGER"
 	"uri"		"http://localhost:23415/cs2/input"
 	"timeout"		"0.1"
 	"buffer"		"0"
-	"throttle"		"0"
+	"throttle"		"0.03"
 	"output"
 	{
 	}
-	"heartbeat"		"0.01"
+	"heartbeat"		"1"
 	"data"
 	{
 		"provider"		"1"
