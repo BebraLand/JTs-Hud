@@ -19,7 +19,7 @@ type FlatBvh = {
 }
 
 const LEAF_TRIANGLES = 8
-const INTERSECTION_EPSILON = 0.5
+export const INTERSECTION_EPSILON = 0.5
 
 const component = (
   triangles: Float32Array,

@@ -39,6 +39,7 @@ for (const mapName of officialMaps) {
   assert.ok(targetArea, `${mapName} has no adjacent topology area`)
   const route = topology.findNearestEnemyPath(sourceArea.id, [targetArea!.id])
   assert.ok(route && route.areaIds.length >= 2, `${mapName} cannot traverse an adjacent route`)
+  assert.deepEqual(topology.findNearestEnemyPath(sourceArea.id, [targetArea!.id]), route)
 }
 
 const area = (
