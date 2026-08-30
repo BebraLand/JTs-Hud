@@ -252,6 +252,26 @@ const installGsiCfg = async () => {
               </div>
             </div>
 
+            <div class="border-t border-border pt-4">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-xs font-semibold capitalize text-zinc-500">Developer / Testing</p>
+                  <p class="mt-1 text-xs text-zinc-500">
+                    Enables experimental Auto Director custom preset editing.
+                  </p>
+                </div>
+                <BaseCheckbox
+                  v-model="settings.developerTestingEnabled"
+                  :disabled="isSaving"
+                  size="md"
+                  class="text-primary"
+                  @update:model-value="
+                    saveSettings({ developerTestingEnabled: settings.developerTestingEnabled })
+                  "
+                />
+              </div>
+            </div>
+
             <div class="border-t border-border pt-4 flex flex-col gap-3">
               <div class="flex items-start justify-between gap-4">
                 <div>

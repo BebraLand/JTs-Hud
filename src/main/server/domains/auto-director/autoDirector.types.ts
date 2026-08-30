@@ -146,6 +146,15 @@ export interface AutoDirectorProfile {
   >
 }
 
+export interface AutoDirectorPreset {
+  id: string
+  name: string
+  mode: AutoDirectorMode
+  weights: Record<string, number>
+  minimumDwellOverrideMs: number | null
+  postDeathHoldMs: number
+}
+
 export interface AutoDirectorSettings {
   enabled: boolean
   paused: boolean
@@ -163,6 +172,7 @@ export interface AutoDirectorSettings {
   }
   minimumDwellOverrideMs: number | null
   postDeathHoldMs: number
+  customPresets: AutoDirectorPreset[]
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Partial<AutoDirectorProfile['weights']>

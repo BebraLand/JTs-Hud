@@ -32,6 +32,7 @@ const settings: AutoDirectorSettings = {
   },
   minimumDwellOverrideMs: null,
   postDeathHoldMs: 1000,
+  customPresets: [],
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}

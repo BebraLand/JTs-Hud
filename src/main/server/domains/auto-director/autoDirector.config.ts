@@ -105,6 +105,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   },
   minimumDwellOverrideMs: null,
   postDeathHoldMs: 1000,
+  customPresets: [],
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}
