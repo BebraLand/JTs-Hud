@@ -107,7 +107,7 @@ export function registerIpcHandlers(): void {
     })
 
     activeOverlay = overlayWindow
-    overlayWindow.setIgnoreMouseEvents(true, { forward: true })
+    overlayWindow.setIgnoreMouseEvents(true)
     overlayWindow.loadURL(hudUrl)
     enforceOverlayOnTop(overlayWindow)
 
