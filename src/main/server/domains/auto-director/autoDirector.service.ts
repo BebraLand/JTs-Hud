@@ -316,6 +316,7 @@ export class AutoDirectorService {
   processGsi(payload: GsiLikePayload): void {
     const now = Date.now()
     this.lastGsiAt = now
+    if (!this.settings.enabled) return
     if (now - this.lastEvaluationAt < this.settings.scoringIntervalMs) return
     this.lastEvaluationAt = now
 
