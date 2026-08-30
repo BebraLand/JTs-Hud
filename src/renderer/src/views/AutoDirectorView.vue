@@ -90,8 +90,19 @@ const profileDefaults: Record<AutoDirectorMode, Record<string, number>> = {
   }
 }
 
+const profileDwellDefaults: Record<AutoDirectorMode, number> = {
+  balanced: 2500,
+  reactive: 1250,
+  calm: 4000
+}
+
 const effectiveWeight = (key: string): number =>
   status.value.settings.customWeights[key] ?? profileDefaults[status.value.settings.mode][key] ?? 0
+
+const effectiveDwellMs = computed(
+  () =>
+    status.value.settings.minimumDwellOverrideMs ?? profileDwellDefaults[status.value.settings.mode]
+)
 
 const setWeight = (key: string, value: number) => {
   void updateSettings({
@@ -397,6 +408,64 @@ const healthClass = (state: string) =>
             <h2 class="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
               Camera Transport
             </h2>
+            <div class="mb-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold text-zinc-200">POV lock timing</p>
+                  <p class="mt-1 text-[10px] text-zinc-500">
+                    Prevents rapid switches. The profile default is used until you change the
+                    slider.
+                  </p>
+                </div>
+                <button
+                  v-if="status.settings.minimumDwellOverrideMs !== null"
+                  @click="updateSettings({ minimumDwellOverrideMs: null })"
+                  class="text-[10px] text-zinc-500 hover:text-cyan-300"
+                >
+                  Reset
+                </button>
+              </div>
+              <label class="mt-3 block text-[10px] text-zinc-400">
+                <span class="flex justify-between">
+                  <span>Minimum time on current POV</span>
+                  <strong class="text-cyan-300">{{ (effectiveDwellMs / 1000).toFixed(2) }}s</strong>
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="5000"
+                  step="100"
+                  :value="effectiveDwellMs"
+                  @change="
+                    updateSettings({
+                      minimumDwellOverrideMs: Number(($event.target as HTMLInputElement).value)
+                    })
+                  "
+                  class="mt-1 w-full accent-cyan-400"
+                />
+              </label>
+              <label class="mt-3 block text-[10px] text-zinc-400">
+                <span class="flex justify-between">
+                  <span>Hold POV after player death</span>
+                  <strong class="text-cyan-300"
+                    >{{ (status.settings.postDeathHoldMs / 1000).toFixed(2) }}s</strong
+                  >
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="2000"
+                  step="100"
+                  :value="status.settings.postDeathHoldMs"
+                  @change="
+                    updateSettings({
+                      postDeathHoldMs: Number(($event.target as HTMLInputElement).value)
+                    })
+                  "
+                  class="mt-1 w-full accent-cyan-400"
+                />
+              </label>
+            </div>
             <div class="mb-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2">
               <div class="flex items-center justify-between gap-3">
                 <div>

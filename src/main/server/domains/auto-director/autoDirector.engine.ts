@@ -15,6 +15,7 @@ type TemporalSignals = {
   shotUntil: number
   damageUntil: number
   killUntil: number
+  deathUntil: number
   damageDelta: number
 }
 
@@ -235,6 +236,7 @@ export class AutoDirectorEngine {
         shotUntil: 0,
         damageUntil: 0,
         killUntil: 0,
+        deathUntil: 0,
         damageDelta: 0
       }
       const canFireProjectile =
@@ -253,10 +255,12 @@ export class AutoDirectorEngine {
       const newKill = previous
         ? player.kills > previous.kills || player.roundKills > previous.roundKills
         : false
+      const newDeath = Boolean(previous?.alive && !player.alive)
       this.signals.set(player.steamId, {
         shotUntil: ammoDropped ? at + 700 : existing.shotUntil,
         damageUntil: healthDropped || damageDelta > 0 ? at + 1100 : existing.damageUntil,
         killUntil: newKill ? at + 1600 : existing.killUntil,
+        deathUntil: newDeath ? at + settings.postDeathHoldMs : existing.deathUntil,
         damageDelta:
           damageDelta > 0 ? damageDelta : existing.damageUntil > at ? existing.damageDelta : 0
       })
@@ -784,11 +788,19 @@ export class AutoDirectorEngine {
         ? `Hard objective lock: ${bombState} by ${objectivePlayer?.name ?? objectiveSteamId}`
         : `Holding ${bombState} objective action`
       lockKind = 'objective'
-    } else if (!currentScore || !currentScore.alive) {
+    } else if (!currentScore) {
       shouldSwitch = best.steamId !== this.currentSteamId
-      reason = currentScore
-        ? `${currentScore.name} died; selecting ${best.name}`
-        : `Initial target: ${best.name}`
+      reason = `Initial target: ${best.name}`
+    } else if (!currentScore.alive) {
+      const deathUntil = this.signals.get(currentScore.steamId)?.deathUntil ?? 0
+      if (deathUntil > at) {
+        reason = `Post-death hold on ${currentScore.name}`
+        lockKind = 'post-death'
+        lockUntil = deathUntil
+      } else {
+        shouldSwitch = best.steamId !== this.currentSteamId
+        reason = `${currentScore.name} died; selecting ${best.name}`
+      }
     } else if (best.steamId === currentScore.steamId) {
       reason = `${currentScore.name} remains highest priority`
     } else {

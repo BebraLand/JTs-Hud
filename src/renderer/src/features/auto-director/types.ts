@@ -82,6 +82,8 @@ export interface AutoDirectorSettings {
     midRound: boolean
     roundEnd: boolean
   }
+  minimumDwellOverrideMs: number | null
+  postDeathHoldMs: number
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Record<string, number>
