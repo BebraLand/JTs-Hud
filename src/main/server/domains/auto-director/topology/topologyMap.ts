@@ -119,6 +119,7 @@ export class TopologyMap {
   private readonly areas = new Map<number, TopologyAreaArtifact>()
   private readonly portals = new Map<string, TopologyPortalArtifact>()
   private readonly portalsByArea = new Map<number, TopologyPortalArtifact[]>()
+  private readonly pathCache = new Map<string, TopologyPath | null>()
 
   constructor(artifact: TopologyArtifact) {
     if (artifact.schemaVersion !== 1) throw new Error('Unsupported topology schema version')
@@ -184,11 +185,12 @@ export class TopologyMap {
   isChokepoint(portal: TopologyPortalArtifact | null): boolean {
     if (!portal) return false
     if (portal.chokepoint === true) return true
-    const connectedAreas = new Set([portal.from, portal.to])
-    const localPortals = [...this.portals.values()].filter((candidate) =>
-      [candidate.from, candidate.to].some((areaId) => connectedAreas.has(areaId))
+    const localPortals = new Set(
+      [portal.from, portal.to].flatMap((areaId) =>
+        this.getPortalsForArea(areaId).map((candidate) => candidate.id)
+      )
     )
-    return portal.width <= 192 || localPortals.length <= 3
+    return portal.width <= 192 || localPortals.size <= 3
   }
 
   findNearestArea(position: Vec3): TopologyAreaArtifact | null {
@@ -225,6 +227,10 @@ export class TopologyMap {
       return null
     const targets = new Set(targetAreaIds.filter((id) => this.areas.has(id)))
     if (!targets.size) return null
+    const cacheKey = `${startAreaId}:${[...targets].sort((left, right) => left - right).join(',')}`
+    if (this.pathCache.has(cacheKey)) return this.pathCache.get(cacheKey) ?? null
+    // ponytail: bounded match-local cache; clear it if a long session explores 4096 route sets.
+    if (this.pathCache.size >= 4096) this.pathCache.clear()
     const distances = new Map<number, number>([[startAreaId, 0]])
     const previous = new Map<number, { areaId: number; portalId: string | null }>()
     const heap: HeapNode[] = []
@@ -244,7 +250,9 @@ export class TopologyMap {
         }
         areaIds.reverse()
         portalIds.reverse()
-        return { distance: current.distance, areaIds, portalIds }
+        const path = { distance: current.distance, areaIds, portalIds }
+        this.pathCache.set(cacheKey, path)
+        return path
       }
       const area = this.areas.get(current.id)!
       for (const neighborId of area.neighbors) {
@@ -261,6 +269,7 @@ export class TopologyMap {
         pushHeap(heap, { id: neighborId, distance: nextDistance })
       }
     }
+    this.pathCache.set(cacheKey, null)
     return null
   }
 }

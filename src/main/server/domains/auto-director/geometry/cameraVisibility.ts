@@ -1,4 +1,4 @@
-import type { GeometryMap, Vec3 } from './geometryMap'
+import { INTERSECTION_EPSILON, type GeometryMap, type Vec3 } from './geometryMap'
 
 export interface CameraAnchorPose {
   position: Vec3
@@ -101,9 +101,11 @@ const hasLineOfSightToTarget = (
 ): { lineOfSight: boolean; firstIntersectionDistance: number | null } => {
   const distances = targetHeights.map((height) => {
     const target: Vec3 = [targetPosition[0], targetPosition[1], targetPosition[2] + height]
+    const targetDistance = distance(camera.position, target)
+    const firstHit = geometry.firstIntersectionDistance(camera.position, target)
     return {
-      visible: geometry.hasLineOfSight(camera.position, target),
-      firstHit: geometry.firstIntersectionDistance(camera.position, target)
+      visible: firstHit === null || firstHit >= targetDistance - INTERSECTION_EPSILON,
+      firstHit
     }
   })
   return {

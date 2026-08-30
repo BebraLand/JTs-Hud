@@ -138,6 +138,12 @@ export const computeTopologyFeatures = (
 ): Map<string, PlayerTopologyFeatures> => {
   const alive = players.filter((player) => player.alive && player.position && player.team)
   const areas = new Map(alive.map((player) => [player.steamId, mapArea(topology, player)]))
+  const previousAreas = new Map(
+    [...previousPlayers].map(([steamId, player]) => [
+      steamId,
+      player.position ? topology.findNearestArea(player.position) : null
+    ])
+  )
   const result = new Map<string, PlayerTopologyFeatures>()
 
   for (const player of players) {
@@ -189,7 +195,7 @@ export const computeTopologyFeatures = (
 
     const incomingEntries = routeGroup.filter((entry) => {
       const previous = previousPlayers.get(entry.enemy.steamId)
-      const previousArea = previous?.position ? topology.findNearestArea(previous.position) : null
+      const previousArea = previous ? previousAreas.get(entry.enemy.steamId) : null
       if (!previousArea || !player.position || !area) return false
       const previousPath = routeDistanceFor(topology, previousArea.id, area.id)
       return Boolean(previousPath && previousPath.distance > entry.path.distance + MIN_MOVEMENT)
@@ -200,7 +206,7 @@ export const computeTopologyFeatures = (
     const routeClosingPerSample = incomingEntries
       .map((entry) => {
         const previous = previousPlayers.get(entry.enemy.steamId)
-        const previousArea = previous?.position ? topology.findNearestArea(previous.position) : null
+        const previousArea = previous ? previousAreas.get(entry.enemy.steamId) : null
         if (!previousArea || !area) return 0
         const previousPath = routeDistanceFor(topology, previousArea.id, area.id)
         return previousPath ? Math.max(0, previousPath.distance - entry.path.distance) : 0
