@@ -30,6 +30,8 @@ const settings: AutoDirectorSettings = {
     midRound: true,
     roundEnd: true
   },
+  minimumDwellOverrideMs: null,
+  postDeathHoldMs: 1000,
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}

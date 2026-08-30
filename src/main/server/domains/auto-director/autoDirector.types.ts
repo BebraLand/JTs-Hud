@@ -161,6 +161,8 @@ export interface AutoDirectorSettings {
     midRound: boolean
     roundEnd: boolean
   }
+  minimumDwellOverrideMs: number | null
+  postDeathHoldMs: number
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Partial<AutoDirectorProfile['weights']>
@@ -171,6 +173,7 @@ export type CameraLockKind =
   | 'minimum-dwell'
   | 'combat'
   | 'post-kill'
+  | 'post-death'
   | 'objective'
   | 'manual'
 

@@ -72,6 +72,24 @@ const sanitizeSettings = (
       aerialPresentationPhases
     )
   }
+  if (input.minimumDwellOverrideMs !== undefined) {
+    if (input.minimumDwellOverrideMs === null) {
+      output.minimumDwellOverrideMs = null
+    } else {
+      const dwell = Number(input.minimumDwellOverrideMs)
+      if (!Number.isFinite(dwell) || dwell < 0 || dwell > 5000) {
+        throw new Error('POV lock must be 0-5000 ms')
+      }
+      output.minimumDwellOverrideMs = Math.round(dwell)
+    }
+  }
+  if (input.postDeathHoldMs !== undefined) {
+    const hold = Number(input.postDeathHoldMs)
+    if (!Number.isFinite(hold) || hold < 0 || hold > 2000) {
+      throw new Error('Post-death hold must be 0-2000 ms')
+    }
+    output.postDeathHoldMs = Math.round(hold)
+  }
   if (input.scoringIntervalMs !== undefined) {
     const interval = Number(input.scoringIntervalMs)
     if (!Number.isFinite(interval) || interval < 50 || interval > 1000) {

@@ -19,6 +19,8 @@ const emptyStatus = (): AutoDirectorStatus => ({
       midRound: true,
       roundEnd: true
     },
+    minimumDwellOverrideMs: null,
+    postDeathHoldMs: 1000,
     scoringIntervalMs: 100,
     manualOverrideSteamId: null,
     customWeights: {}

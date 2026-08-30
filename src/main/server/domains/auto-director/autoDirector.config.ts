@@ -103,6 +103,8 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
     midRound: true,
     roundEnd: true
   },
+  minimumDwellOverrideMs: null,
+  postDeathHoldMs: 1000,
   scoringIntervalMs: 100,
   manualOverrideSteamId: null,
   customWeights: {}
@@ -112,6 +114,7 @@ export const getProfile = (settings: AutoDirectorSettings): AutoDirectorProfile 
   const base = AUTO_DIRECTOR_PROFILES[settings.mode]
   return {
     ...base,
+    minDwellMs: settings.minimumDwellOverrideMs ?? base.minDwellMs,
     weights: { ...base.weights, ...settings.customWeights }
   }
 }

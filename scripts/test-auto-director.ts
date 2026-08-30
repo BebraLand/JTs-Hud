@@ -421,9 +421,41 @@ const deadCurrentPayload = snapshot({
   }
 })
 const deathRecovery = engine.evaluate(deadCurrentPayload, settings, 4_100)
-assert.equal(deathRecovery.shouldSwitch, true)
-assert.equal(deathRecovery.candidateSteamId, 'ct')
-engine.confirmSwitch('ct', 4_100)
+assert.equal(deathRecovery.shouldSwitch, false)
+assert.equal(deathRecovery.lockKind, 'post-death')
+const deathRecoveryAfterHold = engine.evaluate(deadCurrentPayload, settings, 5_200)
+assert.equal(deathRecoveryAfterHold.shouldSwitch, true)
+assert.equal(deathRecoveryAfterHold.candidateSteamId, 'ct')
+engine.confirmSwitch('ct', 5_200)
+
+const deathHoldEngine = new AutoDirectorEngine()
+const aliveBeforeDeath = snapshot({
+  allplayers: {
+    ct: player('Anchor', 'CT', 1, '0, 0, 0', '1, 0, 0'),
+    t: player('Entry', 'T', 6, '1000, 0, 0', '-1, 0, 0')
+  }
+})
+deathHoldEngine.evaluate(aliveBeforeDeath, settings, 5_000)
+deathHoldEngine.confirmSwitch('t', 5_000)
+const deathHold = deathHoldEngine.evaluate(deadCurrentPayload, settings, 5_500)
+assert.equal(deathHold.shouldSwitch, false)
+assert.equal(deathHold.lockKind, 'post-death')
+assert.equal(deathHold.lockUntil, 6_500)
+const deathAfterHold = deathHoldEngine.evaluate(deadCurrentPayload, settings, 6_600)
+assert.equal(deathAfterHold.shouldSwitch, true)
+assert.equal(deathAfterHold.candidateSteamId, 'ct')
+
+const overrideEngine = new AutoDirectorEngine()
+overrideEngine.evaluate(initialPayload, { ...settings, minimumDwellOverrideMs: 5_000 }, 7_000)
+overrideEngine.confirmSwitch('ct', 7_000)
+const overrideLock = overrideEngine.evaluate(
+  contactPayload,
+  { ...settings, minimumDwellOverrideMs: 5_000 },
+  10_000
+)
+assert.equal(overrideLock.shouldSwitch, false)
+assert.equal(overrideLock.lockKind, 'minimum-dwell')
+assert.equal(overrideLock.lockUntil, 12_000)
 
 const objectivePayload = snapshot({
   bomb: { state: 'planting', player: 't' },
