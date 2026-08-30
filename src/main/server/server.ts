@@ -24,6 +24,7 @@ import { signedHudMiddleware } from './middleware/signedHudMiddleware'
 import { matIntegrationService } from './integrations/mat.integration'
 import { challongeIntegrationService } from './integrations/challonge.integration'
 import { databaseReady } from './database/sqlite'
+import { getSystemStats } from './systemStats'
 
 // Track the currently active HUD id so the socket register handler can look up correct HUD
 let activeHudId: string | null = null
@@ -64,6 +65,9 @@ app.use('/api/match', createMatchRouter(io))
 app.use('/api/settings', settingsRoutes)
 app.use('/api/spectator', spectatorRoutes)
 app.use('/api/auto-director', autoDirectorRoutes)
+app.get('/api/system/stats', (_req, res) => {
+  res.json(getSystemStats())
+})
 
 setupSockets(io)
 

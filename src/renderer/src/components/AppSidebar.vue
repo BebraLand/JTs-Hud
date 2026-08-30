@@ -5,6 +5,7 @@ import twitchLogo from '../assets/icon.jpg'
 import SettingsModal from './base/SettingsModal.vue'
 import SidebarNavLink from './SidebarNavLink.vue'
 import BaseButton from './base/BaseButton.vue'
+import SystemStats from './SystemStats.vue'
 
 const settingsOpen = ref(false)
 const hasLiveData = ref(false)
@@ -274,6 +275,8 @@ function openTwitch() {
         </svg>
       </SidebarNavLink>
     </nav>
+
+    <SystemStats :collapsed="collapsed" />
 
     <div>
       <!-- Footer — expanded -->
