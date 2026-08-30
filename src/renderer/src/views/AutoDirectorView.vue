@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useConfirmation } from '../composables/useConfirmation'
 import { useAutoDirector } from '../features/auto-director/composables/useAutoDirector'
-import type { AutoDirectorMode } from '../features/auto-director/types'
+import type { AutoDirectorMode, AutoDirectorPreset } from '../features/auto-director/types'
+import { useSettings } from '../features/settings/composables/useSettings'
 
 const {
   status,
@@ -15,6 +17,9 @@ const {
   forcePlayer,
   testTransport
 } = useAutoDirector()
+const { confirm } = useConfirmation()
+const { settings: appSettings, fetchSettings: fetchAppSettings } = useSettings()
+onMounted(() => void fetchAppSettings())
 
 const modes: { value: AutoDirectorMode; label: string; detail: string }[] = [
   { value: 'balanced', label: 'Balanced', detail: 'Broadcast-ready default' },
@@ -104,13 +109,97 @@ const effectiveDwellMs = computed(
     status.value.settings.minimumDwellOverrideMs ?? profileDwellDefaults[status.value.settings.mode]
 )
 
-const setWeight = (key: string, value: number) => {
-  void updateSettings({
-    customWeights: { ...status.value.settings.customWeights, [key]: value }
+const activePresetId = ref<string | null>(null)
+
+const effectiveWeights = computed(() =>
+  Object.fromEntries(weightDefinitions.map(([key]) => [key, effectiveWeight(key)]))
+)
+
+const presetSettings = (preset: AutoDirectorPreset, patch: Partial<AutoDirectorPreset>) =>
+  status.value.settings.customPresets.map((current) =>
+    current.id === preset.id ? { ...current, ...patch } : current
+  )
+
+const createPreset = async () => {
+  if (status.value.settings.customPresets.length >= 20) return
+  const preset: AutoDirectorPreset = {
+    id: crypto.randomUUID(),
+    name: `Custom ${status.value.settings.customPresets.length + 1}`,
+    mode: status.value.settings.mode,
+    weights: effectiveWeights.value,
+    minimumDwellOverrideMs: status.value.settings.minimumDwellOverrideMs,
+    postDeathHoldMs: status.value.settings.postDeathHoldMs
+  }
+  await updateSettings({ customPresets: [...status.value.settings.customPresets, preset] })
+  activePresetId.value = preset.id
+}
+
+const applyPreset = async (preset: AutoDirectorPreset) => {
+  activePresetId.value = preset.id
+  await updateSettings({
+    mode: preset.mode,
+    customWeights: { ...preset.weights },
+    minimumDwellOverrideMs: preset.minimumDwellOverrideMs,
+    postDeathHoldMs: preset.postDeathHoldMs
   })
 }
 
-const resetWeights = () => void updateSettings({ customWeights: {} })
+const deletePreset = async (preset: AutoDirectorPreset) => {
+  if (!(await confirm(`Preset “${preset.name}” will be permanently deleted.`))) return
+  await updateSettings({
+    customPresets: status.value.settings.customPresets.filter(({ id }) => id !== preset.id)
+  })
+  if (activePresetId.value === preset.id) activePresetId.value = null
+}
+
+const selectMode = (mode: AutoDirectorMode) => {
+  activePresetId.value = null
+  void updateSettings({
+    mode,
+    customWeights: {},
+    minimumDwellOverrideMs: null,
+    postDeathHoldMs: 1000
+  })
+}
+
+const updateActivePreset = (patch: Partial<AutoDirectorPreset>) => {
+  const preset = status.value.settings.customPresets.find(
+    ({ id }) => id === activePresetId.value
+  )
+  return preset ? presetSettings(preset, patch) : status.value.settings.customPresets
+}
+
+const setWeight = (key: string, value: number) => {
+  const customWeights = { ...status.value.settings.customWeights, [key]: value }
+  void updateSettings({
+    customWeights,
+    customPresets: updateActivePreset({
+      weights: { ...effectiveWeights.value, [key]: value }
+    })
+  })
+}
+
+const resetWeights = () =>
+  void updateSettings({
+    customWeights: {},
+    customPresets: updateActivePreset({
+      weights: Object.fromEntries(
+        weightDefinitions.map(([key]) => [key, profileDefaults[status.value.settings.mode][key]])
+      )
+    })
+  })
+
+const setMinimumDwell = (value: number | null) =>
+  void updateSettings({
+    minimumDwellOverrideMs: value,
+    customPresets: updateActivePreset({ minimumDwellOverrideMs: value })
+  })
+
+const setPostDeathHold = (value: number) =>
+  void updateSettings({
+    postDeathHoldMs: value,
+    customPresets: updateActivePreset({ postDeathHoldMs: value })
+  })
 
 const setAerialPhase = (phase: 'freezeTime' | 'midRound' | 'roundEnd', enabled: boolean) =>
   void updateSettings({
@@ -229,7 +318,7 @@ const healthClass = (state: string) =>
           <button
             v-for="mode in modes"
             :key="mode.value"
-            @click="updateSettings({ mode: mode.value })"
+            @click="selectMode(mode.value)"
             :class="
               status.settings.mode === mode.value
                 ? 'border-cyan-400/60 bg-cyan-400/10 text-white'
@@ -262,6 +351,74 @@ const healthClass = (state: string) =>
             {{ status.settings.enabled ? 'Disable' : 'Enable Director' }}
           </button>
         </div>
+      </section>
+
+      <section
+        v-if="appSettings.developerTestingEnabled"
+        class="mb-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+              Developer Presets
+            </h2>
+            <p class="mt-1 text-[10px] text-zinc-500">
+              Create a preset, then edit it. Changes save automatically.
+            </p>
+          </div>
+          <span class="text-[10px] text-zinc-600"
+            >{{ status.settings.customPresets.length }}/20</span
+          >
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            @click="void createPreset()"
+            :disabled="saving || status.settings.customPresets.length >= 20"
+            class="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-400/20 disabled:opacity-40"
+          >
+            Create preset
+          </button>
+        </div>
+        <div
+          v-if="status.settings.customPresets.length"
+          class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <div
+            v-for="preset in status.settings.customPresets"
+            :key="preset.id"
+            class="flex min-w-0 items-center gap-2 rounded-lg border border-zinc-800 bg-black/20 p-2"
+          >
+            <button
+              @click="void applyPreset(preset)"
+              :disabled="saving"
+              :class="
+                activePresetId === preset.id
+                  ? 'text-cyan-300'
+                  : 'text-zinc-200'
+              "
+              class="min-w-0 flex-1 text-left disabled:opacity-40"
+            >
+              <span class="block truncate text-xs font-semibold text-zinc-200">{{
+                preset.name
+              }}</span>
+              <span class="mt-0.5 block text-[10px] uppercase text-zinc-600">
+                {{ activePresetId === preset.id ? 'editing · ' : '' }}{{
+                  Object.keys(preset.weights).length
+                }}
+                weights
+              </span>
+            </button>
+            <button
+              @click="void deletePreset(preset)"
+              :disabled="saving"
+              title="Delete preset"
+              class="rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <p v-else class="mt-3 text-[10px] text-zinc-600">No custom presets saved yet.</p>
       </section>
 
       <div class="auto-director-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(430px,520px)_minmax(0,1fr)]">
@@ -419,7 +576,7 @@ const healthClass = (state: string) =>
                 </div>
                 <button
                   v-if="status.settings.minimumDwellOverrideMs !== null"
-                  @click="updateSettings({ minimumDwellOverrideMs: null })"
+                  @click="setMinimumDwell(null)"
                   class="text-[10px] text-zinc-500 hover:text-cyan-300"
                 >
                   Reset
@@ -437,9 +594,7 @@ const healthClass = (state: string) =>
                   step="100"
                   :value="effectiveDwellMs"
                   @change="
-                    updateSettings({
-                      minimumDwellOverrideMs: Number(($event.target as HTMLInputElement).value)
-                    })
+                    setMinimumDwell(Number(($event.target as HTMLInputElement).value))
                   "
                   class="mt-1 w-full accent-cyan-400"
                 />
@@ -458,9 +613,7 @@ const healthClass = (state: string) =>
                   step="100"
                   :value="status.settings.postDeathHoldMs"
                   @change="
-                    updateSettings({
-                      postDeathHoldMs: Number(($event.target as HTMLInputElement).value)
-                    })
+                    setPostDeathHold(Number(($event.target as HTMLInputElement).value))
                   "
                   class="mt-1 w-full accent-cyan-400"
                 />

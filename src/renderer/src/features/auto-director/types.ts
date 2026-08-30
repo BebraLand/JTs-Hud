@@ -1,6 +1,15 @@
 export type AutoDirectorMode = 'balanced' | 'reactive' | 'calm'
 export type CameraTransport = 'telnet' | 'keyboard'
 
+export interface AutoDirectorPreset {
+  id: string
+  name: string
+  mode: AutoDirectorMode
+  weights: Record<string, number>
+  minimumDwellOverrideMs: number | null
+  postDeathHoldMs: number
+}
+
 export interface ScoreFactor {
   key: string
   label: string
@@ -84,6 +93,7 @@ export interface AutoDirectorSettings {
   }
   minimumDwellOverrideMs: number | null
   postDeathHoldMs: number
+  customPresets: AutoDirectorPreset[]
   scoringIntervalMs: number
   manualOverrideSteamId: string | null
   customWeights: Record<string, number>

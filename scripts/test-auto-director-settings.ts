@@ -11,6 +11,7 @@ import {
 
 const main = async (): Promise<void> => {
   assert.equal(DEFAULT_AUTO_DIRECTOR_SETTINGS.autoFallback, false)
+  assert.deepEqual(DEFAULT_AUTO_DIRECTOR_SETTINGS.customPresets, [])
   assert.deepEqual(resolveTelnetSettings({}), DEFAULT_TELNET_SETTINGS)
   assert.deepEqual(resolveTelnetSettings({ telnetHost: '10.0.0.5', telnetPort: '31337' }), {
     host: '10.0.0.5',
@@ -47,6 +48,25 @@ const main = async (): Promise<void> => {
   assert.equal(committed.enabled, true)
   assert.equal(committed.manualOverrideSteamId, '76561198000000000')
   assert.equal(current.enabled, false)
+
+  const preset = {
+    id: 'aggressive-entry',
+    name: 'Aggressive Entry',
+    mode: 'reactive' as const,
+    weights: { combat: 80, entry: 70 },
+    minimumDwellOverrideMs: 1500,
+    postDeathHoldMs: 1000
+  }
+  let persistedPresets: unknown
+  const presetSettings = await persistSettingsCandidate(
+    current,
+    { customPresets: [preset] },
+    async (candidate) => {
+      persistedPresets = candidate.customPresets
+    }
+  )
+  assert.deepEqual(persistedPresets, [preset])
+  assert.deepEqual(presetSettings.customPresets, [preset])
 
   assert.deepEqual(
     sanitizeAerialPresentationPhases(

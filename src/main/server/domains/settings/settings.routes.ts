@@ -10,6 +10,7 @@ const router = Router()
 export interface AppSettings {
   autoSwitchSides: boolean
   autoRefreshHuds: boolean
+  developerTestingEnabled: boolean
   telnetHost: string
   telnetPort: number
   matEnabled: boolean
@@ -27,6 +28,7 @@ export interface AppSettings {
 const DEFAULT_SETTINGS: AppSettings = {
   autoSwitchSides: true,
   autoRefreshHuds: true,
+  developerTestingEnabled: false,
   telnetHost: '127.0.0.1',
   telnetPort: 2020,
   matEnabled: false,
@@ -55,6 +57,10 @@ export const getSettings = async (): Promise<AppSettings> => {
       map.autoRefreshHuds !== undefined
         ? map.autoRefreshHuds === 'true'
         : DEFAULT_SETTINGS.autoRefreshHuds,
+    developerTestingEnabled:
+      map.developerTestingEnabled !== undefined
+        ? map.developerTestingEnabled === 'true'
+        : DEFAULT_SETTINGS.developerTestingEnabled,
     telnetHost: telnet.host,
     telnetPort: telnet.port,
     matEnabled: map.matEnabled === 'true',
@@ -150,10 +156,17 @@ router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
     const localKeys = new Set([
       'autoSwitchSides',
       'autoRefreshHuds',
+      'developerTestingEnabled',
       'telnetHost',
       'telnetPort',
       'tournamentIntegrationPriority'
     ])
+    if (
+      updates.developerTestingEnabled !== undefined &&
+      typeof updates.developerTestingEnabled !== 'boolean'
+    ) {
+      return res.status(400).json({ error: 'Developer/testing setting must be a boolean' })
+    }
     if (
       updates.telnetHost !== undefined &&
       (typeof updates.telnetHost !== 'string' || !updates.telnetHost.trim())

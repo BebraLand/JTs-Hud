@@ -5,7 +5,7 @@ import { sendTelnetCommands } from '../../../camera/telnet'
 import { simulateObserverSlotKey } from '../../../camera/keySimulation'
 import { dbGet, dbRun } from '../../database/sqlite'
 import { getTelnetSettings } from '../settings/telnetSettings.repository'
-import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from './autoDirector.config'
+import { AUTO_DIRECTOR_PROFILES, DEFAULT_AUTO_DIRECTOR_SETTINGS } from './autoDirector.config'
 import {
   AutoDirectorEngine,
   normalizePlayers,
@@ -33,6 +33,7 @@ import {
 import { computeCameraDebugStatus, emptyCameraDebugStatus } from './cameraDebug'
 import type {
   AutoDirectorSettings,
+  AutoDirectorPreset,
   AutoDirectorStatus,
   CameraTransport,
   DirectorPlayer,
@@ -46,6 +47,55 @@ const AERIAL_MIN_CONFIRMATIONS = 2
 const AERIAL_MAX_HOLD_MS = 6000
 const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
+const MAX_CUSTOM_PRESETS = 20
+const MAX_PRESET_NAME_LENGTH = 40
+
+const sanitizePreset = (input: unknown): AutoDirectorPreset => {
+  if (!input || typeof input !== 'object') throw new Error('Invalid custom preset')
+  const candidate = input as Record<string, unknown>
+  const id = typeof candidate.id === 'string' ? candidate.id.trim() : ''
+  const name = typeof candidate.name === 'string' ? candidate.name.trim() : ''
+  const mode = candidate.mode
+  if (!id || id.length > 80) throw new Error('Custom preset id is invalid')
+  if (!name || name.length > MAX_PRESET_NAME_LENGTH) {
+    throw new Error(`Preset name must be 1-${MAX_PRESET_NAME_LENGTH} characters`)
+  }
+  if (!['balanced', 'reactive', 'calm'].includes(String(mode))) {
+    throw new Error('Custom preset mode is invalid')
+  }
+  if (!candidate.weights || typeof candidate.weights !== 'object') {
+    throw new Error('Custom preset weights are invalid')
+  }
+  const weights = Object.fromEntries(
+    Object.entries(candidate.weights)
+      .filter(([key]) => key in AUTO_DIRECTOR_PROFILES.balanced.weights)
+      .map(([key, value]) => [key, Number(value)] as const)
+      .filter(([, value]) => Number.isFinite(value) && value >= 0 && value <= 200)
+  )
+  const minimumDwellOverrideMs =
+    candidate.minimumDwellOverrideMs === null ? null : Number(candidate.minimumDwellOverrideMs)
+  const postDeathHoldMs = Number(candidate.postDeathHoldMs)
+  if (
+    (minimumDwellOverrideMs !== null &&
+      (!Number.isFinite(minimumDwellOverrideMs) ||
+        minimumDwellOverrideMs < 0 ||
+        minimumDwellOverrideMs > 5000)) ||
+    !Number.isFinite(postDeathHoldMs) ||
+    postDeathHoldMs < 0 ||
+    postDeathHoldMs > 2000
+  ) {
+    throw new Error('Custom preset timing is invalid')
+  }
+  return {
+    id,
+    name,
+    mode: mode as AutoDirectorPreset['mode'],
+    weights,
+    minimumDwellOverrideMs:
+      minimumDwellOverrideMs === null ? null : Math.round(minimumDwellOverrideMs),
+    postDeathHoldMs: Math.round(postDeathHoldMs)
+  }
+}
 
 const sanitizeSettings = (
   input: Partial<AutoDirectorSettings>,
@@ -89,6 +139,19 @@ const sanitizeSettings = (
       throw new Error('Post-death hold must be 0-2000 ms')
     }
     output.postDeathHoldMs = Math.round(hold)
+  }
+  if (input.customPresets !== undefined) {
+    if (!Array.isArray(input.customPresets) || input.customPresets.length > MAX_CUSTOM_PRESETS) {
+      throw new Error(`You can save up to ${MAX_CUSTOM_PRESETS} custom presets`)
+    }
+    const presets = input.customPresets.map(sanitizePreset)
+    const names = new Set<string>()
+    for (const preset of presets) {
+      const name = preset.name.toLowerCase()
+      if (names.has(name)) throw new Error('Custom preset names must be unique')
+      names.add(name)
+    }
+    output.customPresets = presets
   }
   if (input.scoringIntervalMs !== undefined) {
     const interval = Number(input.scoringIntervalMs)

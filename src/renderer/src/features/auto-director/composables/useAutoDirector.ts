@@ -21,6 +21,7 @@ const emptyStatus = (): AutoDirectorStatus => ({
     },
     minimumDwellOverrideMs: null,
     postDeathHoldMs: 1000,
+    customPresets: [],
     scoringIntervalMs: 100,
     manualOverrideSteamId: null,
     customWeights: {}
