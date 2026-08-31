@@ -24,9 +24,6 @@ export class PlayerService {
   async getPlayerAvatar(steamid: string) {
     const matPlayer = matIntegrationService.getPlayerBySteamId(steamid)
     if (matPlayer?.avatar) return { custom: matPlayer.avatar, steam: matPlayer.avatar }
-
-    const matAvatar = await matIntegrationService.getBroadcastPlayerAvatar(steamid)
-    if (matAvatar) return { custom: matAvatar, steam: matAvatar }
     if (matPlayer) return { custom: '', steam: '' }
 
     const player = await this.repo.getPlayerBySteamId(steamid)

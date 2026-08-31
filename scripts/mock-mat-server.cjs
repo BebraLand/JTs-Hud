@@ -107,10 +107,6 @@ http
       res.writeHead(200, { 'content-type': 'application/json' })
       return res.end(JSON.stringify(projection))
     }
-    if (req.url?.startsWith('/broadcast-assets/players/')) {
-      res.writeHead(200, { 'content-type': 'image/png' })
-      return res.end('fixture-player-image')
-    }
     res.writeHead(404)
     res.end()
   })
