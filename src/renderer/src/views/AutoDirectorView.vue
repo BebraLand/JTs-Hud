@@ -109,6 +109,9 @@ const effectiveDwellMs = computed(
     status.value.settings.minimumDwellOverrideMs ?? profileDwellDefaults[status.value.settings.mode]
 )
 
+const weightDrafts = ref<Record<string, number>>({})
+const dwellDraft = ref<number | null>(null)
+const postDeathHoldDraft = ref<number | null>(null)
 const activePresetId = ref<string | null>(null)
 
 const effectiveWeights = computed(() =>
@@ -136,6 +139,9 @@ const createPreset = async () => {
 
 const applyPreset = async (preset: AutoDirectorPreset) => {
   activePresetId.value = preset.id
+  weightDrafts.value = {}
+  dwellDraft.value = null
+  postDeathHoldDraft.value = null
   await updateSettings({
     mode: preset.mode,
     customWeights: { ...preset.weights },
@@ -154,6 +160,9 @@ const deletePreset = async (preset: AutoDirectorPreset) => {
 
 const selectMode = (mode: AutoDirectorMode) => {
   activePresetId.value = null
+  weightDrafts.value = {}
+  dwellDraft.value = null
+  postDeathHoldDraft.value = null
   void updateSettings({
     mode,
     customWeights: {},
@@ -163,13 +172,12 @@ const selectMode = (mode: AutoDirectorMode) => {
 }
 
 const updateActivePreset = (patch: Partial<AutoDirectorPreset>) => {
-  const preset = status.value.settings.customPresets.find(
-    ({ id }) => id === activePresetId.value
-  )
+  const preset = status.value.settings.customPresets.find(({ id }) => id === activePresetId.value)
   return preset ? presetSettings(preset, patch) : status.value.settings.customPresets
 }
 
 const setWeight = (key: string, value: number) => {
+  weightDrafts.value[key] = value
   const customWeights = { ...status.value.settings.customWeights, [key]: value }
   void updateSettings({
     customWeights,
@@ -177,9 +185,24 @@ const setWeight = (key: string, value: number) => {
       weights: { ...effectiveWeights.value, [key]: value }
     })
   })
+    .then(() => {
+      if (weightDrafts.value[key] === value) {
+        const next = { ...weightDrafts.value }
+        delete next[key]
+        weightDrafts.value = next
+      }
+    })
+    .catch(() => undefined)
 }
 
-const resetWeights = () =>
+const setWeightDraft = (key: string, value: number) => {
+  weightDrafts.value[key] = value
+}
+
+const displayWeight = (key: string) => weightDrafts.value[key] ?? effectiveWeight(key)
+
+const resetWeights = () => {
+  weightDrafts.value = {}
   void updateSettings({
     customWeights: {},
     customPresets: updateActivePreset({
@@ -188,18 +211,42 @@ const resetWeights = () =>
       )
     })
   })
+}
 
 const setMinimumDwell = (value: number | null) =>
-  void updateSettings({
+  updateSettings({
     minimumDwellOverrideMs: value,
     customPresets: updateActivePreset({ minimumDwellOverrideMs: value })
   })
 
+const commitMinimumDwell = (value: number) => {
+  dwellDraft.value = value
+  void setMinimumDwell(value)
+    .then(() => {
+      if (dwellDraft.value === value) dwellDraft.value = null
+    })
+    .catch(() => undefined)
+}
+
+const resetMinimumDwell = () => {
+  dwellDraft.value = null
+  void setMinimumDwell(null).catch(() => undefined)
+}
+
 const setPostDeathHold = (value: number) =>
-  void updateSettings({
+  updateSettings({
     postDeathHoldMs: value,
     customPresets: updateActivePreset({ postDeathHoldMs: value })
   })
+
+const commitPostDeathHold = (value: number) => {
+  postDeathHoldDraft.value = value
+  void setPostDeathHold(value)
+    .then(() => {
+      if (postDeathHoldDraft.value === value) postDeathHoldDraft.value = null
+    })
+    .catch(() => undefined)
+}
 
 const setAerialPhase = (phase: 'freezeTime' | 'midRound' | 'roundEnd', enabled: boolean) =>
   void updateSettings({
@@ -244,34 +291,14 @@ const healthClass = (state: string) =>
 </script>
 
 <template>
-  <div class="auto-director-page flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0b0b11] p-4 text-zinc-100 xl:p-5 2xl:p-6">
+  <div
+    class="auto-director-page flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-surface p-4 text-zinc-200 xl:p-5 2xl:p-6"
+  >
     <header class="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3">
       <div>
-        <div class="flex items-center gap-3">
-          <div
-            class="size-10 rounded-xl border border-cyan-400/30 bg-cyan-400/10 grid place-items-center text-cyan-300"
-          >
-            <svg
-              class="size-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
-              <path d="M12 2v2M12 20v2M2 12h2M20 12h2" />
-            </svg>
-          </div>
-          <div>
-            <p class="text-[11px] uppercase tracking-[0.28em] text-cyan-400 font-semibold">
-              BebraLand Broadcast Intelligence
-            </p>
-            <h1 class="text-2xl font-bold tracking-tight">Auto Director</h1>
-          </div>
-        </div>
-        <p class="mt-1 text-xs text-zinc-500">
-          Explainable first-person observer control. Telnet is the primary camera transport.
+        <h1 class="text-2xl font-bold tracking-tight text-text-main">Auto Director</h1>
+        <p class="mt-1 text-sm text-zinc-400">
+          Configure and monitor automatic observer camera control.
         </p>
       </div>
 
@@ -301,19 +328,21 @@ const healthClass = (state: string) =>
 
     <div
       v-if="error"
-      class="mb-3 shrink-0 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-300"
+      class="mb-4 rounded-lg border border-red-900/50 bg-red-900/20 px-4 py-2 text-xs text-red-300"
     >
       {{ error }}
     </div>
     <div
       v-if="loading"
-      class="min-h-0 flex-1 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8 text-center text-zinc-500"
+      class="rounded-xl border border-zinc-700 bg-zinc-800 p-8 text-center text-zinc-400"
     >
       Loading auto-director service…
     </div>
 
     <template v-else>
-      <section class="auto-director-control-strip mb-3 min-w-0 shrink-0 grid gap-2 lg:grid-cols-[1fr_auto]">
+      <section
+        class="auto-director-control-strip mb-3 min-w-0 shrink-0 grid gap-2 lg:grid-cols-[1fr_auto]"
+      >
         <div class="grid gap-2 sm:grid-cols-3">
           <button
             v-for="mode in modes"
@@ -324,7 +353,7 @@ const healthClass = (state: string) =>
                 ? 'border-cyan-400/60 bg-cyan-400/10 text-white'
                 : 'border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:border-zinc-700'
             "
-            class="rounded-xl border px-4 py-3 text-left transition-colors"
+            class="rounded-lg border px-4 py-3 text-left transition-colors"
           >
             <span class="block text-sm font-semibold">{{ mode.label }}</span>
             <span class="mt-0.5 block text-xs text-zinc-500">{{ mode.detail }}</span>
@@ -334,7 +363,7 @@ const healthClass = (state: string) =>
           <button
             @click="updateSettings({ paused: !status.settings.paused })"
             :disabled="saving || !status.settings.enabled"
-            class="rounded-xl border border-zinc-700 bg-zinc-900 px-5 text-sm font-semibold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+            class="rounded-lg border border-zinc-700 bg-zinc-900 px-5 text-sm font-semibold text-zinc-300 hover:bg-zinc-700 disabled:opacity-40"
           >
             {{ status.settings.paused ? 'Resume' : 'Pause' }}
           </button>
@@ -346,7 +375,7 @@ const healthClass = (state: string) =>
                 ? 'border-red-500/40 bg-red-500/10 text-red-300'
                 : 'border-cyan-400/50 bg-cyan-400 text-zinc-950'
             "
-            class="rounded-xl border px-5 text-sm font-bold transition-colors disabled:opacity-50"
+            class="rounded-lg border px-5 text-sm font-bold transition-colors disabled:opacity-50"
           >
             {{ status.settings.enabled ? 'Disable' : 'Enable Director' }}
           </button>
@@ -355,7 +384,7 @@ const healthClass = (state: string) =>
 
       <section
         v-if="appSettings.developerTestingEnabled"
-        class="mb-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3"
+        class="mb-4 rounded-xl border border-zinc-700 bg-zinc-800 p-4"
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -391,20 +420,15 @@ const healthClass = (state: string) =>
             <button
               @click="void applyPreset(preset)"
               :disabled="saving"
-              :class="
-                activePresetId === preset.id
-                  ? 'text-cyan-300'
-                  : 'text-zinc-200'
-              "
+              :class="activePresetId === preset.id ? 'text-cyan-300' : 'text-zinc-200'"
               class="min-w-0 flex-1 text-left disabled:opacity-40"
             >
               <span class="block truncate text-xs font-semibold text-zinc-200">{{
                 preset.name
               }}</span>
               <span class="mt-0.5 block text-[10px] uppercase text-zinc-600">
-                {{ activePresetId === preset.id ? 'editing · ' : '' }}{{
-                  Object.keys(preset.weights).length
-                }}
+                {{ activePresetId === preset.id ? 'editing · ' : ''
+                }}{{ Object.keys(preset.weights).length }}
                 weights
               </span>
             </button>
@@ -421,16 +445,29 @@ const healthClass = (state: string) =>
         <p v-else class="mt-3 text-[10px] text-zinc-600">No custom presets saved yet.</p>
       </section>
 
-      <div class="auto-director-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(430px,520px)_minmax(0,1fr)]">
+      <div
+        class="auto-director-layout min-h-0 min-w-0 flex-1 grid gap-3 2xl:grid-cols-[minmax(430px,520px)_minmax(0,1fr)]"
+      >
         <aside class="auto-director-settings min-w-0 space-y-3 2xl:overflow-y-auto 2xl:pr-1">
           <section
-            class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 shadow-2xl shadow-black/20"
+            class="auto-director-focus-panel rounded-xl border border-zinc-700 bg-zinc-800 p-3"
           >
-            <div class="mb-3 flex items-center justify-between">
+            <div class="mb-3 flex min-h-5 items-center justify-between gap-2">
               <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
                 Broadcast Focus
               </h2>
-              <span class="text-[11px] text-zinc-600">{{ formatTime(status.decision?.at) }}</span>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="status.settings.manualOverrideSteamId"
+                  type="button"
+                  :disabled="saving"
+                  class="h-5 rounded border border-amber-500/30 bg-amber-500/10 px-2 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  @click="forcePlayer(null)"
+                >
+                  Release
+                </button>
+                <span class="text-[11px] text-zinc-600">{{ formatTime(status.decision?.at) }}</span>
+              </div>
             </div>
 
             <div
@@ -458,9 +495,11 @@ const healthClass = (state: string) =>
             </div>
 
             <div class="mt-3 space-y-2 text-xs">
-              <div class="rounded-xl border border-zinc-800 bg-black/20 p-2">
+              <div
+                class="auto-director-decision-card min-h-[62px] rounded-xl border border-zinc-800 bg-black/20 p-2"
+              >
                 <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">Decision</p>
-                <p class="mt-1 text-zinc-200">
+                <p class="mt-1 min-h-8 line-clamp-2 text-zinc-200">
                   {{ status.decision?.reason ?? 'Waiting for complete GSI player data' }}
                 </p>
               </div>
@@ -470,6 +509,9 @@ const healthClass = (state: string) =>
                     Next candidate
                   </p>
                   <p class="mt-1 font-semibold text-zinc-200">{{ candidate?.name ?? 'None' }}</p>
+                  <p class="min-h-4 text-[11px] text-zinc-500">
+                    {{ candidate ? `score ${candidate.total.toFixed(1)}` : 'No candidate queued' }}
+                  </p>
                 </div>
                 <div class="rounded-xl border border-zinc-800 bg-black/20 p-2">
                   <p class="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
@@ -478,8 +520,12 @@ const healthClass = (state: string) =>
                   <p class="mt-1 font-semibold text-zinc-200">
                     {{ status.decision?.lockKind ?? 'none' }}
                   </p>
-                  <p v-if="lockRemaining" class="text-[11px] text-zinc-500">
-                    {{ (lockRemaining / 1000).toFixed(1) }}s remaining
+                  <p class="min-h-4 text-[11px] text-zinc-500">
+                    {{
+                      lockRemaining
+                        ? `${(lockRemaining / 1000).toFixed(1)}s remaining`
+                        : 'No active lock'
+                    }}
                   </p>
                 </div>
               </div>
@@ -491,7 +537,7 @@ const healthClass = (state: string) =>
                   <p class="mt-1 truncate font-semibold text-zinc-200">
                     {{ status.decision?.dominantSceneKey ?? 'none' }}
                   </p>
-                  <p class="text-[11px] text-zinc-500">
+                  <p class="min-h-8 line-clamp-2 text-[11px] text-zinc-500">
                     score {{ status.decision?.dominantSceneScore?.toFixed(1) ?? '0.0' }} ·
                     {{ status.decision?.dominantScenePhase ?? 'forming' }} ·
                     {{ Math.round((status.decision?.dominantSceneConfidence ?? 0) * 100) }}%
@@ -505,7 +551,7 @@ const healthClass = (state: string) =>
                   <p class="mt-1 truncate font-semibold text-zinc-200">
                     {{ status.decision?.currentSceneKey ?? 'none' }}
                   </p>
-                  <p class="text-[11px] text-zinc-500">
+                  <p class="min-h-8 line-clamp-2 text-[11px] text-zinc-500">
                     score {{ status.decision?.currentSceneScore?.toFixed(1) ?? '0.0' }} ·
                     {{ status.decision?.currentScenePhase ?? 'none' }} ·
                     {{ Math.round((status.decision?.currentSceneConfidence ?? 0) * 100) }}%
@@ -513,7 +559,9 @@ const healthClass = (state: string) =>
                   </p>
                 </div>
               </div>
-              <div class="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-2">
+              <div
+                class="auto-director-threat-card mt-2 min-h-[116px] rounded-xl border border-amber-500/20 bg-amber-500/5 p-2"
+              >
                 <p class="text-[10px] font-bold uppercase tracking-wider text-amber-300">
                   Threat POV
                 </p>
@@ -526,7 +574,7 @@ const healthClass = (state: string) =>
                         : 'No dominant threat view'
                   }}
                 </p>
-                <p class="text-[11px] text-zinc-500">
+                <p class="min-h-8 line-clamp-2 text-[11px] text-zinc-500">
                   {{ current?.threatSceneEnemiesInViewCone ?? 0 }} /
                   {{ current?.threatSceneTargetCount ?? 0 }} targets in cone ·
                   {{ Math.round((current?.threatSceneCoverage ?? 0) * 100) }}% direction ·
@@ -536,7 +584,7 @@ const healthClass = (state: string) =>
                   · entry {{ Math.round((current?.routeEntryRelevance ?? 0) * 100) }}% · incoming
                   {{ Math.round((current?.incomingGroupPressure ?? 0) * 100) }}%
                 </p>
-                <p class="mt-1 text-[11px] text-zinc-600">
+                <p class="mt-1 min-h-8 line-clamp-2 text-[11px] text-zinc-600">
                   {{ current?.topologyPlantSite ?? 'route' }} ·
                   {{ current?.topologyCallout ?? 'unknown area' }} ·
                   {{ current?.topologyRoutePortalChokepoint ? 'chokepoint' : 'portal' }}
@@ -551,17 +599,11 @@ const healthClass = (state: string) =>
                 </p>
               </div>
             </div>
-
-            <button
-              v-if="status.settings.manualOverrideSteamId"
-              @click="forcePlayer(null)"
-              class="mt-4 w-full rounded-lg border border-amber-500/30 bg-amber-500/10 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/15"
-            >
-              Release manual override
-            </button>
           </section>
 
-          <section class="min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+          <section
+            class="auto-director-transport-panel rounded-xl border border-zinc-700 bg-zinc-800 p-3"
+          >
             <h2 class="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
               Camera Transport
             </h2>
@@ -576,7 +618,7 @@ const healthClass = (state: string) =>
                 </div>
                 <button
                   v-if="status.settings.minimumDwellOverrideMs !== null"
-                  @click="setMinimumDwell(null)"
+                  @click="resetMinimumDwell"
                   class="text-[10px] text-zinc-500 hover:text-cyan-300"
                 >
                   Reset
@@ -585,17 +627,18 @@ const healthClass = (state: string) =>
               <label class="mt-3 block text-[10px] text-zinc-400">
                 <span class="flex justify-between">
                   <span>Minimum time on current POV</span>
-                  <strong class="text-cyan-300">{{ (effectiveDwellMs / 1000).toFixed(2) }}s</strong>
+                  <strong class="text-cyan-300"
+                    >{{ ((dwellDraft ?? effectiveDwellMs) / 1000).toFixed(2) }}s</strong
+                  >
                 </span>
                 <input
                   type="range"
                   min="0"
                   max="5000"
                   step="100"
-                  :value="effectiveDwellMs"
-                  @change="
-                    setMinimumDwell(Number(($event.target as HTMLInputElement).value))
-                  "
+                  :value="dwellDraft ?? effectiveDwellMs"
+                  @input="dwellDraft = Number(($event.target as HTMLInputElement).value)"
+                  @change="commitMinimumDwell(Number(($event.target as HTMLInputElement).value))"
                   class="mt-1 w-full accent-cyan-400"
                 />
               </label>
@@ -603,7 +646,9 @@ const healthClass = (state: string) =>
                 <span class="flex justify-between">
                   <span>Hold POV after player death</span>
                   <strong class="text-cyan-300"
-                    >{{ (status.settings.postDeathHoldMs / 1000).toFixed(2) }}s</strong
+                    >{{
+                      ((postDeathHoldDraft ?? status.settings.postDeathHoldMs) / 1000).toFixed(2)
+                    }}s</strong
                   >
                 </span>
                 <input
@@ -611,10 +656,9 @@ const healthClass = (state: string) =>
                   min="0"
                   max="2000"
                   step="100"
-                  :value="status.settings.postDeathHoldMs"
-                  @change="
-                    setPostDeathHold(Number(($event.target as HTMLInputElement).value))
-                  "
+                  :value="postDeathHoldDraft ?? status.settings.postDeathHoldMs"
+                  @input="postDeathHoldDraft = Number(($event.target as HTMLInputElement).value)"
+                  @change="commitPostDeathHold(Number(($event.target as HTMLInputElement).value))"
                   class="mt-1 w-full accent-cyan-400"
                 />
               </label>
@@ -727,12 +771,7 @@ const healthClass = (state: string) =>
                     type="checkbox"
                     :checked="status.settings.aerialPresentationPhases[phase[0]]"
                     :disabled="!status.settings.aerialPresentationEnabled"
-                    @change="
-                      setAerialPhase(
-                        phase[0],
-                        ($event.target as HTMLInputElement).checked
-                      )
-                    "
+                    @change="setAerialPhase(phase[0], ($event.target as HTMLInputElement).checked)"
                     class="mt-0.5 accent-sky-400"
                   />
                   <span>
@@ -751,9 +790,12 @@ const healthClass = (state: string) =>
                 </p>
                 <p class="mt-1 text-zinc-500">{{ status.aerial.message }}</p>
                 <p class="mt-1 text-zinc-400">{{ status.aerial.reason }}</p>
-                <p v-if="status.aerial.activeAnchorLabel" class="mt-1 text-sky-300">
-                  LIVE: {{ status.aerial.activeAnchorLabel }} · visible
-                  {{ status.aerial.visibleSteamIds.length }} players
+                <p class="mt-1 min-h-4 text-sky-300">
+                  {{
+                    status.aerial.activeAnchorLabel
+                      ? `LIVE: ${status.aerial.activeAnchorLabel} · visible ${status.aerial.visibleSteamIds.length} players`
+                      : 'No active Aerial anchor'
+                  }}
                 </p>
               </div>
             </div>
@@ -818,20 +860,25 @@ const healthClass = (state: string) =>
               </button>
             </div>
             <div
-              v-if="status.lastCommand"
               :class="
-                status.lastCommand.ok
-                  ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/5'
-                  : 'text-red-300 border-red-500/20 bg-red-500/5'
+                status.lastCommand
+                  ? status.lastCommand.ok
+                    ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/5'
+                    : 'text-red-300 border-red-500/20 bg-red-500/5'
+                  : 'invisible border-transparent bg-transparent'
               "
-              class="mt-3 rounded-lg border p-3 text-xs"
+              class="mt-3 h-[42px] overflow-hidden rounded-lg border p-3 text-xs line-clamp-2"
             >
-              <span class="font-bold uppercase">{{ status.lastCommand.transport }}</span
-              >: {{ status.lastCommand.message }}
+              <template v-if="status.lastCommand">
+                <span class="font-bold uppercase">{{ status.lastCommand.transport }}</span
+                >: {{ status.lastCommand.message }}
+              </template>
             </div>
           </section>
 
-          <section class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+          <section
+            class="auto-director-weights-panel rounded-xl border border-zinc-700 bg-zinc-800 p-3"
+          >
             <div class="mb-2 flex items-center justify-between">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
@@ -847,14 +894,15 @@ const healthClass = (state: string) =>
               <label v-for="[key, label] in weightDefinitions" :key="key" class="block">
                 <span class="flex justify-between text-[11px] text-zinc-500"
                   ><span>{{ label }}</span
-                  ><strong class="text-zinc-300">{{ effectiveWeight(key) }}</strong></span
+                  ><strong class="text-zinc-300">{{ displayWeight(key) }}</strong></span
                 >
                 <input
                   type="range"
                   min="0"
                   max="100"
                   step="1"
-                  :value="effectiveWeight(key)"
+                  :value="displayWeight(key)"
+                  @input="setWeightDraft(key, Number(($event.target as HTMLInputElement).value))"
                   @change="setWeight(key, Number(($event.target as HTMLInputElement).value))"
                   class="mt-1 w-full accent-cyan-400"
                 />
@@ -863,8 +911,12 @@ const healthClass = (state: string) =>
           </section>
         </aside>
 
-        <main class="auto-director-main min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_150px] gap-3 overflow-hidden">
-          <section class="auto-director-player-board min-h-0 flex flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+        <main
+          class="auto-director-main min-h-0 min-w-0 grid grid-rows-[minmax(0,1fr)_150px] gap-3 overflow-hidden"
+        >
+          <section
+            class="auto-director-player-board min-h-0 flex flex-col overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800 p-3"
+          >
             <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
@@ -886,7 +938,10 @@ const healthClass = (state: string) =>
             >
               Start CS2 or replay a GSI fixture to populate the board.
             </div>
-            <div v-else class="auto-director-player-list grid min-h-0 min-w-0 grid-cols-1 gap-2 overflow-y-auto pr-1">
+            <div
+              v-else
+              class="auto-director-player-list grid min-h-0 min-w-0 grid-cols-1 gap-2 overflow-y-auto pr-1"
+            >
               <article
                 v-for="(player, index) in players"
                 :key="player.steamId"
@@ -898,9 +953,7 @@ const healthClass = (state: string) =>
                 ]"
                 class="auto-director-player-card rounded-xl border p-2 transition-colors"
               >
-                <div
-                  class="auto-director-player-row grid items-center gap-3"
-                >
+                <div class="auto-director-player-row grid items-center gap-3">
                   <div
                     class="grid size-7 place-items-center rounded-lg bg-zinc-800 text-xs font-bold text-zinc-400"
                   >
@@ -994,7 +1047,9 @@ const healthClass = (state: string) =>
           </section>
 
           <section class="auto-director-bottom min-h-0 overflow-hidden">
-            <div class="min-h-0 h-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+            <div
+              class="min-h-0 h-full overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800 p-3"
+            >
               <h2 class="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
                 Decision History
               </h2>
@@ -1048,6 +1103,13 @@ const healthClass = (state: string) =>
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.auto-director-settings,
+.auto-director-player-list,
+.auto-director-history {
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
 }
 
 /* Compact mode is preserved for a tall/fullscreen viewport. A short window
