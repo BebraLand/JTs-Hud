@@ -38,24 +38,25 @@ export interface ChallongeStatus {
   currentStage: string | null
 }
 
+const settings = ref<AppSettings>({
+  autoSwitchSides: true,
+  autoRefreshHuds: true,
+  developerTestingEnabled: false,
+  telnetHost: '127.0.0.1',
+  telnetPort: 2020,
+  matEnabled: false,
+  matUrl: '',
+  matTokenConfigured: false,
+  matPollIntervalSeconds: 5,
+  matUseSteamAvatars: false,
+  challongeEnabled: false,
+  challongeTournament: '',
+  challongeSourceConfigured: false,
+  challongePollIntervalSeconds: 10,
+  tournamentIntegrationPriority: 'challonge'
+})
+
 export function useSettings() {
-  const settings = ref<AppSettings>({
-    autoSwitchSides: true,
-    autoRefreshHuds: true,
-    developerTestingEnabled: false,
-    telnetHost: '127.0.0.1',
-    telnetPort: 2020,
-    matEnabled: false,
-    matUrl: '',
-    matTokenConfigured: false,
-    matPollIntervalSeconds: 5,
-    matUseSteamAvatars: false,
-    challongeEnabled: false,
-    challongeTournament: '',
-    challongeSourceConfigured: false,
-    challongePollIntervalSeconds: 10,
-    tournamentIntegrationPriority: 'challonge'
-  })
   const matStatus = ref<MatStatus | null>(null)
   const challongeStatus = ref<ChallongeStatus | null>(null)
   const error = ref('')
