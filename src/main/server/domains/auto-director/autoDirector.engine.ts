@@ -143,6 +143,8 @@ export class AutoDirectorEngine {
   private trackedSceneMembers = new Set<string>()
   private routeEntryStreaks = new Map<string, number>()
   private actionableRouteStreaks = new Map<string, number>()
+  private predictiveCandidateSteamId: string | null = null
+  private predictiveCandidateStreak = 0
 
   confirmSwitch(steamId: string, at: number): void {
     this.currentSteamId = steamId
@@ -166,6 +168,8 @@ export class AutoDirectorEngine {
     this.trackedSceneMembers.clear()
     this.routeEntryStreaks.clear()
     this.actionableRouteStreaks.clear()
+    this.predictiveCandidateSteamId = null
+    this.predictiveCandidateStreak = 0
   }
 
   private trackScene(analysis: SceneAnalysis): SceneSummary | null {
@@ -828,7 +832,19 @@ export class AutoDirectorEngine {
         !currentScore.nearestEnemyHasPeekPotential
       const mlValue = (score: PlayerScore): number =>
         score.factors.find((factor) => factor.key === 'mlAdvisory')?.value ?? 0
-      const predictiveTransition = mlValue(best) >= 6 && mlValue(best) >= mlValue(currentScore) + 4
+      const rawPredictiveTransition =
+        mlValue(best) >= 4 && mlValue(best) >= mlValue(currentScore) + 2
+      if (rawPredictiveTransition) {
+        this.predictiveCandidateStreak =
+          this.predictiveCandidateSteamId === best.steamId
+            ? this.predictiveCandidateStreak + 1
+            : 1
+        this.predictiveCandidateSteamId = best.steamId
+      } else {
+        this.predictiveCandidateSteamId = null
+        this.predictiveCandidateStreak = 0
+      }
+      const predictiveTransition = rawPredictiveTransition && this.predictiveCandidateStreak >= 2
       const predictiveDwellReleased =
         at >= this.switchedAt + Math.min(900, Math.round(profile.minDwellMs * 0.4))
 

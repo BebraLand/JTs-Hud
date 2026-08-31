@@ -4,6 +4,7 @@ import {
   AutoDirectorEngine,
   normalizePlayers
 } from '../src/main/server/domains/auto-director/autoDirector.engine'
+import type { ScoreAdvisory } from '../src/main/server/domains/auto-director/autoDirector.engine'
 import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from '../src/main/server/domains/auto-director/autoDirector.config'
 import {
   autoDirectorMlAdvisory,
@@ -89,13 +90,13 @@ const predictive = new LightGbmRanker({
     model: { tree_info: [{ tree_structure: { leaf_value: 2.197224577 } }] }
   }))
 })
-const predictiveAdvisory = autoDirectorMlAdvisory(predictive, [1])
-assert.ok(predictiveAdvisory.value > 15)
-assert.match(predictiveAdvisory.detail, /0\.5s 90%/)
+const predictiveAdvisoryResult = autoDirectorMlAdvisory(predictive, [1])
+assert.ok(predictiveAdvisoryResult.value > 15)
+assert.match(predictiveAdvisoryResult.detail, /0\.5s 90%/)
 
 const advised = new AutoDirectorEngine().evaluate(payload, settings, 10_000, (item, score, all) => [
   {
-    key: 'mlAdvisory',
+    key: 'mlAdvisory' as const,
     value:
       Math.tanh(
         ranker.predict(
@@ -120,13 +121,15 @@ assert.ok(
 
 const predictiveSwitchEngine = new AutoDirectorEngine()
 predictiveSwitchEngine.setCurrent('ct', 10_000)
-const predictiveSwitch = predictiveSwitchEngine.evaluate(payload, settings, 11_100, (item) => [
+const predictiveAdvisory: ScoreAdvisory = (item) => [
   {
     key: 'mlAdvisory',
     value: item.steamId === 't' ? 18 : 0,
     detail: 'synthetic future contact'
   }
-])
+]
+predictiveSwitchEngine.evaluate(payload, settings, 11_100, predictiveAdvisory)
+const predictiveSwitch = predictiveSwitchEngine.evaluate(payload, settings, 11_225, predictiveAdvisory)
 assert.equal(predictiveSwitch.shouldSwitch, true)
 assert.equal(predictiveSwitch.candidateSteamId, 't')
 assert.match(predictiveSwitch.reason, /pre-contact prediction/)

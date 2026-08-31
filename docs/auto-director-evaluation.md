@@ -78,10 +78,10 @@ The pinned corpus has 30 match-separated demos (18 train, 4 validation, 8 test).
 | Mode | Participant T-2s | Participant T-1s | Participant T-0.5s | Participant at kill | Switches/round | Thrash <1s |
 | ---- | ---------------: | ---------------: | ------------------: | ------------------: | -------------: | ----------: |
 | Balanced before | 46.6% | 52.3% | 58.7% | 66.1% | 22.92 | 607 |
-| Balanced after | **48.1%** | **57.0%** | **65.9%** | **76.8%** | 24.08 | 608 |
+| Balanced after | **49.3%** | **58.6%** | **66.8%** | **77.7%** | 24.78 | 611 |
 | Reactive before | 47.2% | 54.8% | 62.0% | 73.1% | 37.68 | 619 |
-| Reactive after | **48.1%** | **57.1%** | **67.0%** | **78.1%** | **34.30** | 799 |
+| Reactive after | **49.1%** | **58.5%** | **68.0%** | **78.3%** | **35.12** | 935 |
 | Calm before | 46.7% | 50.7% | 55.8% | 62.3% | 15.46 | 600 |
-| Calm after | **49.1%** | **56.8%** | **65.4%** | **75.1%** | 17.82 | 606 |
+| Calm after | **50.2%** | **57.5%** | **66.3%** | **75.7%** | 18.43 | 606 |
 
-The strongest end-to-end gain is early participant capture: +7.2 pp Balanced, +5.0 pp Reactive and +9.6 pp Calm at T-0.5s. The model's held-out top-1 action-group accuracy is 89.7% at 0.5s, 86.2% at 1s, 82.8% at 2s and 82.1% at 3s; camera capture is lower because dwell/lock/state-machine constraints and simultaneous fights still matter. Full corpus evaluation is parallelized by match; a future feature-cache can accelerate repeated runs without changing the exact benchmark.
+The strongest end-to-end gain is early participant capture: +8.1 pp Balanced, +6.0 pp Reactive and +10.5 pp Calm at T-0.5s. The model's held-out top-1 action-group accuracy is 89.7% at 0.5s, 86.2% at 1s, 82.8% at 2s and 82.1% at 3s; camera capture is lower because dwell/lock/state-machine constraints and simultaneous fights still matter. Full corpus evaluation is parallelized by match; a future feature-cache can accelerate repeated runs without changing the exact benchmark.
