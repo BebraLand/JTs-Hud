@@ -84,9 +84,11 @@ export const syncGSITeams = async () => {
 
 let lastGSIState: CSGORaw | null = null
 let lastGSIStateAt: string | null = null
+let lastHudState: CSGORaw | null = null
 
 export const getLastGSIState = (): CSGORaw | null => lastGSIState
 export const getLastGSIStateAt = (): string | null => lastGSIStateAt
+export const getLastHudState = (): CSGORaw | null => lastHudState
 
 // Spectator slot map
 // Populated via PUT /api/spectator/slots from the Spectator Binds page
@@ -352,6 +354,16 @@ export const setupGSI = (io: Server) => {
       matIntegrationService.setObservedSteamIds(
         req.body?.allplayers ? Object.keys(req.body.allplayers) : []
       )
+      if (req.body?.map?.name && req.body?.allplayers) {
+        const allPlayers = req.body.allplayers as Record<string, { team?: unknown }>
+        matIntegrationService.syncLiveMapSide(
+          req.body.map.name,
+          Object.entries(allPlayers).map(([steamid, player]) => ({
+            steamid,
+            side: player?.team === 'CT' || player?.team === 'T' ? player.team : undefined
+          }))
+        )
+      }
 
       // Build payload for for HUDs
       let hudPayload = req.body
@@ -390,6 +402,7 @@ export const setupGSI = (io: Server) => {
 
         hudPayload = { ...req.body, allplayers: remapped }
       }
+      lastHudState = hudPayload as CSGORaw
 
       autoDirectorService.processGsi(hudPayload)
       // Challonge only resolves the current tournament match from GSI; it never

@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
-import { mapMatch, mapPlayer, mapTeam } from '../src/main/server/integrations/mat.mapper'
+import {
+  inferReverseSide,
+  mapMatch,
+  mapPlayer,
+  mapTeam
+} from '../src/main/server/integrations/mat.mapper'
 import type { MatHudProjectionV1 } from '../src/main/server/integrations/mat.types'
 import { resolveAssetUrl } from '../src/renderer/src/utils/assetUrl'
 import { proxyAssetUrl } from '../src/main/server/utils/assetProxy'
@@ -132,6 +137,10 @@ assert.equal(cache.mapEnd, true)
 assert.deepEqual(cache.score, { 'team-a': 13, 'team-b': 8 })
 assert.equal(cache.winner, 'team-a')
 assert.equal(match.vetos.find((veto) => veto.mapName === 'de_mirage')?.type, 'decider')
+assert.equal(inferReverseSide([player], team2.players, [{ steamid: player.steamId, side: 'CT' }]), false)
+assert.equal(inferReverseSide([player], team2.players, [{ steamid: player.steamId, side: 'T' }]), true)
+assert.equal(inferReverseSide([], [player], [{ steamid: player.steamId, side: 'CT' }]), true)
+assert.equal(inferReverseSide([], [], [{ steamid: player.steamId, side: 'CT' }]), null)
 assert.equal(
   resolveAssetUrl(
     'https://mat.example/broadcast-assets/teams/team-a.webp',
