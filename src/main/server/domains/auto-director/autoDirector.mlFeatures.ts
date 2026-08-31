@@ -1,5 +1,6 @@
 import type { PlayerGeometryFeatures } from './geometry/geometryFeatures'
 import type { DirectorPlayer, PlayerScore, ScoreFactorKey } from './autoDirector.types'
+import type { TemporalPlayerFeatures } from './autoDirector.temporal'
 
 export const AUTO_DIRECTOR_ML_FEATURES = [
   'team_t',
@@ -22,6 +23,24 @@ export const AUTO_DIRECTOR_ML_FEATURES = [
   'nearest_enemy_has_peek_potential',
   'peek_potential_enemy_count',
   'best_visible_aim_alignment',
+  'speed_500',
+  'speed_1500',
+  'acceleration',
+  'enemy_closing_speed_500',
+  'aim_turn_rate_500',
+  'movement_aim_alignment',
+  'history_ms',
+  'contact_imminence',
+  'route_entry_relevance',
+  'topology_route_distance',
+  'topology_route_convergence',
+  'topology_incoming_pressure',
+  'topology_predicted_fight_ms',
+  'topology_fight_confidence',
+  'topology_portal_control',
+  'topology_crossfire',
+  'incoming_group_pressure',
+  'pov_quality',
   'factor_base',
   'factor_objective',
   'factor_combat',
@@ -52,7 +71,10 @@ const factorValue = (score: PlayerScore, key: ScoreFactorKey): number =>
   score.factors.find((factor) => factor.key === key)?.value ?? 0
 
 const weaponFeature = (player: DirectorPlayer, type: string): number =>
-  player.weaponType === type ? 1 : 0
+  player.weaponType.toLowerCase().replaceAll(/[^a-z0-9]/g, '') ===
+  type.toLowerCase().replaceAll(/[^a-z0-9]/g, '')
+    ? 1
+    : 0
 
 export const buildAutoDirectorMlFeatures = (
   player: DirectorPlayer,
@@ -60,7 +82,9 @@ export const buildAutoDirectorMlFeatures = (
   players: DirectorPlayer[],
   roundElapsedMs: number,
   geometry: PlayerGeometryFeatures | null,
-  geometryAvailable: boolean
+  geometryAvailable: boolean,
+  temporal: TemporalPlayerFeatures | null = null,
+  requestedFeatures: readonly string[] = AUTO_DIRECTOR_ML_FEATURES
 ): number[] => {
   const alivePlayers = players.filter((candidate) => candidate.alive)
   const aliveTeammates = Math.max(
@@ -91,6 +115,24 @@ export const buildAutoDirectorMlFeatures = (
     nearest_enemy_has_peek_potential: geometry?.nearestEnemyHasPeekPotential ? 1 : 0,
     peek_potential_enemy_count: geometry?.peekPotentialEnemyCount ?? 0,
     best_visible_aim_alignment: geometry?.bestVisibleAimAlignment ?? 0,
+    speed_500: temporal?.speed500 ?? 0,
+    speed_1500: temporal?.speed1500 ?? 0,
+    acceleration: temporal?.acceleration ?? 0,
+    enemy_closing_speed_500: temporal?.enemyClosingSpeed500 ?? 0,
+    aim_turn_rate_500: temporal?.aimTurnRate500 ?? 0,
+    movement_aim_alignment: temporal?.movementAimAlignment ?? 0,
+    history_ms: temporal?.historyMs ?? 0,
+    contact_imminence: score.contactImminence ?? 0,
+    route_entry_relevance: score.routeEntryRelevance ?? 0,
+    topology_route_distance: score.topologyRouteDistance ?? -1,
+    topology_route_convergence: score.topologyRouteConvergence ?? 0,
+    topology_incoming_pressure: score.topologyIncomingRoutePressure ?? 0,
+    topology_predicted_fight_ms: score.topologyPredictedFightMs ?? -1,
+    topology_fight_confidence: score.topologyFightPredictionConfidence ?? 0,
+    topology_portal_control: score.topologyPortalControlScore ?? 0,
+    topology_crossfire: score.topologyCrossfirePotential ?? 0,
+    incoming_group_pressure: score.incomingGroupPressure ?? 0,
+    pov_quality: score.povQuality ?? 0,
     factor_base: factorValue(score, 'base'),
     factor_objective: factorValue(score, 'objective'),
     factor_combat: factorValue(score, 'combat'),
@@ -116,5 +158,5 @@ export const buildAutoDirectorMlFeatures = (
     weapon_knife: weaponFeature(player, 'knife'),
     weapon_c4: weaponFeature(player, 'C4')
   }
-  return AUTO_DIRECTOR_ML_FEATURES.map((feature) => values[feature])
+  return requestedFeatures.map((feature) => values[feature as keyof typeof values] ?? 0)
 }

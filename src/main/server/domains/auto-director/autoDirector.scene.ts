@@ -235,7 +235,13 @@ const buildScenes = (
     const contact =
       hasOpposition &&
       (closestOpposingDistance <= 700 ||
-        members.some((member) => member.roundDamage > 0 || member.roundKills > 0))
+        members.some((member) => {
+          const previous = previousPlayers.get(member.steamId)
+          return Boolean(
+            previous &&
+            (member.roundDamage > previous.roundDamage || member.roundKills > previous.roundKills)
+          )
+        }))
     const objective = hasOpposition && members.some((member) => member.hasBomb)
     const phase: ScenePhase = objective
       ? 'objective'
@@ -341,9 +347,7 @@ export const analyzeScenes = (
       player.alive &&
       sceneMemberCount <= 2 &&
       enemies.filter((enemy) => distance(player.position!, enemy.position!) <= 1400).length === 0 &&
-      !player.hasBomb &&
-      player.roundDamage <= 0 &&
-      player.roundKills <= 0
+      !player.hasBomb
     const sceneScore = scene?.score ?? 0
     const dominantSceneScore = dominantScene?.score ?? 0
     const localSceneEnemies = scene

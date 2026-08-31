@@ -516,7 +516,10 @@ export class AutoDirectorEngine {
             ) {
               add(
                 'portalControl',
-                Math.min(6, scene.topologyPortalControlScore * 6),
+                Math.min(
+                  profile.weights.portalControl,
+                  scene.topologyPortalControlScore * profile.weights.portalControl
+                ),
                 `${scene.topologyPlantSite ?? 'route'} ${scene.topologyCallout ?? 'area'} controls ${scene.topologyRoutePortalChokepoint ? 'chokepoint' : 'portal'} ${scene.topologyRoutePortalId ?? 'unknown'}`
               )
             }
@@ -530,9 +533,9 @@ export class AutoDirectorEngine {
               add(
                 'fightPrediction',
                 Math.min(
-                  8,
+                  profile.weights.fightPrediction,
                   (1 - scene.topologyPredictedFightMs / 2000) *
-                    5 *
+                    profile.weights.fightPrediction *
                     scene.topologyFightPredictionConfidence
                 ),
                 `Predicted route fight in ~${Math.round(scene.topologyPredictedFightMs)} ms; confidence ${Math.round(scene.topologyFightPredictionConfidence * 100)}%`
@@ -541,7 +544,10 @@ export class AutoDirectorEngine {
             if (scene.topologyRouteAdvisoryAllowed && scene.topologyCrossfirePotential >= 0.25) {
               add(
                 'crossfire',
-                Math.min(5, scene.topologyCrossfirePotential * 5),
+                Math.min(
+                  profile.weights.crossfire,
+                  scene.topologyCrossfirePotential * profile.weights.crossfire
+                ),
                 `Crossfire potential on ${scene.topologyCallout ?? 'route portal'}: ${Math.round(scene.topologyCrossfirePotential * 2)} partner(s)`
               )
             }
@@ -820,16 +826,21 @@ export class AutoDirectorEngine {
         currentScore.threatSceneActionableTargetCount === 0 &&
         !currentScore.nearestEnemyHasLineOfSight &&
         !currentScore.nearestEnemyHasPeekPotential
+      const mlValue = (score: PlayerScore): number =>
+        score.factors.find((factor) => factor.key === 'mlAdvisory')?.value ?? 0
+      const predictiveTransition = mlValue(best) >= 6 && mlValue(best) >= mlValue(currentScore) + 4
+      const predictiveDwellReleased =
+        at >= this.switchedAt + Math.min(900, Math.round(profile.minDwellMs * 0.4))
 
       if (postKillUntil > at) {
         reason = `Post-kill hold on ${currentScore.name}`
         lockKind = 'post-kill'
         lockUntil = postKillUntil
-      } else if (combatUntil > at && !staleCombatOnEmptyAngle) {
+      } else if (combatUntil > at && !staleCombatOnEmptyAngle && !predictiveTransition) {
         reason = `Combat soft lock on ${currentScore.name}`
         lockKind = 'combat'
         lockUntil = combatUntil
-      } else if (dwellUntil > at) {
+      } else if (dwellUntil > at && !(predictiveTransition && predictiveDwellReleased)) {
         reason = `Minimum dwell on ${currentScore.name}`
         lockKind = 'minimum-dwell'
         lockUntil = dwellUntil
@@ -845,17 +856,20 @@ export class AutoDirectorEngine {
           (best.routeEntryTargetCount ?? 0) >= 3 &&
           (best.threatSceneActionableTargetCount ?? 0) > 0 &&
           (this.actionableRouteStreaks.get(best.steamId) ?? 0) >= 2
-        const effectiveSwitchMargin =
-          routeEntryTransition || emptyAngleRecovery
+        const effectiveSwitchMargin = predictiveTransition
+          ? Math.max(4, profile.switchMargin * 0.35)
+          : routeEntryTransition || emptyAngleRecovery
             ? Math.max(5, profile.switchMargin * 0.45)
             : profile.switchMargin
         if (best.total >= currentScore.total + effectiveSwitchMargin) {
           shouldSwitch = true
-          reason = emptyAngleRecovery
-            ? `${best.name} recovered an actionable group route while ${currentScore.name} holds an empty angle and leads by ${(best.total - currentScore.total).toFixed(1)} points`
-            : routeEntryTransition
-              ? `${best.name} owns a stable group-entry route and leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
-              : `${best.name} leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
+          reason = predictiveTransition
+            ? `${best.name} has a stronger pre-contact prediction and leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
+            : emptyAngleRecovery
+              ? `${best.name} recovered an actionable group route while ${currentScore.name} holds an empty angle and leads by ${(best.total - currentScore.total).toFixed(1)} points`
+              : routeEntryTransition
+                ? `${best.name} owns a stable group-entry route and leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
+                : `${best.name} leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
         } else {
           reason = `${best.name} does not clear the ${effectiveSwitchMargin}-point switch margin`
         }

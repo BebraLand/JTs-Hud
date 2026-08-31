@@ -27,6 +27,13 @@ export interface AerialPresentationOptions {
 }
 
 const ACTION_FACTOR_KEYS = new Set(['combat', 'damage', 'recentKill', 'objective'])
+const PREDICTIVE_ACTION_FACTOR_KEYS = new Set([
+  'mlAdvisory',
+  'contactImminence',
+  'fightPrediction',
+  'routeEntry',
+  'incomingGroupPressure'
+])
 
 const emptyDecision = (reason: string, actionBlocked = false): AerialPresentationDecision => ({
   eligible: false,
@@ -100,10 +107,7 @@ const spawnTeamForAnchor = (anchor: AerialCameraAnchor): 'CT' | 'T' | null =>
         ? 'T'
         : null
 
-const phaseEnabled = (
-  phase: AerialPresentationPhase,
-  settings: AutoDirectorSettings
-): boolean => {
+const phaseEnabled = (phase: AerialPresentationPhase, settings: AutoDirectorSettings): boolean => {
   const phases = settings.aerialPresentationPhases
   if (phase === 'freeze-time') return phases.freezeTime
   if (phase === 'post-round') return phases.roundEnd
@@ -170,7 +174,11 @@ export const decideAerialPresentation = (
     return emptyDecision(`Aerial presentation disabled for ${phase}`)
   }
   const actionBlocked = directorDecision.scores.some((score) =>
-    score.factors.some((factor) => ACTION_FACTOR_KEYS.has(factor.key))
+    score.factors.some(
+      (factor) =>
+        ACTION_FACTOR_KEYS.has(factor.key) ||
+        (PREDICTIVE_ACTION_FACTOR_KEYS.has(factor.key) && factor.value >= 3)
+    )
   )
   if (actionBlocked)
     return emptyDecision('Immediate combat, kill, damage or objective action has priority', true)
