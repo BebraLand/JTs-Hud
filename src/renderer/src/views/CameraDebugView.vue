@@ -668,8 +668,10 @@ watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
             </div>
           </section>
 
-          <section class="rounded-xl border border-violet-400/20 bg-violet-400/5 p-4">
-            <div class="flex items-center justify-between gap-3">
+          <section
+            class="camera-debug-explanation-panel flex h-[190px] flex-col overflow-hidden rounded-xl border border-violet-400/20 bg-violet-400/5 p-4"
+          >
+            <div class="flex shrink-0 items-center justify-between gap-3">
               <div>
                 <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">
                   Camera explanation
@@ -682,18 +684,24 @@ watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
                 formatScore(selectedAnchor.cameraScore)
               }}</span>
             </div>
-            <div v-if="selectedAnchor" class="mt-2 space-y-1 text-[11px] text-zinc-400">
+            <div
+              v-if="selectedAnchor"
+              class="camera-debug-explanation-reasons mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto text-[11px] text-zinc-400"
+            >
               <p v-for="reason in selectedAnchor.reasons" :key="reason" class="flex gap-2">
                 <span class="text-violet-300">+</span>{{ reason }}
               </p>
-              <p class="border-t border-violet-400/10 pt-3 text-[10px] text-zinc-600">
-                Position {{ formatPosition(selectedAnchor.position) }} · yaw
-                {{ Math.round(selectedAnchor.angles[1]) }}°
-              </p>
             </div>
-            <p v-else class="mt-4 text-xs text-zinc-600">
+            <p v-else class="mt-4 min-h-0 flex-1 text-xs text-zinc-600">
               Live Aerial coverage reasons will appear here when anchors are loaded.
             </p>
+            <div
+              class="camera-debug-explanation-position min-h-[26px] shrink-0 border-t border-violet-400/10 pt-3 text-[10px] text-zinc-600"
+              :class="selectedAnchor ? '' : 'invisible'"
+            >
+              Position {{ selectedAnchor ? formatPosition(selectedAnchor.position) : '-' }} · yaw
+              {{ selectedAnchor ? `${Math.round(selectedAnchor.angles[1])}°` : '-' }}
+            </div>
           </section>
         </aside>
       </div>
@@ -753,6 +761,10 @@ watch([viewMode, () => debug.value.mapName], () => void load3dGeometry())
 }
 
 @media (min-width: 1800px) and (min-height: 900px) {
+  .camera-debug-explanation-reasons {
+    scrollbar-gutter: stable;
+  }
+
   .camera-debug-sidebar {
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
