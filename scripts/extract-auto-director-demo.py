@@ -198,6 +198,7 @@ def main() -> None:
 
     frames: list[dict[str, Any]] = []
     for round_number, start_tick, end_tick in rounds:
+        round_counter_baselines: dict[str, tuple[int, int]] = {}
         for tick in range(start_tick, end_tick + 1, args.sample_ticks):
             rows = rows_by_tick.get(tick, [])
             team_rows = {
@@ -214,6 +215,11 @@ def main() -> None:
             for team, members in team_rows.items():
                 for team_index, row in enumerate(members[:5]):
                     steam_id = str(row["steamid"])
+                    total_kills = integer(row.get("kills_total"))
+                    total_damage = integer(row.get("damage_total"))
+                    baseline_kills, baseline_damage = round_counter_baselines.setdefault(
+                        steam_id, (total_kills, total_damage)
+                    )
                     slot = team_index + 1 if team == "CT" else team_index + 6
                     active_weapon = str(row.get("active_weapon_name") or "unknown")
                     inventory = row.get("inventory")
@@ -247,10 +253,10 @@ def main() -> None:
                             "health": integer(row.get("health")),
                             "armor": integer(row.get("armor_value")),
                             "flashed": finite_number(row.get("flash_duration")),
-                            "round_kills": integer(row.get("kills_total")),
-                            "round_totaldmg": integer(row.get("damage_total")),
+                            "round_kills": max(0, total_kills - baseline_kills),
+                            "round_totaldmg": max(0, total_damage - baseline_damage),
                         },
-                        "match_stats": {"kills": integer(row.get("kills_total"))},
+                        "match_stats": {"kills": total_kills},
                         "weapons": weapons,
                     }
 

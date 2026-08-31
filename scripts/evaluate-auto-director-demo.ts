@@ -6,9 +6,14 @@ import {
   normalizePlayers,
   type ScoreAdvisory
 } from '../src/main/server/domains/auto-director/autoDirector.engine'
-import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from '../src/main/server/domains/auto-director/autoDirector.config'
-import { buildAutoDirectorMlFeatures } from '../src/main/server/domains/auto-director/autoDirector.mlFeatures'
 import {
+  AUTO_DIRECTOR_PROFILES,
+  DEFAULT_AUTO_DIRECTOR_SETTINGS
+} from '../src/main/server/domains/auto-director/autoDirector.config'
+import { buildAutoDirectorMlFeatures } from '../src/main/server/domains/auto-director/autoDirector.mlFeatures'
+import { AutoDirectorTemporalTracker } from '../src/main/server/domains/auto-director/autoDirector.temporal'
+import {
+  autoDirectorMlAdvisory,
   LightGbmRanker,
   loadLightGbmRanker
 } from '../src/main/server/domains/auto-director/autoDirector.ml'
@@ -108,6 +113,7 @@ interface HybridConfig {
 
 const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?: HybridConfig) => {
   const engine = new AutoDirectorEngine()
+  const temporal = new AutoDirectorTemporalTracker()
   const settings: AutoDirectorSettings = {
     ...DEFAULT_AUTO_DIRECTOR_SETTINGS,
     enabled: true,
@@ -128,13 +134,31 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
   let roundStartedAt = 0
   let lastRound = -1
   let previousPlayers = new Map<string, ReturnType<typeof normalizePlayers>[number]>()
+  let previousFrameAt = 0
+  const roundCounterBaselines = new Map<string, { kills: number; damage: number }>()
 
   for (const frame of timeline.frames) {
     if (frame.round !== lastRound) {
       lastRound = frame.round
       roundStartedAt = frame.atMs
+      engine.reset()
+      if (targetSteamId) engine.setCurrent(targetSteamId, frame.atMs)
+      temporal.reset()
+      previousPlayers.clear()
+      previousFrameAt = 0
+      roundCounterBaselines.clear()
     }
     const players = hybrid ? normalizePlayers(frame.payload) : []
+    for (const player of players) {
+      const baseline = roundCounterBaselines.get(player.steamId) ?? {
+        kills: player.roundKills,
+        damage: player.roundDamage
+      }
+      roundCounterBaselines.set(player.steamId, baseline)
+      player.roundKills = Math.max(0, player.roundKills - baseline.kills)
+      player.roundDamage = Math.max(0, player.roundDamage - baseline.damage)
+    }
+    const temporalFeatures = temporal.update(players, frame.atMs)
     let geometryFeatures: ReturnType<typeof computeGeometryFeatures> | null = null
     if (hybrid?.geometry && hybrid.geometryEnabled) {
       geometryFeatures = hybrid.geometryCache.get(frame.payload) ?? null
@@ -159,7 +183,10 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
           players.filter((player) => player.alive),
           hybrid.topology,
           geometryFeatures ? hybrid.geometry : null,
-          previousPlayers
+          previousPlayers,
+          previousFrameAt
+            ? Math.max(1, frame.atMs - previousFrameAt)
+            : timeline.metadata.sampleIntervalMs
         )
         cached[cacheKey] = topologyFeatures
         hybrid.topologyCache.set(frame.payload, cached)
@@ -185,20 +212,23 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
             })
           }
           if (hybrid.mlEnabled && hybrid.ranker) {
-            const raw = hybrid.ranker.predict(
+            const prediction = autoDirectorMlAdvisory(
+              hybrid.ranker,
               buildAutoDirectorMlFeatures(
                 player,
                 score,
                 allPlayers,
                 frame.atMs - roundStartedAt,
                 playerGeometry,
-                geometryFeatures !== null
+                geometryFeatures !== null,
+                temporalFeatures.get(player.steamId) ?? null,
+                hybrid.ranker.featureNames
               )
             )
             results.push({
               key: 'mlAdvisory' as const,
-              value: Math.tanh(raw) * 8,
-              detail: `ML ${raw >= 0 ? '+' : ''}${raw.toFixed(2)}`
+              value: prediction.value,
+              detail: prediction.detail
             })
           }
           return results
@@ -236,6 +266,7 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
       targetSteamId = decision.currentSteamId
     }
     previousPlayers = new Map(players.map((player) => [player.steamId, player]))
+    previousFrameAt = frame.atMs
 
     const target = decision.scores.find((score) => score.steamId === targetSteamId)
     const objectiveState = frame.payload.bomb?.state
@@ -302,8 +333,12 @@ const evaluateMode = (timeline: ReplayTimeline, mode: AutoDirectorMode, hybrid?:
     killEvents: validKills.length,
     killerCaptureAtKillPercent: percentage(captures(0, false), validKills.length),
     participantCaptureAtKillPercent: percentage(captures(0, true), validKills.length),
+    killerCaptureHalfSecondBeforePercent: percentage(captures(500, false), validKills.length),
+    participantCaptureHalfSecondBeforePercent: percentage(captures(500, true), validKills.length),
     killerCaptureOneSecondBeforePercent: percentage(captures(1_000, false), validKills.length),
     participantCaptureOneSecondBeforePercent: percentage(captures(1_000, true), validKills.length),
+    killerCaptureTwoSecondsBeforePercent: percentage(captures(2_000, false), validKills.length),
+    participantCaptureTwoSecondsBeforePercent: percentage(captures(2_000, true), validKills.length),
     objectiveCoveragePercent: percentage(objectiveHits, objectiveSamples.length),
     objectiveSamples: objectiveSamples.length,
     aerialEligibility:
@@ -338,6 +373,23 @@ if (!timeline.frames.length) {
 const geometryDirectory = process.argv[3]
 const modelPath = process.argv[4]
 const aerialDirectory = process.argv[5]
+const profileOverridesPath = process.argv[6]
+const evaluationScope = process.argv[7] ?? 'all'
+if (profileOverridesPath && profileOverridesPath !== '-') {
+  const overrides = JSON.parse(fs.readFileSync(profileOverridesPath, 'utf8')) as Partial<
+    typeof AUTO_DIRECTOR_PROFILES
+  >
+  for (const mode of ['balanced', 'reactive', 'calm'] as const) {
+    const override = overrides[mode]
+    if (!override) continue
+    AUTO_DIRECTOR_PROFILES[mode] = {
+      ...AUTO_DIRECTOR_PROFILES[mode],
+      ...override,
+      mode,
+      weights: { ...AUTO_DIRECTOR_PROFILES[mode].weights, ...override.weights }
+    }
+  }
+}
 let hybrid: HybridConfig | undefined
 if (geometryDirectory && modelPath) {
   const geometry = new GeometryRegistry(path.resolve(geometryDirectory)).load(timeline.metadata.map)
@@ -369,18 +421,30 @@ const report = {
   modes: (['balanced', 'reactive', 'calm'] as const).map((mode) => evaluateMode(timeline, mode)),
   ...(hybrid
     ? {
-        geometryModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
-          evaluateMode(timeline, mode, { ...hybrid!, mlEnabled: false })
-        ),
-        mlModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
-          evaluateMode(timeline, mode, { ...hybrid!, geometryEnabled: false })
-        ),
+        ...(evaluationScope === 'all'
+          ? {
+              geometryModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
+                evaluateMode(timeline, mode, { ...hybrid!, mlEnabled: false })
+              ),
+              mlModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
+                evaluateMode(timeline, mode, { ...hybrid!, geometryEnabled: false })
+              )
+            }
+          : {}),
         hybridModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
           evaluateMode(timeline, mode, hybrid)
         ),
-        aerialEligibilityModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
-          evaluateMode(timeline, mode, { ...hybrid!, mlEnabled: false, aerialEnabled: true })
-        )
+        ...(evaluationScope === 'all'
+          ? {
+              aerialEligibilityModes: (['balanced', 'reactive', 'calm'] as const).map((mode) =>
+                evaluateMode(timeline, mode, {
+                  ...hybrid!,
+                  mlEnabled: false,
+                  aerialEnabled: true
+                })
+              )
+            }
+          : {})
       }
     : {})
 }

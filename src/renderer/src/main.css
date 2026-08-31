@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Caveat+Brush&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* 
   1. Define your base tokens in :root. 
@@ -66,5 +66,31 @@
     background-color: var(--ui-background);
     color: var(--ui-text-main);
     font-family: 'Open Sans', sans-serif;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #3f3f46 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: #3f3f46;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: #71717a;
+    background-clip: padding-box;
   }
 }

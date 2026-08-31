@@ -71,17 +71,17 @@ Results from the 250 ms timeline:
 
 Interpretation: Balanced currently gives the strongest all-around result on this match. Reactive catches slightly more kill participants at the event itself but cuts much more often and does not improve pre-kill coverage. Calm behaves as intended, with much longer stories and fewer cuts at the cost of action capture. This single match validates the parser and evaluator, but it is not enough to claim universal calibration. More maps and teams are required before changing defaults solely from these numbers.
 
-## Current held-out Geometry + ML result
+## Held-out Geometry + ML result
 
-The local corpus contains 12 match-separated validation/test matches with 1,599 eligible kills. The weighted aggregate comparison currently reports:
+The pinned corpus has 30 match-separated demos (18 train, 4 validation, 8 test). Training uses 861,696 rows and four binary horizons (0.5/1/2/3 seconds). The final comparison below uses the same 8 test matches, 166 rounds and 1,105 kills before and after the predictive model/preset changes.
 
-| Mode | Variant | Killer at kill | Participant at kill | Killer at T-1s | Objective coverage | Switches/round | Sub-second thrash |
-| ---- | ------- | --------------: | ------------------: | --------------: | -----------------: | --------------: | ----------------: |
-| Balanced | rules | 31.0% | 59.0% | 24.4% | 82.2% | 16.75 | 829 |
-| Balanced | hybrid | 32.2% | 60.5% | 25.5% | 82.2% | 16.97 | 827 |
-| Reactive | rules | 34.2% | 64.6% | 25.0% | 82.2% | 28.67 | 899 |
-| Reactive | hybrid | 35.8% | 66.6% | 25.9% | 82.2% | 29.33 | 890 |
-| Calm | rules | 28.6% | 54.1% | 22.8% | 82.2% | 9.18 | 811 |
-| Calm | hybrid | 30.0% | 56.7% | 23.0% | 82.2% | 9.69 | 824 |
+| Mode | Participant T-2s | Participant T-1s | Participant T-0.5s | Participant at kill | Switches/round | Thrash <1s |
+| ---- | ---------------: | ---------------: | ------------------: | ------------------: | -------------: | ----------: |
+| Balanced before | 46.6% | 52.3% | 58.7% | 66.1% | 22.92 | 607 |
+| Balanced after | **49.3%** | **58.6%** | **66.8%** | **77.7%** | 24.78 | 611 |
+| Reactive before | 47.2% | 54.8% | 62.0% | 73.1% | 37.68 | 619 |
+| Reactive after | **49.1%** | **58.5%** | **68.0%** | **78.3%** | **35.12** | 935 |
+| Calm before | 46.7% | 50.7% | 55.8% | 62.3% | 15.46 | 600 |
+| Calm after | **50.2%** | **57.5%** | **66.3%** | **75.7%** | 18.43 | 606 |
 
-These numbers show a modest held-out improvement, not the requested 80–90% successful-switch gate. The gate therefore remains open and no claim of production-quality auto-directing accuracy is made yet.
+The strongest end-to-end gain is early participant capture: +8.1 pp Balanced, +6.0 pp Reactive and +10.5 pp Calm at T-0.5s. The model's held-out top-1 action-group accuracy is 89.7% at 0.5s, 86.2% at 1s, 82.8% at 2s and 82.1% at 3s; camera capture is lower because dwell/lock/state-machine constraints and simultaneous fights still matter. Full corpus evaluation is parallelized by match; a future feature-cache can accelerate repeated runs without changing the exact benchmark.

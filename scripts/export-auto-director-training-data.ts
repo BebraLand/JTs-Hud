@@ -9,9 +9,16 @@ import {
 import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from '../src/main/server/domains/auto-director/autoDirector.config'
 import { computeGeometryFeatures } from '../src/main/server/domains/auto-director/geometry/geometryFeatures'
 import { GeometryRegistry } from '../src/main/server/domains/auto-director/geometry/geometryRegistry'
+import {
+  AUTO_DIRECTOR_ML_FEATURES,
+  buildAutoDirectorMlFeatures
+} from '../src/main/server/domains/auto-director/autoDirector.mlFeatures'
+import { AutoDirectorTemporalTracker } from '../src/main/server/domains/auto-director/autoDirector.temporal'
+import { computeTopologyFeatures } from '../src/main/server/domains/auto-director/topology/topologyFeatures'
+import { TopologyRegistry } from '../src/main/server/domains/auto-director/topology/topologyRegistry'
 import type {
-  GsiLikePayload,
-  ScoreFactorKey
+  DirectorPlayer,
+  GsiLikePayload
 } from '../src/main/server/domains/auto-director/autoDirector.types'
 
 interface CorpusEntry {
@@ -50,38 +57,12 @@ interface Timeline {
   kills: TimelineKill[]
 }
 
-const FACTORS: ScoreFactorKey[] = [
-  'base',
-  'objective',
-  'combat',
-  'damage',
-  'recentKill',
-  'proximity',
-  'aimAlignment',
-  'clutch',
-  'grenade',
-  'entry',
-  'retake',
-  'weaponPressure',
-  'bombCarrier',
-  'lowHealthDrama',
-  'flashPenalty'
-]
-const WEAPON_TYPES = [
-  'Pistol',
-  'Rifle',
-  'SniperRifle',
-  'Submachine Gun',
-  'Shotgun',
-  'Machine Gun',
-  'Grenade',
-  'Knife',
-  'C4'
-]
 const HORIZON_MS = 3_000
-const FRAME_STEP = 2
+const HORIZONS_MS = [500, 1_000, 2_000, 3_000] as const
+const FRAME_STEP = 4
 
-const [indexPath, outputPath, geometryDirectory] = process.argv.slice(2)
+const [indexPath, outputPath, geometryDirectory, shardIndexArg = '0', shardCountArg = '1'] =
+  process.argv.slice(2)
 if (!indexPath || !outputPath) {
   throw new Error(
     'Usage: npm run ml:dataset -- <corpus-index.json> <training-rows.csv.gz> [geometry-directory]'
@@ -91,6 +72,18 @@ if (!indexPath || !outputPath) {
 const readTimeline = (file: string): Timeline => {
   const bytes = fs.readFileSync(file)
   return JSON.parse((file.endsWith('.gz') ? gunzipSync(bytes) : bytes).toString('utf8')) as Timeline
+}
+
+const shardIndex = Number(shardIndexArg)
+const shardCount = Number(shardCountArg)
+if (
+  !Number.isInteger(shardIndex) ||
+  !Number.isInteger(shardCount) ||
+  shardCount < 1 ||
+  shardIndex < 0 ||
+  shardIndex >= shardCount
+) {
+  throw new Error(`Invalid shard ${shardIndexArg}/${shardCountArg}`)
 }
 
 const eligibleKills = (timeline: Timeline): TimelineKill[] => {
@@ -129,29 +122,8 @@ const columns = [
   'at_ms',
   'time_to_kill_ms',
   'steam_id',
-  'label',
-  'team_t',
-  'health',
-  'armor',
-  'flashed',
-  'ammo_clip',
-  'round_kills',
-  'round_damage',
-  'has_bomb',
-  'nearest_enemy_distance',
-  'alive_teammates',
-  'alive_enemies',
-  'round_elapsed_ms',
-  'rule_score',
-  'geometry_available',
-  'visible_enemy_count',
-  'nearest_visible_enemy_distance',
-  'nearest_enemy_has_los',
-  'nearest_enemy_has_peek_potential',
-  'peek_potential_enemy_count',
-  'best_visible_aim_alignment',
-  ...FACTORS.map((factor) => `factor_${factor}`),
-  ...WEAPON_TYPES.map((weaponType) => `weapon_${weaponType.replaceAll(' ', '_').toLowerCase()}`)
+  ...HORIZONS_MS.map((horizon) => `label_${horizon}`),
+  ...AUTO_DIRECTOR_ML_FEATURES
 ]
 
 const main = async (): Promise<void> => {
@@ -161,58 +133,113 @@ const main = async (): Promise<void> => {
   const target = fs.createWriteStream(outputPath)
   const gzip = createGzip({ level: 9 })
   gzip.pipe(target)
-  gzip.write(`${columns.join(',')}\n`)
+  if (shardIndex === 0) gzip.write(`${columns.join(',')}\n`)
 
   let rowCount = 0
   const rowsBySplit = { train: 0, validation: 0, test: 0 }
   const settings = { ...DEFAULT_AUTO_DIRECTOR_SETTINGS, enabled: true, mode: 'balanced' as const }
 
-  for (const entry of index.entries) {
+  const entries = index.entries.filter((_, entryIndex) => entryIndex % shardCount === shardIndex)
+  for (const entry of entries) {
     const timelinePath = path.resolve(absoluteIndexDirectory, entry.timeline)
     const timeline = readTimeline(timelinePath)
     if (timeline.metadata.sourceSha256 !== entry.sourceSha256) {
       throw new Error(`Timeline SHA-256 mismatch: ${entry.timeline}`)
     }
     const engine = new AutoDirectorEngine()
+    const temporal = new AutoDirectorTemporalTracker()
     const geometry = geometryDirectory
       ? new GeometryRegistry(path.resolve(geometryDirectory)).load(timeline.metadata.map)
       : null
+    const topology = new TopologyRegistry(path.resolve('resources/auto-director/topology')).load(
+      timeline.metadata.map
+    )
     const kills = eligibleKills(timeline)
     const roundStarts = new Map<number, number>()
     let killIndex = 0
     let matchRows = 0
+    let previousPlayers = new Map<string, DirectorPlayer>()
+    let previousFrameAt = 0
+    let previousRound = -1
+    const roundCounterBaselines = new Map<string, { kills: number; damage: number }>()
 
     for (let frameIndex = 0; frameIndex < timeline.frames.length; frameIndex += 1) {
       const frame = timeline.frames[frameIndex]
+      if (frame.round !== previousRound) {
+        engine.reset()
+        temporal.reset()
+        previousPlayers.clear()
+        previousFrameAt = 0
+        previousRound = frame.round
+        roundCounterBaselines.clear()
+      }
       roundStarts.set(frame.round, roundStarts.get(frame.round) ?? frame.atMs)
-      const decision = engine.evaluate(frame.payload, settings, frame.atMs)
       while (killIndex < kills.length && kills[killIndex].atMs < frame.atMs) killIndex += 1
-      const nextKill = kills[killIndex]
-      if (frameIndex % FRAME_STEP !== 0 || !nextKill || nextKill.atMs - frame.atMs > HORIZON_MS) {
+      const players = normalizePlayers(frame.payload)
+      for (const player of players) {
+        const baseline = roundCounterBaselines.get(player.steamId) ?? {
+          kills: player.roundKills,
+          damage: player.roundDamage
+        }
+        roundCounterBaselines.set(player.steamId, baseline)
+        player.roundKills = Math.max(0, player.roundKills - baseline.kills)
+        player.roundDamage = Math.max(0, player.roundDamage - baseline.damage)
+      }
+      const temporalFeatures = temporal.update(players, frame.atMs)
+      if (frameIndex % FRAME_STEP !== 0) {
+        engine.evaluate(frame.payload, settings, frame.atMs)
+        previousPlayers = new Map(players.map((player) => [player.steamId, player]))
+        previousFrameAt = frame.atMs
         continue
       }
 
-      const players = normalizePlayers(frame.payload)
       const alivePlayers = players.filter((player) => player.alive)
       const geometryFeatures = geometry ? computeGeometryFeatures(alivePlayers, geometry) : null
-      const aliveByTeam = new Map<string, number>()
-      for (const player of alivePlayers) {
-        aliveByTeam.set(player.team, (aliveByTeam.get(player.team) ?? 0) + 1)
-      }
+      const topologyFeatures = topology
+        ? computeTopologyFeatures(
+            alivePlayers,
+            topology,
+            geometry,
+            previousPlayers,
+            previousFrameAt ? frame.atMs - previousFrameAt : timeline.metadata.sampleIntervalMs
+          )
+        : null
+      const decision = engine.evaluate(
+        frame.payload,
+        settings,
+        frame.atMs,
+        undefined,
+        geometryFeatures ?? undefined,
+        topologyFeatures ?? undefined
+      )
+      const upcomingKills = kills.filter(
+        (kill, index) =>
+          index >= killIndex && kill.atMs >= frame.atMs && kill.atMs - frame.atMs <= HORIZON_MS
+      )
+      const nextKill = upcomingKills[0]
 
       for (const player of alivePlayers) {
         const score = decision.scores.find((candidate) => candidate.steamId === player.steamId)
         if (!score) continue
-        const factors = new Map(score.factors.map((factor) => [factor.key, factor.value]))
         const playerGeometry = geometryFeatures?.get(player.steamId)
-        const label =
-          player.steamId === nextKill.attackerSteamId
-            ? 3
-            : player.steamId === nextKill.victimSteamId
-              ? 2
-              : 0
-        const aliveTeammates = Math.max(0, (aliveByTeam.get(player.team) ?? 1) - 1)
-        const aliveEnemies = alivePlayers.length - (aliveByTeam.get(player.team) ?? 0)
+        const labels = HORIZONS_MS.map((horizon) =>
+          upcomingKills.some(
+            (kill) =>
+              kill.atMs - frame.atMs <= horizon &&
+              (kill.attackerSteamId === player.steamId || kill.victimSteamId === player.steamId)
+          )
+            ? 1
+            : 0
+        )
+        const features = buildAutoDirectorMlFeatures(
+          player,
+          score,
+          players,
+          frame.atMs - roundStarts.get(frame.round)!,
+          playerGeometry ?? null,
+          geometry !== null,
+          temporalFeatures.get(player.steamId) ?? null
+        )
         const values: Array<string | number> = [
           entry.split,
           timeline.metadata.sourceFile,
@@ -220,37 +247,18 @@ const main = async (): Promise<void> => {
           frame.round,
           frame.tick,
           frame.atMs,
-          nextKill.atMs - frame.atMs,
+          nextKill ? nextKill.atMs - frame.atMs : -1,
           player.steamId,
-          label,
-          player.team === 'T' ? 1 : 0,
-          player.health,
-          player.armor,
-          player.flashed,
-          player.ammoClip ?? -1,
-          player.roundKills,
-          player.roundDamage,
-          player.hasBomb ? 1 : 0,
-          score.nearestEnemyDistance ?? -1,
-          aliveTeammates,
-          aliveEnemies,
-          frame.atMs - roundStarts.get(frame.round)!,
-          score.total,
-          geometry ? 1 : 0,
-          playerGeometry?.visibleEnemyCount ?? 0,
-          playerGeometry?.nearestVisibleEnemyDistance ?? -1,
-          playerGeometry?.nearestEnemyHasLineOfSight ? 1 : 0,
-          playerGeometry?.nearestEnemyHasPeekPotential ? 1 : 0,
-          playerGeometry?.peekPotentialEnemyCount ?? 0,
-          playerGeometry?.bestVisibleAimAlignment ?? 0,
-          ...FACTORS.map((factor) => factors.get(factor) ?? 0),
-          ...WEAPON_TYPES.map((weaponType) => (player.weaponType === weaponType ? 1 : 0))
+          ...labels,
+          ...features
         ]
         if (!gzip.write(`${values.map(csv).join(',')}\n`)) await once(gzip, 'drain')
         rowCount += 1
         matchRows += 1
         rowsBySplit[entry.split] += 1
       }
+      previousPlayers = new Map(players.map((player) => [player.steamId, player]))
+      previousFrameAt = frame.atMs
     }
     console.log(
       `${entry.split}: ${timeline.metadata.sourceFile}: ${matchRows.toLocaleString()} rows`
@@ -266,7 +274,10 @@ const main = async (): Promise<void> => {
         rows: rowCount,
         rowsBySplit,
         horizonMs: HORIZON_MS,
+        horizonsMs: HORIZONS_MS,
         frameStep: FRAME_STEP,
+        shardIndex,
+        shardCount,
         bytes: fs.statSync(outputPath).size
       },
       null,

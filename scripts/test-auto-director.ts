@@ -73,6 +73,7 @@ const geometryFeature = (
 ): PlayerGeometryFeatures => ({
   steamId,
   visibleEnemyCount: 0,
+  nearestEnemySteamId: null,
   nearestVisibleEnemySteamId: null,
   nearestVisibleEnemyDistance: null,
   nearestEnemyHasLineOfSight: false,
@@ -363,6 +364,27 @@ const approachingScore = approachingSceneCheck.scores.find(
 assert.equal(approachingScore.scenePhase, 'approaching')
 assert.ok((approachingScore.approachPressure ?? 0) > 0.12)
 assert.ok((approachingScore.movementMagnitude ?? 0) > 0)
+
+const actionDecayEngine = new AutoDirectorEngine()
+const actionDecayPayload = snapshot({
+  allplayers: {
+    decayCt: player('Decay CT', 'CT', 1, '0, 0, 0', '1, 0, 0'),
+    decayT: player('Decay T', 'T', 6, '800, 0, 0', '-1, 0, 0')
+  }
+})
+actionDecayEngine.evaluate(actionDecayPayload, settings, 1_000)
+const actionFrame = structuredClone(actionDecayPayload)
+actionFrame.allplayers!.decayCt.state.round_totaldmg = 30
+const activeAction = actionDecayEngine.evaluate(actionFrame, settings, 1_100)
+assert.equal(
+  activeAction.scores.find((score) => score.steamId === 'decayCt')?.scenePhase,
+  'contact'
+)
+const decayedAction = actionDecayEngine.evaluate(actionFrame, settings, 1_200)
+assert.equal(
+  decayedAction.scores.find((score) => score.steamId === 'decayCt')?.scenePhase,
+  'forming'
+)
 
 const sceneDisabledCheck = new AutoDirectorEngine().evaluate(
   snapshot({
