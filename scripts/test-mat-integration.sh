@@ -78,6 +78,9 @@ fi
 curl -fsS "http://127.0.0.1:$HUD_PORT/api/players?steamids=76561198000000001" \
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const v=JSON.parse(s);if(v[0]?.username!=='aurum'||v[0]?.firstName!=='Aurimas'||!v[0]?.avatar.endsWith('aurum.webp'))throw new Error(JSON.stringify(v))})"
 
+curl -fsS "http://127.0.0.1:$HUD_PORT/api/players/avatar/steamid/76561198000000002" \
+  | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const v=JSON.parse(s);if(!decodeURIComponent(v.custom).endsWith('/broadcast-assets/players/76561198000000002.png'))throw new Error(JSON.stringify(v))})"
+
 curl -fsS "http://127.0.0.1:$HUD_PORT/api/match/current" \
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const v=JSON.parse(s);const cache=v.vetos.find(x=>x.mapName==='de_cache');if(v.matchType!=='bo3'||v.left.wins!==1||v.right.wins!==0||cache?.score?.['team-a']!==13||cache?.winner!=='team-a')throw new Error(JSON.stringify(v))})"
 

@@ -14,6 +14,7 @@ import type {
 import { mapMatch, mapPlayer, mapTeam } from './mat.mapper'
 import { notifyHudDataChanged } from '../hudRefresh'
 import { publishTournamentLabels } from './tournamentLabels'
+import { proxyAssetUrl } from '../utils/assetProxy'
 
 const DEFAULT_POLL_SECONDS = 5
 const MIN_POLL_SECONDS = 2
@@ -155,6 +156,15 @@ class MatIntegrationService {
     return this.isActive()
       ? this.players.find((player) => player.steamid === steamId) || null
       : null
+  }
+
+  async getBroadcastPlayerAvatar(steamId: string): Promise<string> {
+    if (!this.isActive() || !/^\d{17}$/.test(steamId)) return ''
+    const settings = await this.readStoredSettings()
+    if (!settings.url) return ''
+    return proxyAssetUrl(
+      new URL(`broadcast-assets/players/${steamId}.png`, `${settings.url}/`).toString()
+    )
   }
 
   getCurrentMatch(): Match | null {

@@ -2,16 +2,17 @@ import type { Match, Veto } from '../domains/matches/match.types'
 import type { Team } from '../domains/teams/team.types'
 import type { Player } from '../domains/players/player.types'
 import type { MatHudProjectionV1 } from './mat.types'
+import { proxyAssetUrl } from '../utils/assetProxy'
 
 function resolveMatAssetUrl(url: string | null, matUrl?: string, cacheBust?: number): string {
   if (!url) return ''
   if (/^(?:data:|blob:)/i.test(url)) return url
   const resolved =
     /^(?:https?:)/i.test(url) || !matUrl ? url : new URL(url, matUrl + '/').toString()
-  if (!cacheBust || !/^https?:/i.test(resolved)) return resolved
+  if (!cacheBust || !/^https?:/i.test(resolved)) return proxyAssetUrl(resolved)
   const parsed = new URL(resolved)
   parsed.searchParams.set('jtsHud', String(cacheBust))
-  return parsed.toString()
+  return proxyAssetUrl(parsed.toString())
 }
 
 export function mapTeam(

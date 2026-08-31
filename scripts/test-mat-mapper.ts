@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mapMatch, mapPlayer, mapTeam } from '../src/main/server/integrations/mat.mapper'
 import type { MatHudProjectionV1 } from '../src/main/server/integrations/mat.types'
 import { resolveAssetUrl } from '../src/renderer/src/utils/assetUrl'
+import { proxyAssetUrl } from '../src/main/server/utils/assetProxy'
 
 const player = {
   id: '76561198000000001',
@@ -90,8 +91,11 @@ const projection: MatHudProjectionV1 = {
 
 const mappedPlayer = mapPlayer(player)
 assert.equal(mappedPlayer.username, 'aurum')
-assert.equal(mappedPlayer.avatar, player.photoUrl)
-assert.equal(mapPlayer({ ...player, photoUrl: null }, undefined, true).avatar, player.avatarUrl)
+assert.equal(mappedPlayer.avatar, proxyAssetUrl(player.photoUrl))
+assert.equal(
+  mapPlayer({ ...player, photoUrl: null }, undefined, true).avatar,
+  proxyAssetUrl(player.avatarUrl)
+)
 assert.equal(mapPlayer({ ...player, photoUrl: null }).avatar, '')
 assert.equal(mappedPlayer.country, 'LT')
 assert.equal(mappedPlayer.team, 'team-a')
@@ -102,10 +106,12 @@ assert.equal(
   ).avatar,
   'http://localhost:3069/broadcast-assets/players/player.webp'
 )
+assert.equal(proxyAssetUrl('http://mat.example/player.webp'), '/api/assets/proxy?url=http%3A%2F%2Fmat.example%2Fplayer.webp')
+assert.equal(proxyAssetUrl('https://mat.example/player.webp'), '/api/assets/proxy?url=https%3A%2F%2Fmat.example%2Fplayer.webp')
 
 const mappedTeam = mapTeam(team1)
 assert.equal(mappedTeam.shortName, 'BEBRA')
-assert.equal(mappedTeam.logo, team1.logoUrl)
+assert.equal(mappedTeam.logo, proxyAssetUrl(team1.logoUrl))
 assert.equal(
   mapTeam({ ...team1, logoUrl: '/broadcast-assets/teams/team-a.webp' }, 'http://localhost:3069')
     .logo,

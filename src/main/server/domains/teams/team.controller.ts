@@ -11,7 +11,7 @@ export const getTeamLogo = async (req: Request, res: Response) => {
   try {
     const logo = await teamService.getTeamLogoPath(req.params.id as string)
     if (!logo) return res.status(404).json({ error: 'Logo not found' })
-    if (/^https?:\/\//i.test(logo)) {
+    if (/^(?:https?:\/\/|\/api\/assets\/proxy)/i.test(logo)) {
       return res.redirect(302, logo)
     }
     res.sendFile(path.join(uploadsPath, logo))
