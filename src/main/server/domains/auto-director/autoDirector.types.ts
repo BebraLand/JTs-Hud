@@ -208,6 +208,10 @@ export interface AutoDirectorDecision {
   dominantSceneConfidence?: number
   currentScenePhase?: 'forming' | 'approaching' | 'contact' | 'objective' | null
   currentSceneConfidence?: number
+  storyTargetSteamId?: string | null
+  storyPhase?: string | null
+  storyConfidence?: number
+  storyUtility?: number
 }
 
 export interface CameraCommandResult {

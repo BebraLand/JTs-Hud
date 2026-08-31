@@ -8,6 +8,7 @@ import type {
   ScoreFactor
 } from './autoDirector.types'
 import { analyzeScenes, type SceneAnalysis, type SceneSummary } from './autoDirector.scene'
+import { planBroadcastStory, type BroadcastStoryPlan } from './autoDirector.story'
 import type { PlayerGeometryFeatures } from './geometry/geometryFeatures'
 import type { PlayerTopologyFeatures } from './topology/topologyFeatures'
 
@@ -145,6 +146,10 @@ export class AutoDirectorEngine {
   private actionableRouteStreaks = new Map<string, number>()
   private predictiveCandidateSteamId: string | null = null
   private predictiveCandidateStreak = 0
+  private storyReservation: BroadcastStoryPlan | null = null
+  private storyReservationUntil = 0
+  private storyCandidateSteamId: string | null = null
+  private storyCandidateStreak = 0
 
   confirmSwitch(steamId: string, at: number): void {
     this.currentSteamId = steamId
@@ -170,6 +175,10 @@ export class AutoDirectorEngine {
     this.actionableRouteStreaks.clear()
     this.predictiveCandidateSteamId = null
     this.predictiveCandidateStreak = 0
+    this.storyReservation = null
+    this.storyReservationUntil = 0
+    this.storyCandidateSteamId = null
+    this.storyCandidateStreak = 0
   }
 
   private trackScene(analysis: SceneAnalysis): SceneSummary | null {
@@ -756,6 +765,25 @@ export class AutoDirectorEngine {
     const currentScore = scores.find((score) => score.steamId === this.currentSteamId) ?? null
     const ranked =
       settings.rulesEnabled || advisory ? scores.filter((score) => score.switchEligible) : []
+    const storyPlan = settings.sceneAdvisoryEnabled
+      ? planBroadcastStory(scores, trackedScene)
+      : null
+    if (storyPlan) {
+      this.storyCandidateStreak =
+        this.storyCandidateSteamId === storyPlan.targetSteamId
+          ? this.storyCandidateStreak + 1
+          : 1
+      this.storyCandidateSteamId = storyPlan.targetSteamId
+      if (this.storyCandidateStreak >= 3 && storyPlan.confidence >= 0.7) {
+        this.storyReservation = storyPlan
+        this.storyReservationUntil = at + storyPlan.reserveMs
+      }
+    } else if (this.storyReservation && at >= this.storyReservationUntil) {
+      this.storyReservation = null
+      this.storyReservationUntil = 0
+      this.storyCandidateSteamId = null
+      this.storyCandidateStreak = 0
+    }
     const requestedOverride = settings.manualOverrideSteamId
       ? (ranked.find((score) => score.steamId === settings.manualOverrideSteamId) ?? null)
       : null
@@ -914,7 +942,11 @@ export class AutoDirectorEngine {
       dominantScenePhase: trackedScene?.phase ?? null,
       dominantSceneConfidence: trackedScene?.confidence ?? 0,
       currentScenePhase: currentScore?.scenePhase ?? null,
-      currentSceneConfidence: currentScore?.sceneConfidence ?? 0
+      currentSceneConfidence: currentScore?.sceneConfidence ?? 0,
+      storyTargetSteamId: storyPlan?.targetSteamId ?? null,
+      storyPhase: storyPlan?.phase ?? null,
+      storyConfidence: storyPlan?.confidence ?? 0,
+      storyUtility: storyPlan?.utility ?? 0
     }
   }
 }
