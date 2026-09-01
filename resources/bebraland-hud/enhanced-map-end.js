@@ -21,6 +21,12 @@
   })[char])
   const isTrue = (value) => value === true || value === 'true' || value === 1
   const mapLabel = (name) => String(name || 'UNKNOWN').replace(/^(de_|cs_|gg_|ar_)/, '').replace(/_/g, ' ')
+  const matMapImage = (name) => {
+    const mapName = String(name || '')
+    return mapName === 'de_cache'
+      ? 'https://raw.githubusercontent.com/auuruum/matchzy-auto-tournament/main/map_thumbnails/de_cache.webp'
+      : `https://raw.githubusercontent.com/sivert-io/cs2-server-manager/master/map_thumbnails/${encodeURIComponent(mapName)}.webp`
+  }
   const bestOfNumber = (format) => {
     const bestOf = Number(String(format || '').replace(/^bo/i, ''))
     return bestOf > 0 ? bestOf : 1
@@ -293,8 +299,11 @@
         const map = entry.map
         const score = map?.score ? `${map.score.team1} : ${map.score.team2}` : ''
         const mapKey = String(entry.mapName || '').replace(/^de_/, '')
-        return `<article class="enhanced-map-end-veto-map ${entry.type}" style="--veto-map: url('${asset(mapAssets[mapKey] || mapAssets.ancient)}')">
-          <div><strong>${esc(mapLabel(entry.mapName))}</strong><span>${actionLabel(entry)}${team ? ` · ${esc(team.tag || team.name)}` : ''}</span></div>${score ? `<b>${score}</b>` : ''}
+        const image = cleanUrl(map?.imageUrl || entry.imageUrl) || matMapImage(entry.mapName)
+        const logo = cleanUrl(team?.logoUrl)
+        const sidePick = entry.side ? `<i class="enhanced-map-end-veto-side ${entry.side}" title="${entry.side === 'CT' ? 'Counter-Terrorist side' : 'Terrorist side'}"></i>` : ''
+        return `<article class="enhanced-map-end-veto-map ${entry.type}" style="--veto-map: url('${esc(image)}')">
+          <div><strong>${esc(mapLabel(entry.mapName))}</strong><span>${actionLabel(entry)}${team ? ` · ${logo ? `<img src="${esc(logo)}" alt="">` : ''}${esc(team.tag || team.name)}` : ''}${sidePick}</span></div>${score ? `<b>${score}</b>` : ''}
         </article>`
       }).join('')}</div>
     </aside>`

@@ -135,8 +135,12 @@
 .enhanced-map-end-veto-map strong,
 .enhanced-map-end-veto-map span { display: block; text-transform: uppercase; }
 .enhanced-map-end-veto-map strong { font-size: 13px; letter-spacing: 0.06em; }
-.enhanced-map-end-veto-map span { margin-top: 3px; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: 0.12em; }
+.enhanced-map-end-veto-map span { display: flex; align-items: center; gap: 5px; margin-top: 3px; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: 0.12em; }
+.enhanced-map-end-veto-map span img { width: 16px; height: 16px; object-fit: contain; }
 .enhanced-map-end-veto-map b { color: var(--orange-bright); font-size: 14px; }
+.enhanced-map-end-veto-side { width: 8px; height: 8px; margin-left: 2px; border-radius: 50%; background: var(--muted); }
+.enhanced-map-end-veto-side.CT { background: var(--blue); box-shadow: 0 0 7px rgba(84, 215, 255, 0.8); }
+.enhanced-map-end-veto-side.T { background: var(--orange-bright); box-shadow: 0 0 7px rgba(255, 189, 124, 0.8); }
 .enhanced-map-end-veto-map.ban { filter: grayscale(1); opacity: 0.72; }
 .enhanced-map-end-veto-map.ban b { display: none; }
 .enhanced-map-end-veto-map.pick { border-color: rgba(84, 215, 255, 0.55); }
