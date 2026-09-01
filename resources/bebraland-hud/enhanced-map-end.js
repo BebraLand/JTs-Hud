@@ -21,6 +21,20 @@
   })[char])
   const isTrue = (value) => value === true || value === 'true' || value === 1
   const mapLabel = (name) => String(name || 'UNKNOWN').replace(/^(de_|cs_|gg_|ar_)/, '').replace(/_/g, ' ')
+  const bestOfNumber = (format) => {
+    const bestOf = Number(String(format || '').replace(/^bo/i, ''))
+    return bestOf > 0 ? bestOf : 1
+  }
+  const seriesPipCount = (format) => Math.ceil(bestOfNumber(format) / 2)
+  const liveTeamSide = (team) => {
+    const name = String(team?.name || '').trim().toLowerCase()
+    if (!name) return null
+    for (const node of document.querySelectorAll('#matchbar .team')) {
+      if (String(node.querySelector('.team-name')?.textContent || '').trim().toLowerCase() !== name) continue
+      return node.classList.contains('T') ? 'T' : node.classList.contains('CT') ? 'CT' : null
+    }
+    return null
+  }
   const cleanUrl = (value) => typeof value === 'string' && value.trim() ? value : ''
 
   let enabled = true
@@ -43,7 +57,7 @@
   }
 
   const holdEnhanced = () => {
-    if (!enabled || (!debugPreview && !oldOverlay())) return clearEnhanced()
+    if ((!enabled && !debugPreview) || (!debugPreview && !oldOverlay())) return clearEnhanced()
     pending = true
     document.documentElement.classList.remove('enhanced-map-end-active')
     document.documentElement.classList.add('enhanced-map-end-pending')
@@ -54,7 +68,7 @@
     const nextEnabled = value !== false && value !== 'false' && value !== 0
     const changed = nextEnabled !== enabled
     enabled = nextEnabled
-    if (!enabled) clearEnhanced()
+    if (!enabled && !debugPreview) clearEnhanced()
     else if (changed && oldOverlay()) startMapEnd()
   }
 
@@ -63,7 +77,7 @@
     .then(updateEnabled)
     .catch(() => {
       enabled = false
-      clearEnhanced()
+      if (!debugPreview) clearEnhanced()
     })
 
   const loadSettings = () => fetch('/api/settings', { cache: 'no-store' })
@@ -72,7 +86,7 @@
     .catch(() => undefined)
 
   const loadProjection = () => {
-    if (!enabled) return Promise.resolve()
+    if (!enabled && !debugPreview) return Promise.resolve()
     if (projectionRequest) return projectionRequest
     projectionRequest = fetch('/api/settings/mat/projection', { cache: 'no-store' })
       .then((response) => response.ok ? response.json() : null)
@@ -133,6 +147,25 @@
     const source = projection?.match
     const team1 = debugTeam(source?.team1, 'debug-team-1', 'Kailos Team')
     const team2 = debugTeam(source?.team2, 'debug-team-2', 'BebraLand Team')
+    const previewMapNames = ['de_dust2', 'de_cache', 'de_ancient', 'de_anubis', 'de_inferno']
+    const sourceMaps = Array.isArray(source?.maps) ? source.maps : []
+    const maps = Array.from({ length: Math.max(bestOfNumber(source?.format), sourceMaps.length) }, (_, index) => ({
+      number: index + 1,
+      name: sourceMaps[index]?.name || previewMapNames[index] || 'de_ancient',
+      score: null,
+      completedAt: null,
+      playerStats: null
+    }))
+    maps[0] = {
+      ...maps[0],
+      score: { team1: 16, team2: 12 },
+      winnerTeamId: team1.id,
+      completedAt: new Date().toISOString(),
+      playerStats: {
+        team1: debugStats(team1, 22, 14, 420),
+        team2: debugStats(team2, 17, 17, 340)
+      }
+    }
     return {
       ...source,
       id: 'debug-map-end',
@@ -143,17 +176,7 @@
       team1,
       team2,
       seriesScore: { team1: 1, team2: 0 },
-      maps: [{
-        number: 1,
-        name: 'de_dust2',
-        score: { team1: 16, team2: 12 },
-        winnerTeamId: team1.id,
-        completedAt: new Date().toISOString(),
-        playerStats: {
-          team1: debugStats(team1, 22, 14, 420),
-          team2: debugStats(team2, 17, 17, 340)
-        }
-      }]
+      maps
     }
   }
 
@@ -219,7 +242,7 @@
 
   const render = () => {
     const match = debugPreview ? debugMatch() : projection?.match
-    if (!enabled || (!debugPreview && !oldOverlay())) return clearEnhanced()
+    if ((!enabled && !debugPreview) || (!debugPreview && !oldOverlay())) return clearEnhanced()
     if (!match) {
       holdEnhanced()
       retryProjection()
@@ -243,10 +266,13 @@
     const mvp = players.sort((a, b) => b.stats.rating - a.stats.rating || b.stats.kills - a.stats.kills)[0]
     const mapKey = String(map.name || '').replace(/^de_/, '')
     const seriesScore = match.seriesScore || { team1: 0, team2: 0 }
+    const defaultTeam1Side = map.startingSideTeam1 === 'T' ? 'T' : 'CT'
+    const team1Side = liveTeamSide(match.team1) || defaultTeam1Side
+    const team2Side = liveTeamSide(match.team2) || (team1Side === 'CT' ? 'T' : 'CT')
     const statsSignature = [...(lines.team1 || []), ...(lines.team2 || [])]
       .map((line) => `${line.steamId}:${line.kills}:${line.deaths}:${line.assists}:${line.damage}`)
       .join('|')
-    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${mvp?.player.steamId || ''}:${statsSignature}`
+    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${mvp?.player.steamId || ''}:${statsSignature}`
     if (signature === lastRendered) {
       pending = false
       document.documentElement.classList.remove('enhanced-map-end-pending')
@@ -256,13 +282,21 @@
     lastRendered = signature
     const winner = winnerId === match.team1.id ? match.team1 : winnerId === match.team2.id ? match.team2 : null
     const mvpImage = mvp ? playerImage(mvp.player, true, mvp.side) : asset('player_silhouette-6cb6fa39.png')
+    const renderSeriesPips = (side, wins) => Array.from({ length: seriesPipCount(match.format) }, (_, index) => `<div class="wins_box${index < Number(wins || 0) ? ' win' : ''} ${side}"></div>`).join('')
     root.style.setProperty('--map-bg', `url("${asset(mapAssets[mapKey] || mapAssets.ancient)}")`)
     root.innerHTML = `<main class="enhanced-map-end-shell">
       <header class="enhanced-map-end-scorebar">
         <div class="enhanced-map-end-scoreteam ${winnerId === match.team1.id ? 'winner' : ''}">
           <img src="${esc(cleanUrl(match.team1.logoUrl) || asset('logo_CT_default-98efc38d.png'))}" alt=""><div><small>${winnerId === match.team1.id ? 'Winner' : 'Opponent'}</small><strong>${esc(match.team1.name)}</strong></div>
         </div>
-        <div class="enhanced-map-end-scorecenter"><small>Final score</small><div class="enhanced-map-end-score"><b>${score.team1}</b><span>:</span><b>${score.team2}</b></div><em>${esc(match.format.toUpperCase())} · Series ${seriesScore.team1}:${seriesScore.team2} · ${esc(mapLabel(map.name))}</em></div>
+        <div class="enhanced-map-end-scorecenter">
+          <div class="enhanced-map-end-score-context"><span>ROUND SCORE</span><i></i><span>MAP ${map.number || 1} · ${esc(mapLabel(map.name))}</span></div>
+          <div class="enhanced-map-end-score">
+            <div class="enhanced-map-end-score-side"><b class="${team1Side}">${score.team1}</b><div class="enhanced-map-end-score-pips"><div class="wins_box_container">${renderSeriesPips(team1Side, seriesScore.team1)}</div></div></div>
+            <span>:</span>
+            <div class="enhanced-map-end-score-side"><b class="${team2Side}">${score.team2}</b><div class="enhanced-map-end-score-pips"><div class="wins_box_container">${renderSeriesPips(team2Side, seriesScore.team2)}</div></div></div>
+          </div>
+        </div>
         <div class="enhanced-map-end-scoreteam ${winnerId === match.team2.id ? 'winner' : ''}">
           <div><small>${winnerId === match.team2.id ? 'Winner' : 'Opponent'}</small><strong>${esc(match.team2.name)}</strong></div><img src="${esc(cleanUrl(match.team2.logoUrl) || asset('logo_T_default-e8ec7778.png'))}" alt="">
         </div>
