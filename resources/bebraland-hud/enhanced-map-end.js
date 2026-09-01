@@ -32,6 +32,10 @@
     return bestOf > 0 ? bestOf : 1
   }
   const seriesPipCount = (format) => Math.ceil(bestOfNumber(format) / 2)
+  const seconds = (value) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.min(parsed, 600) : 30
+  }
   const liveTeamState = (team) => {
     const name = String(team?.name || '').trim().toLowerCase()
     if (!name) return null
@@ -50,25 +54,35 @@
   let showVeto = false
   let vetoPosition = 'right'
   let ratingModel = 'five_factor'
+  let lastMapSeconds = 30
+  let seriesSeconds = 30
   let projection = null
   let lastRendered = ''
   let projectionRequest = null
   let pending = false
   let retryTimer = null
   let debugPreview = false
+  let debugSeriesPreview = false
+  let presentationKey = ''
+  let presentationStartedAt = 0
+  let seriesEndUntil = 0
+  let finishedSeriesKey = ''
+  let phaseTimer = null
 
   const oldOverlay = () => document.querySelector('.eg-overlay')
   const clearEnhanced = () => {
     pending = false
     if (retryTimer) clearTimeout(retryTimer)
     retryTimer = null
+    if (phaseTimer) clearTimeout(phaseTimer)
+    phaseTimer = null
     document.documentElement.classList.remove('enhanced-map-end-active', 'enhanced-map-end-pending')
     root.replaceChildren()
     lastRendered = ''
   }
 
   const holdEnhanced = () => {
-    if ((!enabled && !debugPreview) || (!debugPreview && !oldOverlay())) return clearEnhanced()
+    if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending)) return clearEnhanced()
     pending = true
     document.documentElement.classList.remove('enhanced-map-end-active')
     document.documentElement.classList.add('enhanced-map-end-pending')
@@ -80,13 +94,17 @@
     const nextShowVeto = isTrue(config?.display_settings?.show_map_end_veto)
     const nextVetoPosition = config?.display_settings?.map_end_veto_position === 'left' ? 'left' : 'right'
     const nextRatingModel = config?.display_settings?.map_end_rating_model === 'hltv_like' ? 'hltv_like' : 'five_factor'
-    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition || nextRatingModel !== ratingModel
+    const nextLastMapSeconds = seconds(config?.display_settings?.map_end_last_map_seconds)
+    const nextSeriesSeconds = seconds(config?.display_settings?.map_end_series_seconds)
+    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition || nextRatingModel !== ratingModel || nextLastMapSeconds !== lastMapSeconds || nextSeriesSeconds !== seriesSeconds
     enabled = nextEnabled
     showVeto = nextShowVeto
     vetoPosition = nextVetoPosition
     ratingModel = nextRatingModel
-    if (!enabled && !debugPreview) clearEnhanced()
-    else if (changed && (debugPreview || oldOverlay())) {
+    lastMapSeconds = nextLastMapSeconds
+    seriesSeconds = nextSeriesSeconds
+    if (!enabled && !debugPreview && !debugSeriesPreview) clearEnhanced()
+    else if (changed && (debugPreview || debugSeriesPreview || oldOverlay() || Date.now() < seriesEndUntil)) {
       lastRendered = ''
       loadProjection().then(render)
     }
@@ -97,7 +115,7 @@
     .then(updateEnabled)
     .catch(() => {
       enabled = false
-      if (!debugPreview) clearEnhanced()
+      if (!debugPreview && !debugSeriesPreview) clearEnhanced()
     })
 
   const loadSettings = () => fetch('/api/settings', { cache: 'no-store' })
@@ -106,7 +124,7 @@
     .catch(() => undefined)
 
   const loadProjection = () => {
-    if (!enabled && !debugPreview) return Promise.resolve()
+    if (!enabled && !debugPreview && !debugSeriesPreview) return Promise.resolve()
     if (projectionRequest) return projectionRequest
     projectionRequest = fetch('/api/settings/mat/projection', { cache: 'no-store' })
       .then((response) => response.ok ? response.json() : null)
@@ -116,13 +134,20 @@
     return projectionRequest
   }
 
-  const loadDebugPreview = () => fetch('/api/settings/debug/map-end', { cache: 'no-store' })
-    .then((response) => response.ok ? response.json() : null)
-    .then((value) => {
-      const next = value?.enabled === true
-      if (next === debugPreview) return
-      debugPreview = next
-      if (debugPreview) loadProjection().then(render)
+  const loadDebugPreview = () => Promise.all([
+    fetch('/api/settings/debug/map-end', { cache: 'no-store' }),
+    fetch('/api/settings/debug/series-end', { cache: 'no-store' })
+  ]).then(async ([mapEnd, seriesEnd]) => {
+      const nextMap = mapEnd.ok && (await mapEnd.json()).enabled === true
+      const nextSeries = seriesEnd.ok && (await seriesEnd.json()).enabled === true
+      if (nextMap === debugPreview && nextSeries === debugSeriesPreview) return
+      debugPreview = nextMap
+      debugSeriesPreview = nextSeries
+      presentationKey = ''
+      presentationStartedAt = 0
+      seriesEndUntil = 0
+      finishedSeriesKey = ''
+      if (debugPreview || debugSeriesPreview) loadProjection().then(render)
       else clearEnhanced()
     })
     .catch(() => undefined)
@@ -136,7 +161,7 @@
   }
 
   const startMapEnd = () => {
-    if (debugPreview || !enabled || !oldOverlay() || pending || document.documentElement.classList.contains('enhanced-map-end-active')) return
+    if (debugPreview || debugSeriesPreview || !enabled || !oldOverlay() || pending || document.documentElement.classList.contains('enhanced-map-end-active')) return
     holdEnhanced()
     loadProjection().then(render)
   }
@@ -166,11 +191,11 @@
     roundsPlayed: 24
   }))
 
-  const debugMatch = () => {
+  const debugMatch = (series = false) => {
     const source = projection?.match
     const team1 = debugTeam(source?.team1, 'debug-team-1', 'Kailos Team')
     const team2 = debugTeam(source?.team2, 'debug-team-2', 'BebraLand Team')
-    const format = source?.format || 'bo3'
+    const format = series && bestOfNumber(source?.format) === 1 ? 'bo3' : source?.format || 'bo3'
     const previewMapNames = ['de_dust2', 'de_cache', 'de_ancient', 'de_anubis', 'de_inferno', 'de_mirage', 'de_nuke']
     const sourceMaps = Array.isArray(source?.maps) ? source.maps : []
     const maps = Array.from({ length: Math.max(bestOfNumber(format), sourceMaps.length) }, (_, index) => ({
@@ -190,6 +215,21 @@
         team2: debugStats(team2, 17, 17, 340)
       }
     }
+    const winsNeeded = seriesPipCount(format)
+    if (series) {
+      for (let index = 1; index < winsNeeded; index += 1) {
+        maps[index] = {
+          ...maps[index],
+          score: { team1: 13 + index, team2: 9 + index },
+          winnerTeamId: team1.id,
+          completedAt: new Date(Date.now() + index).toISOString(),
+          playerStats: {
+            team1: debugStats(team1, 19 + index, 12 + index, 380 + index * 20),
+            team2: debugStats(team2, 14 + index, 17 + index, 310 + index * 20)
+          }
+        }
+      }
+    }
     const veto = source?.veto?.actions?.length ? source.veto : {
       status: 'completed',
       actions: [
@@ -199,14 +239,14 @@
     }
     return {
       ...source,
-      id: 'debug-map-end',
+      id: series ? 'debug-series-end' : 'debug-map-end',
       format,
       status: 'completed',
       currentMap: null,
-      currentMapNumber: 1,
+      currentMapNumber: series ? winsNeeded : 1,
       team1,
       team2,
-      seriesScore: { team1: 1, team2: 0 },
+      seriesScore: { team1: series ? winsNeeded : 1, team2: 0 },
       veto,
       maps
     }
@@ -335,9 +375,47 @@
     </aside>`
   }
 
+  const seriesResult = (match, maps) => {
+    const wins = { team1: 0, team2: 0 }
+    for (const map of maps) {
+      const winnerId = map.winnerTeamId || (map.score?.team1 > map.score?.team2 ? match.team1.id : map.score?.team2 > map.score?.team1 ? match.team2.id : null)
+      if (winnerId === match.team1.id) wins.team1 += 1
+      if (winnerId === match.team2.id) wins.team2 += 1
+    }
+    return wins
+  }
+
+  const aggregateSeriesStats = (maps) => {
+    const aggregate = (side) => {
+      const players = new Map()
+      for (const map of maps) {
+        for (const line of map.playerStats?.[side] || []) {
+          const key = String(line.steamId).toLowerCase()
+          const total = players.get(key) || { ...line, kills: 0, deaths: 0, assists: 0, flashAssists: 0, damage: 0, utilityDamage: 0, enemiesFlashed: 0, headshotKills: 0, mvps: 0, score: 0, roundsPlayed: 0, kastRounds: 0 }
+          const rounds = Number(line.roundsPlayed || 0)
+          for (const field of ['kills', 'deaths', 'assists', 'flashAssists', 'damage', 'utilityDamage', 'enemiesFlashed', 'headshotKills', 'mvps', 'score', 'roundsPlayed']) total[field] += Number(line[field] || 0)
+          total.kastRounds += Number(line.kast || 0) * rounds
+          total.name = line.name || total.name
+          players.set(key, total)
+        }
+      }
+      return [...players.values()].map(({ kastRounds, ...line }) => ({ ...line, kast: line.roundsPlayed ? kastRounds / line.roundsPlayed : 0 }))
+    }
+    return { team1: aggregate('team1'), team2: aggregate('team2') }
+  }
+
+  const schedulePhase = (delay) => {
+    if (phaseTimer) clearTimeout(phaseTimer)
+    phaseTimer = setTimeout(() => {
+      phaseTimer = null
+      lastRendered = ''
+      loadProjection().then(render)
+    }, Math.max(0, delay) + 25)
+  }
+
   const render = () => {
-    const match = debugPreview ? debugMatch() : projection?.match
-    if ((!enabled && !debugPreview) || (!debugPreview && !oldOverlay())) return clearEnhanced()
+    const match = debugSeriesPreview ? debugMatch(true) : debugPreview ? debugMatch() : projection?.match
+    if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending && Date.now() >= seriesEndUntil)) return clearEnhanced()
     if (!match) {
       holdEnhanced()
       retryProjection()
@@ -345,17 +423,40 @@
     }
 
     const maps = match.maps || []
-    const map = [...maps].reverse().find((item) => item.completedAt || item.score || item.playerStats)
+    const completedMaps = maps.filter((item) => item.playerStats && item.score)
+    const map = [...completedMaps].reverse()[0]
     if (!map?.playerStats) {
       holdEnhanced()
       retryProjection()
       return
     }
-    const score = map.score || { team1: 0, team2: 0 }
-    const winnerId = map.winnerTeamId || (score.team1 === score.team2 ? null : score.team1 > score.team2 ? match.team1.id : match.team2.id)
-    const lines = map.playerStats || { team1: [], team2: [] }
+    const currentKey = `${match.id}:${map.number}:${map.completedAt || `${map.score.team1}:${map.score.team2}`}`
+    if (currentKey !== presentationKey) {
+      presentationKey = currentKey
+      presentationStartedAt = Date.now()
+      seriesEndUntil = 0
+    }
+    const mapSeriesScore = seriesResult(match, completedMaps)
+    const projectedSeriesScore = match.seriesScore || { team1: 0, team2: 0 }
+    const seriesScore = {
+      team1: Math.max(Number(projectedSeriesScore.team1 || 0), mapSeriesScore.team1),
+      team2: Math.max(Number(projectedSeriesScore.team2 || 0), mapSeriesScore.team2)
+    }
+    const seriesComplete = debugSeriesPreview || (bestOfNumber(match.format) > 1 && Math.max(seriesScore.team1, seriesScore.team2) >= seriesPipCount(match.format))
+    if (seriesComplete && finishedSeriesKey !== currentKey) seriesEndUntil = presentationStartedAt + (lastMapSeconds + seriesSeconds) * 1000
+    const elapsed = Date.now() - presentationStartedAt
+    const showSeries = seriesComplete && elapsed >= lastMapSeconds * 1000
+    if (seriesComplete && Date.now() >= seriesEndUntil) {
+      finishedSeriesKey = currentKey
+      return clearEnhanced()
+    }
+    if (seriesComplete) schedulePhase(showSeries ? seriesEndUntil - Date.now() : lastMapSeconds * 1000 - elapsed)
+    const score = showSeries ? seriesScore : map.score || { team1: 0, team2: 0 }
+    const winnerId = showSeries
+      ? (seriesScore.team1 === seriesScore.team2 ? null : seriesScore.team1 > seriesScore.team2 ? match.team1.id : match.team2.id)
+      : map.winnerTeamId || (score.team1 === score.team2 ? null : score.team1 > score.team2 ? match.team1.id : match.team2.id)
+    const lines = showSeries ? aggregateSeriesStats(completedMaps) : map.playerStats || { team1: [], team2: [] }
     const mapKey = String(map.name || '').replace(/^de_/, '')
-    const seriesScore = match.seriesScore || { team1: 0, team2: 0 }
     const defaultTeam1Side = map.startingSideTeam1 === 'T' ? 'T' : 'CT'
     const team1Live = liveTeamState(match.team1)
     const team2Live = liveTeamState(match.team2)
@@ -372,7 +473,7 @@
     const statsSignature = [...(lines.team1 || []), ...(lines.team2 || [])]
       .map((line) => `${line.steamId}:${line.kills}:${line.deaths}:${line.assists}:${line.flashAssists}:${line.damage}:${line.utilityDamage}:${line.enemiesFlashed}:${line.headshotKills}:${line.mvps}:${line.kast}:${line.roundsPlayed}`)
       .join('|')
-    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${team1Live?.slot ?? ''}:${team2Live?.slot ?? ''}:${mvp?.player.steamId || ''}:${ratingModel}:${showVeto}:${vetoPosition}:${veto}:${statsSignature}`
+    const signature = `${match.id}:${map.number}:${showSeries}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${team1Live?.slot ?? ''}:${team2Live?.slot ?? ''}:${mvp?.player.steamId || ''}:${ratingModel}:${showVeto}:${vetoPosition}:${veto}:${statsSignature}`
     if (signature === lastRendered) {
       pending = false
       document.documentElement.classList.remove('enhanced-map-end-pending')
@@ -389,7 +490,7 @@
           <img src="${esc(cleanUrl(leftTeam.team.logoUrl) || asset(leftTeam.side === 'T' ? 'logo_T_default-e8ec7778.png' : 'logo_CT_default-98efc38d.png'))}" alt=""><div><small>${leftTeam.winner ? 'Winner' : 'Opponent'}</small><strong>${esc(leftTeam.team.name)}</strong></div>
         </div>
         <div class="enhanced-map-end-scorecenter">
-          <div class="enhanced-map-end-score-context"><span>ROUND SCORE</span><i></i><span>MAP ${map.number || 1} · ${esc(mapLabel(map.name))}</span></div>
+          <div class="enhanced-map-end-score-context"><span>${showSeries ? 'SERIES SCORE' : 'ROUND SCORE'}</span><i></i><span>${showSeries ? `${esc(String(match.format || 'bo1').toUpperCase())} · ${completedMaps.length} MAPS` : `MAP ${map.number || 1} · ${esc(mapLabel(map.name))}`}</span></div>
           <div class="enhanced-map-end-score">
             <div class="enhanced-map-end-score-side"><b class="${leftTeam.side}">${leftTeam.score}</b><div class="enhanced-map-end-score-pips"><div class="wins_box_container">${renderSeriesPips(leftTeam.side, leftTeam.series)}</div></div></div>
             <span>:</span>
@@ -402,8 +503,8 @@
       </header>
       <div class="enhanced-map-end-teams">${renderTeam(leftTeam.team, leftTeam.lines, leftTeam.side, leftTeam.winner, mvp?.player.steamId)}${renderTeam(rightTeam.team, rightTeam.lines, rightTeam.side, rightTeam.winner, mvp?.player.steamId)}</div>
       <aside class="enhanced-map-end-mvp-side">
-        ${mvp ? `<section class="enhanced-map-end-mvp ${mvp.side}"><span class="enhanced-map-end-mvp-badge">MVP</span><img class="enhanced-map-end-mvp-photo" src="${esc(mvpImage)}" alt=""><div class="enhanced-map-end-mvp-copy"><span class="enhanced-map-end-mvp-label">${esc(mvp.team.name)}</span><div class="enhanced-map-end-mvp-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-mvp-metrics"><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">Rating</span><strong>${mvp.stats.rating.toFixed(2)}</strong></div><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">K · D · A</span><strong>${mvp.stats.kills} · ${mvp.stats.deaths} · ${mvp.stats.assists}</strong></div></div></div></section>` : ''}
-        ${mvp ? `<section class="enhanced-map-end-fragger ${mvp.side}"><span class="enhanced-map-end-kicker">Top fragger</span><div class="enhanced-map-end-fragger-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-fragger-metrics"><div><span class="enhanced-map-end-kicker">Kills</span><strong>${mvp.stats.kills}</strong></div><div><span class="enhanced-map-end-kicker">K/D</span><strong>${mvp.stats.deaths ? (mvp.stats.kills / mvp.stats.deaths).toFixed(2) : '∞'}</strong></div></div></section>` : ''}
+        ${mvp ? `<section class="enhanced-map-end-mvp ${mvp.side}"><span class="enhanced-map-end-mvp-badge">${showSeries ? 'SERIES MVP' : 'MVP'}</span><img class="enhanced-map-end-mvp-photo" src="${esc(mvpImage)}" alt=""><div class="enhanced-map-end-mvp-copy"><span class="enhanced-map-end-mvp-label">${esc(mvp.team.name)}</span><div class="enhanced-map-end-mvp-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-mvp-metrics"><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">Rating</span><strong>${mvp.stats.rating.toFixed(2)}</strong></div><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">K · D · A</span><strong>${mvp.stats.kills} · ${mvp.stats.deaths} · ${mvp.stats.assists}</strong></div></div></div></section>` : ''}
+        ${mvp ? `<section class="enhanced-map-end-fragger ${mvp.side}"><span class="enhanced-map-end-kicker">${showSeries ? 'Series top fragger' : 'Top fragger'}</span><div class="enhanced-map-end-fragger-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-fragger-metrics"><div><span class="enhanced-map-end-kicker">Kills</span><strong>${mvp.stats.kills}</strong></div><div><span class="enhanced-map-end-kicker">K/D</span><strong>${mvp.stats.deaths ? (mvp.stats.kills / mvp.stats.deaths).toFixed(2) : '∞'}</strong></div></div></section>` : ''}
       </aside>
       ${veto}
     </main>`
@@ -414,13 +515,13 @@
 
   loadConfig().then(() => loadSettings()).then(() => loadProjection().then(render))
   new MutationObserver(() => {
-    if (debugPreview) return
+    if (debugPreview || debugSeriesPreview) return
     if (oldOverlay()) startMapEnd()
-    else clearEnhanced()
+    else if (!pending && Date.now() >= seriesEndUntil) clearEnhanced()
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
   setInterval(() => {
     loadConfig().then(loadSettings)
     loadDebugPreview()
-    if (pending || debugPreview) loadProjection().then(render)
+    if (pending || debugPreview || debugSeriesPreview || Date.now() < seriesEndUntil) loadProjection().then(render)
   }, 1500)
 })()

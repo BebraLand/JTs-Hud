@@ -18,7 +18,10 @@ const {
   developerTestingEnabled,
   debugMapEndActive,
   debugMapEndBusy,
+  debugSeriesEndActive,
+  debugSeriesEndBusy,
   toggleDebugMapEnd,
+  toggleDebugSeriesEnd,
   livePlayerSteamIds,
   showOnlyActivePlayers,
   playersForSection,
@@ -58,13 +61,22 @@ const {
                 Temporary only — does not change HUD settings or match data.
               </p>
             </div>
-            <BaseButton
-              variant="secondary"
-              :disabled="debugMapEndBusy"
-              @click="toggleDebugMapEnd"
-            >
-              {{ debugMapEndBusy ? 'Working…' : debugMapEndActive ? 'Hide preview' : 'Simulate map-end' }}
-            </BaseButton>
+            <div class="flex gap-2">
+              <BaseButton
+                variant="secondary"
+                :disabled="debugMapEndBusy || debugSeriesEndBusy"
+                @click="toggleDebugMapEnd"
+              >
+                {{ debugMapEndBusy ? 'Working…' : debugMapEndActive ? 'Hide map preview' : 'Simulate map-end' }}
+              </BaseButton>
+              <BaseButton
+                variant="secondary"
+                :disabled="debugMapEndBusy || debugSeriesEndBusy"
+                @click="toggleDebugSeriesEnd"
+              >
+                {{ debugSeriesEndBusy ? 'Working…' : debugSeriesEndActive ? 'Hide series preview' : 'Simulate series-end' }}
+              </BaseButton>
+            </div>
           </div>
         </div>
         <HudPanelSection

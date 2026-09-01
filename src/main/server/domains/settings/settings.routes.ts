@@ -7,6 +7,7 @@ import { resolveTelnetSettings } from './telnetSettings'
 
 const router = Router()
 let debugMapEndEnabled = false
+let debugSeriesEndEnabled = false
 
 export interface AppSettings {
   autoSwitchSides: boolean
@@ -106,7 +107,21 @@ router.put('/debug/map-end', requireLocalOrigin, (req: Request, res: Response) =
     return res.status(400).json({ error: 'Debug map-end enabled must be a boolean' })
   }
   debugMapEndEnabled = req.body.enabled
+  if (debugMapEndEnabled) debugSeriesEndEnabled = false
   return res.json({ enabled: debugMapEndEnabled })
+})
+
+router.get('/debug/series-end', (_req: Request, res: Response) => {
+  res.json({ enabled: debugSeriesEndEnabled })
+})
+
+router.put('/debug/series-end', requireLocalOrigin, (req: Request, res: Response) => {
+  if (typeof req.body?.enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Debug series-end enabled must be a boolean' })
+  }
+  debugSeriesEndEnabled = req.body.enabled
+  if (debugSeriesEndEnabled) debugMapEndEnabled = false
+  return res.json({ enabled: debugSeriesEndEnabled })
 })
 
 router.post('/mat/test', requireLocalOrigin, async (req: Request, res: Response) => {

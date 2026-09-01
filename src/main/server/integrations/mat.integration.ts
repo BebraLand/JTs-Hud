@@ -415,39 +415,42 @@ class MatIntegrationService {
       const response = await this.fetchProjection(settings.url, token)
       const projection = response.projection
       if (generation !== this.refreshGeneration) return
-      const changed = this.forceLocalUpdate || projection.revision !== this.projection?.revision
+      const previousMatch = this.projection?.match
+      const keepPostMatchProjection = !projection.match && previousMatch?.maps?.some((map) => Boolean(map.score && map.playerStats))
+      const nextProjection = keepPostMatchProjection ? this.projection! : projection
+      const changed = this.forceLocalUpdate || nextProjection.revision !== this.projection?.revision
       if (changed && this.projection) {
         this.teamAssetVersion = Math.max(Date.now(), this.teamAssetVersion + 1)
       }
-      this.projection = projection
-      this.match = mapMatch(projection)
-      if (this.match && this.liveMatchId === projection.match?.id) {
+      this.projection = nextProjection
+      this.match = mapMatch(nextProjection)
+      if (this.match && this.liveMatchId === nextProjection.match?.id) {
         for (const veto of this.match.vetos) {
           const reverseSide = this.liveMapSides.get(veto.mapName)
           if (reverseSide !== undefined) veto.reverseSide = reverseSide
         }
       }
-      this.teams = projection.match
+      this.teams = nextProjection.match
         ? [
-            mapTeam(projection.match.team1, settings.url, this.teamAssetVersion),
-            mapTeam(projection.match.team2, settings.url, this.teamAssetVersion)
+            mapTeam(nextProjection.match!.team1, settings.url, this.teamAssetVersion),
+            mapTeam(nextProjection.match!.team2, settings.url, this.teamAssetVersion)
           ]
         : []
-      this.players = projection.match
-        ? [...projection.match.team1.players, ...projection.match.team2.players].map((player) =>
+      this.players = nextProjection.match
+        ? [...nextProjection.match!.team1.players, ...nextProjection.match!.team2.players].map((player) =>
             mapPlayer(player, settings.url, settings.useSteamAvatars)
           )
         : []
       this.status = {
         state: 'connected',
-        message: projection.match
-          ? `Synced ${projection.match.team1.name} vs ${projection.match.team2.name}`
+        message: nextProjection.match
+          ? `Synced ${nextProjection.match.team1.name} vs ${nextProjection.match.team2.name}`
           : response.tokenMode === 'automatic'
             ? 'Connected; automatic match not detected'
             : 'Connected; no MAT broadcast match selected',
         lastSyncAt: new Date().toISOString(),
-        revision: projection.revision,
-        currentMatchSlug: projection.match?.slug || null,
+        revision: nextProjection.revision,
+        currentMatchSlug: nextProjection.match?.slug || null,
         tokenMode: response.tokenMode
       }
       if (changed) {

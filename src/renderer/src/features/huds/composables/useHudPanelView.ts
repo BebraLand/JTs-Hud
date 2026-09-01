@@ -10,7 +10,7 @@ export type PanelInput = {
   type: string
   name: string
   label: string
-  default?: boolean
+  default?: boolean | string | number
   requires?: 'mat'
   values?: { name: string; label: string }[]
 }
@@ -40,6 +40,8 @@ export function useHudPanelView() {
   const developerTestingEnabled = ref(false)
   const debugMapEndActive = ref(false)
   const debugMapEndBusy = ref(false)
+  const debugSeriesEndActive = ref(false)
+  const debugSeriesEndBusy = ref(false)
 
   const activeSection = computed<PanelSection>(
     () => panel.value.find((s) => s.name === activeTab.value) ?? EMPTY_SECTION
@@ -90,10 +92,14 @@ export function useHudPanelView() {
     }
   }
 
-  const loadDebugMapEnd = async () => {
+  const loadDebugPreviews = async () => {
     if (!developerTestingEnabled.value) return
-    const res = await fetch(`${API_URL}/settings/debug/map-end`)
-    if (res.ok) debugMapEndActive.value = (await res.json()).enabled === true
+    const [mapEnd, seriesEnd] = await Promise.all([
+      fetch(`${API_URL}/settings/debug/map-end`),
+      fetch(`${API_URL}/settings/debug/series-end`)
+    ])
+    if (mapEnd.ok) debugMapEndActive.value = (await mapEnd.json()).enabled === true
+    if (seriesEnd.ok) debugSeriesEndActive.value = (await seriesEnd.json()).enabled === true
   }
 
   const toggleDebugMapEnd = async () => {
@@ -104,9 +110,23 @@ export function useHudPanelView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !debugMapEndActive.value })
       })
-      if (res.ok) debugMapEndActive.value = (await res.json()).enabled === true
+      if (res.ok) await loadDebugPreviews()
     } finally {
       debugMapEndBusy.value = false
+    }
+  }
+
+  const toggleDebugSeriesEnd = async () => {
+    debugSeriesEndBusy.value = true
+    try {
+      const res = await fetch(`${API_URL}/settings/debug/series-end`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !debugSeriesEndActive.value })
+      })
+      if (res.ok) await loadDebugPreviews()
+    } finally {
+      debugSeriesEndBusy.value = false
     }
   }
 
@@ -139,7 +159,7 @@ export function useHudPanelView() {
     seedConfig()
     await loadConfig()
     seedConfig()
-    await loadDebugMapEnd()
+    await loadDebugPreviews()
   })
 
   onUnmounted(() => {
@@ -239,6 +259,8 @@ export function useHudPanelView() {
     developerTestingEnabled,
     debugMapEndActive,
     debugMapEndBusy,
+    debugSeriesEndActive,
+    debugSeriesEndBusy,
     hasNonActionInputs,
     hasPlayerInput,
     livePlayerSteamIds,
@@ -247,6 +269,7 @@ export function useHudPanelView() {
     saveSectionConfig,
     fireAction,
     toggleDebugMapEnd,
+    toggleDebugSeriesEnd,
     uploadImage,
     clearImage,
     uploadImageToList,
