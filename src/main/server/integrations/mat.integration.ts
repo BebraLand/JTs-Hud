@@ -11,7 +11,7 @@ import type {
   MatIntegrationStatus,
   MatTokenMode
 } from './mat.types'
-import { inferReverseSide, mapMatch, mapPlayer, mapTeam } from './mat.mapper'
+import { inferReverseSide, mapMatch, mapPlayer, mapTeam, matMatchAssetsKey } from './mat.mapper'
 import { notifyHudDataChanged } from '../hudRefresh'
 import { publishTournamentLabels } from './tournamentLabels'
 
@@ -419,7 +419,9 @@ class MatIntegrationService {
       const keepPostMatchProjection = !projection.match && previousMatch?.maps?.some((map) => Boolean(map.score && map.playerStats))
       const nextProjection = keepPostMatchProjection ? this.projection! : projection
       const changed = this.forceLocalUpdate || nextProjection.revision !== this.projection?.revision
-      if (changed && this.projection) {
+      const assetsChanged =
+        matMatchAssetsKey(previousMatch ?? null) !== matMatchAssetsKey(nextProjection.match)
+      if (assetsChanged && this.projection) {
         this.teamAssetVersion = Math.max(Date.now(), this.teamAssetVersion + 1)
       }
       this.projection = nextProjection
@@ -455,7 +457,7 @@ class MatIntegrationService {
       }
       if (changed) {
         this.forceLocalUpdate = false
-        this.emitLocalUpdates()
+        this.emitLocalUpdates(assetsChanged)
       } else {
         this.emitStatus()
       }
@@ -504,7 +506,7 @@ class MatIntegrationService {
     this.localIo?.emit('mat:status', this.getStatus())
   }
 
-  private emitLocalUpdates(): void {
+  private emitLocalUpdates(refreshHud = false): void {
     if (this.localIo) void publishTournamentLabels(this.localIo, 'mat', this.getHudLabels())
     // A manually selected MAT match can change without a new GSI packet.
     // Ask Challonge to re-resolve its stage from the new MAT teams.
@@ -517,7 +519,7 @@ class MatIntegrationService {
     this.localIo?.emit('match')
     this.localIo?.emit('teams')
     this.localIo?.emit('players')
-    if (this.localIo) void notifyHudDataChanged(this.localIo, 'mat')
+    if (refreshHud && this.localIo) void notifyHudDataChanged(this.localIo, 'mat')
   }
 }
 

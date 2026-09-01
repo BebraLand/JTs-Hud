@@ -26,7 +26,6 @@ const disabledLabels = (): TournamentHudLabels => ({
 let io: Server | null = null
 let matLabels = disabledLabels()
 let challongeLabels = disabledLabels()
-let lastPublishedKey = ''
 
 const isUsable = (labels: TournamentHudLabels): boolean => labels.enabled && labels.available
 
@@ -51,25 +50,17 @@ export const publishTournamentLabels = async (
   if (source === 'mat') matLabels = { ...labels, source }
   else challongeLabels = { ...labels, source }
   const resolved = await resolve()
-  const key = JSON.stringify(resolved)
-  const changed = key !== lastPublishedKey
-  lastPublishedKey = key
   server.emit('tournament:labels', resolved)
   // Existing HUDs already consume this event. Keep it as the compatibility
   // channel while tournament-aware HUDs can use tournament:labels directly.
   server.emit('mat:labels', resolved)
-  if (changed) server.emit('refreshHUD')
 }
 
 export const refreshTournamentLabels = async (): Promise<void> => {
   if (!io) return
   const resolved = await resolve()
-  const key = JSON.stringify(resolved)
-  const changed = key !== lastPublishedKey
-  lastPublishedKey = key
   io.emit('tournament:labels', resolved)
   io.emit('mat:labels', resolved)
-  if (changed) io.emit('refreshHUD')
 }
 
 export const getResolvedTournamentLabels = async (): Promise<TournamentHudLabels> => resolve()

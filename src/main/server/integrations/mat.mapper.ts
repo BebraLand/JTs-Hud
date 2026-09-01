@@ -15,6 +15,20 @@ function resolveMatAssetUrl(url: string | null, matUrl?: string, cacheBust?: num
   return proxyAssetUrl(parsed.toString())
 }
 
+export function matMatchAssetsKey(match: MatHudProjectionV1['match']): string {
+  if (!match) return ''
+  return JSON.stringify([
+    match.id,
+    ...[match.team1, match.team2].flatMap((team) => [
+      team.id,
+      team.logoUrl,
+      ...[...team.players]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .flatMap((player) => [player.id, player.avatarUrl, player.photoUrl])
+    ])
+  ])
+}
+
 export function inferReverseSide(
   team1Players: readonly Pick<MatHudPlayer, 'steamId'>[],
   team2Players: readonly Pick<MatHudPlayer, 'steamId'>[],

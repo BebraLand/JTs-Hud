@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   inferReverseSide,
+  matMatchAssetsKey,
   mapMatch,
   mapPlayer,
   mapTeam
@@ -125,6 +126,25 @@ assert.equal(
 
 const match = mapMatch(projection)
 if (!match) throw new Error('Expected MAT match to map')
+if (!projection.match) throw new Error('Expected MAT fixture match')
+const assetKey = matMatchAssetsKey(projection.match)
+assert.equal(
+  matMatchAssetsKey({
+    ...projection.match,
+    maps: [{ ...projection.match.maps[0], score: { team1: 14, team2: 8 } }]
+  }),
+  assetKey
+)
+assert.notEqual(
+  matMatchAssetsKey({
+    ...projection.match,
+    team1: {
+      ...projection.match.team1,
+      players: [{ ...player, photoUrl: 'https://mat.example/new-photo.webp' }]
+    }
+  }),
+  assetKey
+)
 assert.equal(match.matchType, 'bo3')
 assert.deepEqual(match.left, { id: 'team-a', wins: 1 })
 assert.deepEqual(match.right, { id: 'team-b', wins: 0 })
