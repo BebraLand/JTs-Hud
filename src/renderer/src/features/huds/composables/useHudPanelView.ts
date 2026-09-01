@@ -124,7 +124,7 @@ export function useHudPanelView() {
               ? input.default ?? false
               : input.type === 'images'
                 ? []
-                : ''
+                : input.default ?? ''
         }
       }
     }

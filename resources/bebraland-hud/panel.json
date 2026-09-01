@@ -63,6 +63,22 @@
       },
       {
         "type": "checkbox",
+        "name": "show_map_end_veto",
+        "label": "Show map veto on map-end screen",
+        "default": false
+      },
+      {
+        "type": "select",
+        "name": "map_end_veto_position",
+        "label": "Map veto position",
+        "default": "right",
+        "values": [
+          { "name": "right", "label": "Right" },
+          { "name": "left", "label": "Left" }
+        ]
+      },
+      {
+        "type": "checkbox",
         "name": "show_side_player_metadata",
         "label": "Show player details on side cards",
         "default": false

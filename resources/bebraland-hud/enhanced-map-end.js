@@ -41,6 +41,8 @@
 
   let enabled = true
   let steamAvatars = false
+  let showVeto = false
+  let vetoPosition = 'right'
   let projection = null
   let lastRendered = ''
   let projectionRequest = null
@@ -68,10 +70,17 @@
   const updateEnabled = (config) => {
     const value = config?.display_settings?.use_enhanced_map_end_screen
     const nextEnabled = value !== false && value !== 'false' && value !== 0
-    const changed = nextEnabled !== enabled
+    const nextShowVeto = isTrue(config?.display_settings?.show_map_end_veto)
+    const nextVetoPosition = config?.display_settings?.map_end_veto_position === 'left' ? 'left' : 'right'
+    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition
     enabled = nextEnabled
+    showVeto = nextShowVeto
+    vetoPosition = nextVetoPosition
     if (!enabled && !debugPreview) clearEnhanced()
-    else if (changed && oldOverlay()) startMapEnd()
+    else if (changed && (debugPreview || oldOverlay())) {
+      lastRendered = ''
+      loadProjection().then(render)
+    }
   }
 
   const loadConfig = () => fetch('/api/huds/bebraland/config', { cache: 'no-store' })
@@ -149,9 +158,10 @@
     const source = projection?.match
     const team1 = debugTeam(source?.team1, 'debug-team-1', 'Kailos Team')
     const team2 = debugTeam(source?.team2, 'debug-team-2', 'BebraLand Team')
-    const previewMapNames = ['de_dust2', 'de_cache', 'de_ancient', 'de_anubis', 'de_inferno']
+    const format = source?.format || 'bo3'
+    const previewMapNames = ['de_dust2', 'de_cache', 'de_ancient', 'de_anubis', 'de_inferno', 'de_mirage', 'de_nuke']
     const sourceMaps = Array.isArray(source?.maps) ? source.maps : []
-    const maps = Array.from({ length: Math.max(bestOfNumber(source?.format), sourceMaps.length) }, (_, index) => ({
+    const maps = Array.from({ length: Math.max(bestOfNumber(format), sourceMaps.length) }, (_, index) => ({
       number: index + 1,
       name: sourceMaps[index]?.name || previewMapNames[index] || 'de_ancient',
       score: null,
@@ -168,16 +178,24 @@
         team2: debugStats(team2, 17, 17, 340)
       }
     }
+    const veto = source?.veto?.actions?.length ? source.veto : {
+      status: 'completed',
+      actions: [
+        ...previewMapNames.filter((name) => !maps.some((map) => map.name === name)).map((mapName, index) => ({ step: index + 1, teamId: index % 2 ? team2.id : team1.id, type: 'ban', mapName, side: null })),
+        ...maps.map((map, index) => ({ step: previewMapNames.length - maps.length + index + 1, teamId: index === maps.length - 1 ? null : index % 2 ? team2.id : team1.id, type: index === maps.length - 1 ? 'decider' : 'pick', mapName: map.name, side: null }))
+      ]
+    }
     return {
       ...source,
       id: 'debug-map-end',
-      format: source?.format || 'bo3',
+      format,
       status: 'completed',
       currentMap: null,
       currentMapNumber: 1,
       team1,
       team2,
       seriesScore: { team1: 1, team2: 0 },
+      veto,
       maps
     }
   }
@@ -242,6 +260,46 @@
     </section>`
   }
 
+  const vetoEntries = (match) => {
+    const entries = new Map()
+    const ensure = (mapName) => {
+      if (!entries.has(mapName)) entries.set(mapName, { mapName, step: 1000 + entries.size, type: 'decider', teamId: null, side: null, map: null })
+      return entries.get(mapName)
+    }
+    for (const action of [...(match.veto?.actions || [])].sort((a, b) => a.step - b.step)) {
+      const entry = ensure(action.mapName)
+      if (action.type === 'side') entry.side = action.side
+      else Object.assign(entry, action)
+    }
+    for (const map of match.maps || []) {
+      const entry = ensure(map.name)
+      entry.map = map
+      entry.step = Math.min(entry.step, 500 + Number(map.number || 0))
+      if (!entry.type) entry.type = map.pickedByTeamId ? 'pick' : 'decider'
+      if (!entry.teamId) entry.teamId = map.pickedByTeamId
+    }
+    return [...entries.values()].sort((a, b) => a.step - b.step)
+  }
+
+  const renderVeto = (match) => {
+    const entries = vetoEntries(match)
+    if (!entries.length) return ''
+    const teamFor = (id) => id === match.team1.id ? match.team1 : id === match.team2.id ? match.team2 : null
+    const actionLabel = (entry) => entry.type === 'ban' ? 'BAN' : entry.type === 'pick' ? 'PICK' : 'DECIDER'
+    return `<aside class="enhanced-map-end-veto ${vetoPosition}">
+      <div class="enhanced-map-end-veto-header"><span>MAP VETO</span><small>${esc(String(match.format || 'bo1').toUpperCase())}</small></div>
+      <div class="enhanced-map-end-veto-list">${entries.map((entry) => {
+        const team = teamFor(entry.teamId)
+        const map = entry.map
+        const score = map?.score ? `${map.score.team1} : ${map.score.team2}` : ''
+        const mapKey = String(entry.mapName || '').replace(/^de_/, '')
+        return `<article class="enhanced-map-end-veto-map ${entry.type}" style="--veto-map: url('${asset(mapAssets[mapKey] || mapAssets.ancient)}')">
+          <div><strong>${esc(mapLabel(entry.mapName))}</strong><span>${actionLabel(entry)}${team ? ` · ${esc(team.tag || team.name)}` : ''}</span></div>${score ? `<b>${score}</b>` : ''}
+        </article>`
+      }).join('')}</div>
+    </aside>`
+  }
+
   const render = () => {
     const match = debugPreview ? debugMatch() : projection?.match
     if ((!enabled && !debugPreview) || (!debugPreview && !oldOverlay())) return clearEnhanced()
@@ -275,10 +333,11 @@
       player, side, stats: statFor(player, teamLines), team
     })))
     const mvp = players.sort((a, b) => b.stats.rating - a.stats.rating || b.stats.kills - a.stats.kills)[0]
+    const veto = showVeto ? renderVeto(match) : ''
     const statsSignature = [...(lines.team1 || []), ...(lines.team2 || [])]
       .map((line) => `${line.steamId}:${line.kills}:${line.deaths}:${line.assists}:${line.damage}`)
       .join('|')
-    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${team1Live?.slot ?? ''}:${team2Live?.slot ?? ''}:${mvp?.player.steamId || ''}:${statsSignature}`
+    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${team1Live?.slot ?? ''}:${team2Live?.slot ?? ''}:${mvp?.player.steamId || ''}:${showVeto}:${vetoPosition}:${veto}:${statsSignature}`
     if (signature === lastRendered) {
       pending = false
       document.documentElement.classList.remove('enhanced-map-end-pending')
@@ -286,11 +345,10 @@
       return
     }
     lastRendered = signature
-    const winner = winnerId === match.team1.id ? match.team1 : winnerId === match.team2.id ? match.team2 : null
     const mvpImage = mvp ? playerImage(mvp.player, true, mvp.side) : asset('player_silhouette-6cb6fa39.png')
     const renderSeriesPips = (side, wins) => Array.from({ length: seriesPipCount(match.format) }, (_, index) => `<div class="wins_box${index < Number(wins || 0) ? ' win' : ''} ${side}"></div>`).join('')
     root.style.setProperty('--map-bg', `url("${asset(mapAssets[mapKey] || mapAssets.ancient)}")`)
-    root.innerHTML = `<main class="enhanced-map-end-shell">
+    root.innerHTML = `<main class="enhanced-map-end-shell${veto ? ` with-veto-${vetoPosition}` : ''}">
       <header class="enhanced-map-end-scorebar">
         <div class="enhanced-map-end-scoreteam ${leftTeam.side} ${leftTeam.winner ? 'winner' : ''}">
           <img src="${esc(cleanUrl(leftTeam.team.logoUrl) || asset(leftTeam.side === 'T' ? 'logo_T_default-e8ec7778.png' : 'logo_CT_default-98efc38d.png'))}" alt=""><div><small>${leftTeam.winner ? 'Winner' : 'Opponent'}</small><strong>${esc(leftTeam.team.name)}</strong></div>
@@ -312,6 +370,7 @@
         ${mvp ? `<section class="enhanced-map-end-mvp ${mvp.side}"><span class="enhanced-map-end-mvp-badge">MVP</span><img class="enhanced-map-end-mvp-photo" src="${esc(mvpImage)}" alt=""><div class="enhanced-map-end-mvp-copy"><span class="enhanced-map-end-mvp-label">${esc(mvp.team.name)}</span><div class="enhanced-map-end-mvp-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-mvp-metrics"><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">Rating</span><strong>${mvp.stats.rating.toFixed(2)}</strong></div><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">K · D · A</span><strong>${mvp.stats.kills} · ${mvp.stats.deaths} · ${mvp.stats.assists}</strong></div></div></div></section>` : ''}
         ${mvp ? `<section class="enhanced-map-end-fragger ${mvp.side}"><span class="enhanced-map-end-kicker">Top fragger</span><div class="enhanced-map-end-fragger-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-fragger-metrics"><div><span class="enhanced-map-end-kicker">Kills</span><strong>${mvp.stats.kills}</strong></div><div><span class="enhanced-map-end-kicker">K/D</span><strong>${mvp.stats.deaths ? (mvp.stats.kills / mvp.stats.deaths).toFixed(2) : '∞'}</strong></div></div></section>` : ''}
       </aside>
+      ${veto}
     </main>`
     pending = false
     document.documentElement.classList.remove('enhanced-map-end-pending')
