@@ -3,6 +3,7 @@ import { useHudPanelView } from '../features/huds/composables/useHudPanelView';
 import HudPanelHeader from '../features/huds/components/HudPanelHeader.vue';
 import HudPanelTabBar from '../features/huds/components/HudPanelTabBar.vue';
 import HudPanelSection from '../features/huds/components/HudPanelSection.vue';
+import BaseButton from '../components/base/BaseButton.vue';
 
 const {
   hudId,
@@ -14,6 +15,10 @@ const {
   activeTab,
   activeSection,
   matEnabled,
+  developerTestingEnabled,
+  debugMapEndActive,
+  debugMapEndBusy,
+  toggleDebugMapEnd,
   livePlayerSteamIds,
   showOnlyActivePlayers,
   playersForSection,
@@ -42,6 +47,26 @@ const {
       </div>
 
       <div v-else-if="activeSection.name && config[activeSection.name]" class="max-w-3xl mx-auto">
+        <div
+          v-if="developerTestingEnabled && hudId === 'bebraland'"
+          class="mb-4 rounded-xl border border-amber-800/60 bg-amber-950/20 p-4"
+        >
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-sm font-semibold text-amber-200">Developer preview</p>
+              <p class="mt-1 text-xs text-amber-300/70">
+                Temporary only — does not change HUD settings or match data.
+              </p>
+            </div>
+            <BaseButton
+              variant="secondary"
+              :disabled="debugMapEndBusy"
+              @click="toggleDebugMapEnd"
+            >
+              {{ debugMapEndBusy ? 'Working…' : debugMapEndActive ? 'Hide preview' : 'Simulate map-end' }}
+            </BaseButton>
+          </div>
+        </div>
         <HudPanelSection
           :section="activeSection"
           :section-config="config[activeSection.name]"

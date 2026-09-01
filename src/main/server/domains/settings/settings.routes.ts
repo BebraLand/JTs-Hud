@@ -6,6 +6,7 @@ import { refreshTournamentLabels } from '../../integrations/tournamentLabels'
 import { resolveTelnetSettings } from './telnetSettings'
 
 const router = Router()
+let debugMapEndEnabled = false
 
 export interface AppSettings {
   autoSwitchSides: boolean
@@ -94,6 +95,18 @@ router.get('/mat/status', async (_req: Request, res: Response) => {
 
 router.get('/mat/projection', (_req: Request, res: Response) => {
   res.json(matIntegrationService.getProjection())
+})
+
+router.get('/debug/map-end', (_req: Request, res: Response) => {
+  res.json({ enabled: debugMapEndEnabled })
+})
+
+router.put('/debug/map-end', requireLocalOrigin, (req: Request, res: Response) => {
+  if (typeof req.body?.enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Debug map-end enabled must be a boolean' })
+  }
+  debugMapEndEnabled = req.body.enabled
+  return res.json({ enabled: debugMapEndEnabled })
 })
 
 router.post('/mat/test', requireLocalOrigin, async (req: Request, res: Response) => {

@@ -30,6 +30,7 @@
   let projectionRequest = null
   let pending = false
   let retryTimer = null
+  let debugPreview = false
 
   const oldOverlay = () => document.querySelector('.eg-overlay')
   const clearEnhanced = () => {
@@ -42,7 +43,7 @@
   }
 
   const holdEnhanced = () => {
-    if (!enabled || !oldOverlay()) return clearEnhanced()
+    if (!enabled || (!debugPreview && !oldOverlay())) return clearEnhanced()
     pending = true
     document.documentElement.classList.remove('enhanced-map-end-active')
     document.documentElement.classList.add('enhanced-map-end-pending')
@@ -81,6 +82,17 @@
     return projectionRequest
   }
 
+  const loadDebugPreview = () => fetch('/api/settings/debug/map-end', { cache: 'no-store' })
+    .then((response) => response.ok ? response.json() : null)
+    .then((value) => {
+      const next = value?.enabled === true
+      if (next === debugPreview) return
+      debugPreview = next
+      if (debugPreview) loadProjection().then(render)
+      else clearEnhanced()
+    })
+    .catch(() => undefined)
+
   const retryProjection = () => {
     if (!pending || retryTimer) return
     retryTimer = setTimeout(() => {
@@ -90,9 +102,59 @@
   }
 
   const startMapEnd = () => {
-    if (!enabled || !oldOverlay() || pending || document.documentElement.classList.contains('enhanced-map-end-active')) return
+    if (debugPreview || !enabled || !oldOverlay() || pending || document.documentElement.classList.contains('enhanced-map-end-active')) return
     holdEnhanced()
     loadProjection().then(render)
+  }
+
+  const debugTeam = (team, fallbackId, fallbackName) => ({
+    id: team?.id || fallbackId,
+    name: team?.name || fallbackName,
+    tag: team?.tag || null,
+    logoUrl: team?.logoUrl || null,
+    players: team?.players?.length ? team.players : [{ id: fallbackId, steamId: fallbackId, nickname: fallbackName }]
+  })
+
+  const debugStats = (team, kills, deaths, damage) => team.players.map((player, index) => ({
+    steamId: player.steamId,
+    name: player.nickname,
+    kills: Math.max(0, kills - index * 2),
+    deaths: Math.max(0, deaths + index),
+    assists: Math.max(0, 3 - index),
+    damage: Math.max(0, damage - index * 35),
+    headshotKills: Math.max(0, kills - index * 3),
+    kast: 70,
+    mvps: index === 0 ? 2 : 0,
+    score: Math.max(0, kills - index),
+    roundsPlayed: 24
+  }))
+
+  const debugMatch = () => {
+    const source = projection?.match
+    const team1 = debugTeam(source?.team1, 'debug-team-1', 'Kailos Team')
+    const team2 = debugTeam(source?.team2, 'debug-team-2', 'BebraLand Team')
+    return {
+      ...source,
+      id: 'debug-map-end',
+      format: source?.format || 'bo3',
+      status: 'completed',
+      currentMap: null,
+      currentMapNumber: 1,
+      team1,
+      team2,
+      seriesScore: { team1: 1, team2: 0 },
+      maps: [{
+        number: 1,
+        name: 'de_dust2',
+        score: { team1: 16, team2: 12 },
+        winnerTeamId: team1.id,
+        completedAt: new Date().toISOString(),
+        playerStats: {
+          team1: debugStats(team1, 22, 14, 420),
+          team2: debugStats(team2, 17, 17, 340)
+        }
+      }]
+    }
   }
 
   const statFor = (player, lines) => {
@@ -156,8 +218,8 @@
   }
 
   const render = () => {
-    const match = projection?.match
-    if (!enabled || !oldOverlay()) return clearEnhanced()
+    const match = debugPreview ? debugMatch() : projection?.match
+    if (!enabled || (!debugPreview && !oldOverlay())) return clearEnhanced()
     if (!match) {
       holdEnhanced()
       retryProjection()
@@ -218,11 +280,13 @@
 
   loadConfig().then(() => loadSettings()).then(() => loadProjection().then(render))
   new MutationObserver(() => {
+    if (debugPreview) return
     if (oldOverlay()) startMapEnd()
     else clearEnhanced()
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
   setInterval(() => {
     loadConfig().then(loadSettings)
-    if (pending) loadProjection().then(render)
+    loadDebugPreview()
+    if (pending || debugPreview) loadProjection().then(render)
   }, 1500)
 })()

@@ -37,6 +37,9 @@ export function useHudPanelView() {
   const sectionStatus = ref<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({})
   const activeTab = ref<string>('')
   const matEnabled = ref(false)
+  const developerTestingEnabled = ref(false)
+  const debugMapEndActive = ref(false)
+  const debugMapEndBusy = ref(false)
 
   const activeSection = computed<PanelSection>(
     () => panel.value.find((s) => s.name === activeTab.value) ?? EMPTY_SECTION
@@ -80,7 +83,31 @@ export function useHudPanelView() {
 
   const loadMatSettings = async () => {
     const res = await fetch(`${API_URL}/settings`)
-    if (res.ok) matEnabled.value = (await res.json()).matEnabled === true
+    if (res.ok) {
+      const settings = await res.json()
+      matEnabled.value = settings.matEnabled === true
+      developerTestingEnabled.value = settings.developerTestingEnabled === true
+    }
+  }
+
+  const loadDebugMapEnd = async () => {
+    if (!developerTestingEnabled.value) return
+    const res = await fetch(`${API_URL}/settings/debug/map-end`)
+    if (res.ok) debugMapEndActive.value = (await res.json()).enabled === true
+  }
+
+  const toggleDebugMapEnd = async () => {
+    debugMapEndBusy.value = true
+    try {
+      const res = await fetch(`${API_URL}/settings/debug/map-end`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !debugMapEndActive.value })
+      })
+      if (res.ok) debugMapEndActive.value = (await res.json()).enabled === true
+    } finally {
+      debugMapEndBusy.value = false
+    }
   }
 
   const seedConfig = () => {
@@ -112,6 +139,7 @@ export function useHudPanelView() {
     seedConfig()
     await loadConfig()
     seedConfig()
+    await loadDebugMapEnd()
   })
 
   onUnmounted(() => {
@@ -208,6 +236,9 @@ export function useHudPanelView() {
     activeTab,
     activeSection,
     matEnabled,
+    developerTestingEnabled,
+    debugMapEndActive,
+    debugMapEndBusy,
     hasNonActionInputs,
     hasPlayerInput,
     livePlayerSteamIds,
@@ -215,6 +246,7 @@ export function useHudPanelView() {
     playersForSection,
     saveSectionConfig,
     fireAction,
+    toggleDebugMapEnd,
     uploadImage,
     clearImage,
     uploadImageToList,
