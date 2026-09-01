@@ -209,7 +209,7 @@
       ...maps[0],
       score: { team1: 16, team2: 12 },
       winnerTeamId: team1.id,
-      completedAt: new Date().toISOString(),
+      completedAt: '2026-01-01T00:00:00.000Z',
       playerStats: {
         team1: debugStats(team1, 22, 14, 420),
         team2: debugStats(team2, 17, 17, 340)
@@ -222,7 +222,7 @@
           ...maps[index],
           score: { team1: 13 + index, team2: 9 + index },
           winnerTeamId: team1.id,
-          completedAt: new Date(Date.now() + index).toISOString(),
+          completedAt: `2026-01-01T00:00:0${index}.000Z`,
           playerStats: {
             team1: debugStats(team1, 19 + index, 12 + index, 380 + index * 20),
             team2: debugStats(team2, 14 + index, 17 + index, 310 + index * 20)
@@ -409,7 +409,7 @@
     phaseTimer = setTimeout(() => {
       phaseTimer = null
       lastRendered = ''
-      loadProjection().then(render)
+      render()
     }, Math.max(0, delay) + 25)
   }
 
