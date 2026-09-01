@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io'
 import { getHudConfig } from './domains/huds/hud.routes'
 import { getActiveHudId } from './server'
 import { getHudRefreshState, refreshAllHuds } from './hudRefresh'
+import { getLastHudState } from './integrations/gsi'
 import { matIntegrationService } from './integrations/mat.integration'
 import { challongeIntegrationService } from './integrations/challonge.integration'
 import { getResolvedTournamentLabels } from './integrations/tournamentLabels'
@@ -48,6 +49,9 @@ export const setupSockets = (io: Server) => {
           socket.emit('hud_config', config)
           const labels = await getResolvedTournamentLabels()
           socket.emit('mat:labels', labels)
+          const lastHudState = getLastHudState()
+          if (lastHudState) socket.emit('update', lastHudState)
+          socket.emit('match')
         } catch (e) {
           console.error('Failed to push hud_config on register:', e)
         }

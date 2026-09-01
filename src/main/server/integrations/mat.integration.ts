@@ -11,7 +11,7 @@ import type {
   MatIntegrationStatus,
   MatTokenMode
 } from './mat.types'
-import { mapMatch, mapPlayer, mapTeam } from './mat.mapper'
+import { inferReverseSide, mapMatch, mapPlayer, mapTeam } from './mat.mapper'
 import { notifyHudDataChanged } from '../hudRefresh'
 import { publishTournamentLabels } from './tournamentLabels'
 
@@ -73,6 +73,8 @@ class MatIntegrationService {
   private observedSteamIds: string[] = []
   private forceLocalUpdate = false
   private teamAssetVersion = 0
+  private liveMatchId: string | null = null
+  private liveMapSides = new Map<string, boolean>()
 
   private async readStoredSettings(): Promise<StoredSettings> {
     const rows = (await dbAll('SELECT key, value FROM settings')) as Array<{
@@ -299,6 +301,8 @@ class MatIntegrationService {
     this.match = null
     this.forceLocalUpdate = false
     this.teamAssetVersion = 0
+    this.liveMatchId = null
+    this.liveMapSides.clear()
     if (!settings.enabled) {
       this.status = {
         state: 'disabled',
@@ -372,6 +376,26 @@ class MatIntegrationService {
     if (this.enabled) void this.refreshNow()
   }
 
+  syncLiveMapSide(
+    mapName: string,
+    players: Array<{ steamid: string; side?: 'CT' | 'T' }>
+  ): void {
+    const source = this.projection?.match
+    if (!this.isActive() || !source || !this.match) return
+    if (this.liveMatchId !== source.id) {
+      this.liveMatchId = source.id
+      this.liveMapSides.clear()
+    }
+
+    const reverseSide = inferReverseSide(source.team1.players, source.team2.players, players)
+    if (reverseSide === null) return
+    this.liveMapSides.set(mapName, reverseSide)
+    const veto = this.match.vetos.find((item) => item.mapName === mapName)
+    if (!veto || veto.reverseSide === reverseSide) return
+    veto.reverseSide = reverseSide
+    this.emitLocalUpdates()
+  }
+
   private async refreshNowUnfenced(): Promise<void> {
     if (this.refreshInFlight) return this.refreshInFlight
     const generation = this.refreshGeneration
@@ -397,6 +421,12 @@ class MatIntegrationService {
       }
       this.projection = projection
       this.match = mapMatch(projection)
+      if (this.match && this.liveMatchId === projection.match?.id) {
+        for (const veto of this.match.vetos) {
+          const reverseSide = this.liveMapSides.get(veto.mapName)
+          if (reverseSide !== undefined) veto.reverseSide = reverseSide
+        }
+      }
       this.teams = projection.match
         ? [
             mapTeam(projection.match.team1, settings.url, this.teamAssetVersion),

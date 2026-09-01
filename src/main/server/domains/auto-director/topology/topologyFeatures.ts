@@ -38,7 +38,6 @@ export interface PlayerTopologyFeatures {
 const EYE_HEIGHT = 64
 const CHEST_HEIGHT = 48
 const MIN_MOVEMENT = 20
-const SAMPLE_INTERVAL_MS = 100
 
 const pointAtHeight = (position: Vec3, height: number): Vec3 => [
   position[0],
@@ -105,11 +104,11 @@ const portalControlScore = (
   )
   const proximity = clamp01(1 - distance / 768)
   const towardPortal = player.forward
-    ? [
+    ? ([
         portal.center[0] - player.position[0],
         portal.center[1] - player.position[1],
         portal.center[2] - player.position[2]
-      ] as Vec3
+      ] as Vec3)
     : null
   const facing =
     towardPortal && player.forward
@@ -122,10 +121,10 @@ const portalControlScore = (
       : 0
   const seesPortal = Boolean(
     geometry &&
-      geometry.hasLineOfSight(
-        pointAtHeight(player.position, EYE_HEIGHT),
-        pointAtHeight(portal.center, CHEST_HEIGHT)
-      )
+    geometry.hasLineOfSight(
+      pointAtHeight(player.position, EYE_HEIGHT),
+      pointAtHeight(portal.center, CHEST_HEIGHT)
+    )
   )
   return clamp01(proximity * 0.45 + facing * 0.25 + (seesPortal ? 0.3 : 0))
 }
@@ -134,7 +133,8 @@ export const computeTopologyFeatures = (
   players: DirectorPlayer[],
   topology: TopologyMap,
   geometry: GeometryMap | null,
-  previousPlayers: ReadonlyMap<string, DirectorPlayer> = new Map()
+  previousPlayers: ReadonlyMap<string, DirectorPlayer> = new Map(),
+  sampleIntervalMs = 100
 ): Map<string, PlayerTopologyFeatures> => {
   const alive = players.filter((player) => player.alive && player.position && player.team)
   const areas = new Map(alive.map((player) => [player.steamId, mapArea(topology, player)]))
@@ -215,17 +215,13 @@ export const computeTopologyFeatures = (
     const fastestClosing = routeClosingPerSample.length ? Math.max(...routeClosingPerSample) : 0
     const predictedFightMs =
       nearest && fastestClosing > MIN_MOVEMENT
-        ? Math.max(
-            250,
-            Math.min(5000, (nearest.path.distance / fastestClosing) * SAMPLE_INTERVAL_MS)
-          )
+        ? Math.max(250, Math.min(5000, (nearest.path.distance / fastestClosing) * sampleIntervalMs))
         : null
     const routePortalChokepoint = topology.isChokepoint(routePortal)
     const portalControl = portalControlScore(geometry, player, routePortal)
     const defensiveAngle = clamp01(
       portalControl *
-        (0.45 +
-          (routePortal ? Math.max(0, Math.min(1, 1 - routePortal.width / 512)) * 0.55 : 0))
+        (0.45 + (routePortal ? Math.max(0, Math.min(1, 1 - routePortal.width / 512)) * 0.55 : 0))
     )
     const fightPredictionConfidence = clamp01(
       routeConvergence * 0.3 +

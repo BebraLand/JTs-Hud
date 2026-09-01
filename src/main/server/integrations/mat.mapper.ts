@@ -1,17 +1,38 @@
 import type { Match, Veto } from '../domains/matches/match.types'
 import type { Team } from '../domains/teams/team.types'
 import type { Player } from '../domains/players/player.types'
-import type { MatHudProjectionV1 } from './mat.types'
+import type { MatHudPlayer, MatHudProjectionV1 } from './mat.types'
+import { proxyAssetUrl } from '../utils/assetProxy'
 
 function resolveMatAssetUrl(url: string | null, matUrl?: string, cacheBust?: number): string {
   if (!url) return ''
   if (/^(?:data:|blob:)/i.test(url)) return url
   const resolved =
     /^(?:https?:)/i.test(url) || !matUrl ? url : new URL(url, matUrl + '/').toString()
-  if (!cacheBust || !/^https?:/i.test(resolved)) return resolved
+  if (!cacheBust || !/^https?:/i.test(resolved)) return proxyAssetUrl(resolved)
   const parsed = new URL(resolved)
   parsed.searchParams.set('jtsHud', String(cacheBust))
-  return parsed.toString()
+  return proxyAssetUrl(parsed.toString())
+}
+
+export function inferReverseSide(
+  team1Players: readonly Pick<MatHudPlayer, 'steamId'>[],
+  team2Players: readonly Pick<MatHudPlayer, 'steamId'>[],
+  livePlayers: readonly { steamid: string; side?: 'CT' | 'T' }[]
+): boolean | null {
+  const team1Ids = new Set(team1Players.map((player) => player.steamId))
+  const team2Ids = new Set(team2Players.map((player) => player.steamId))
+  let team1Side: 'CT' | 'T' | undefined
+  let team2Side: 'CT' | 'T' | undefined
+
+  for (const player of livePlayers) {
+    if (player.side !== 'CT' && player.side !== 'T') continue
+    if (team1Ids.has(player.steamid)) team1Side = player.side
+    if (team2Ids.has(player.steamid)) team2Side = player.side
+  }
+
+  team1Side ||= team2Side === 'CT' ? 'T' : team2Side === 'T' ? 'CT' : undefined
+  return team1Side ? team1Side === 'T' : null
 }
 
 export function mapTeam(

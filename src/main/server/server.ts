@@ -25,6 +25,7 @@ import { matIntegrationService } from './integrations/mat.integration'
 import { challongeIntegrationService } from './integrations/challonge.integration'
 import { databaseReady } from './database/sqlite'
 import { getSystemStats } from './systemStats'
+import { proxyAsset } from './utils/assetProxy'
 
 // Track the currently active HUD id so the socket register handler can look up correct HUD
 let activeHudId: string | null = null
@@ -57,6 +58,7 @@ app.use('/huds/default', express.static(getBuiltinHudDir()))
 app.use('/huds/bebraland', express.static(getBuiltinHudDir('bebraland')))
 app.use('/huds', express.static(hudsPath))
 app.use('/api/uploads', express.static(uploadsPath))
+app.get('/api/assets/proxy', proxyAsset)
 
 app.use('/api/huds', createHudRouter(io))
 app.use('/api/teams', createTeamRouter(io))

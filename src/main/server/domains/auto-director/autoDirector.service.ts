@@ -13,11 +13,9 @@ import {
   type ScoreAdvisoryResult
 } from './autoDirector.engine'
 import { buildAutoDirectorMlFeatures } from './autoDirector.mlFeatures'
-import { LightGbmRanker, loadLightGbmRanker } from './autoDirector.ml'
-import {
-  persistSettingsCandidate,
-  sanitizeAerialPresentationPhases
-} from './autoDirector.settings'
+import { AutoDirectorTemporalTracker } from './autoDirector.temporal'
+import { autoDirectorMlAdvisory, LightGbmRanker, loadLightGbmRanker } from './autoDirector.ml'
+import { persistSettingsCandidate, sanitizeAerialPresentationPhases } from './autoDirector.settings'
 import { CameraController } from './cameraController'
 import { getAutoDirectorResourceDir } from '../../../paths'
 import { computeGeometryFeatures } from './geometry/geometryFeatures'
@@ -109,6 +107,8 @@ const sanitizeSettings = (
   if (typeof input.rulesEnabled === 'boolean') output.rulesEnabled = input.rulesEnabled
   if (typeof input.sceneAdvisoryEnabled === 'boolean')
     output.sceneAdvisoryEnabled = input.sceneAdvisoryEnabled
+  if (typeof input.storyPlannerEnabled === 'boolean')
+    output.storyPlannerEnabled = input.storyPlannerEnabled
   if (typeof input.geometryAdvisoryEnabled === 'boolean')
     output.geometryAdvisoryEnabled = input.geometryAdvisoryEnabled
   if (typeof input.mlAdvisoryEnabled === 'boolean')
@@ -175,6 +175,7 @@ const sanitizeSettings = (
 
 export class AutoDirectorService {
   private readonly engine = new AutoDirectorEngine()
+  private readonly temporal = new AutoDirectorTemporalTracker()
   private readonly camera = new CameraController(
     getTelnetSettings,
     sendTelnetCommands,
@@ -225,6 +226,7 @@ export class AutoDirectorService {
   private lastDecisionSignature = ''
   private lastDecisionHistoryAt = 0
   private previousTopologyPlayers = new Map<string, DirectorPlayer>()
+  private previousTopologyAt = 0
   private statusTimer: NodeJS.Timeout | null = null
   private aerialActiveAnchor: AerialCameraAnchor | null = null
   private aerialActiveUntil = 0
@@ -341,26 +343,43 @@ export class AutoDirectorService {
 
   async updateSettings(input: Partial<AutoDirectorSettings>): Promise<AutoDirectorStatus> {
     const next = sanitizeSettings(input, this.settings.aerialPresentationPhases)
+    const directorDisabled = (next.enabled ?? this.settings.enabled) === false
+    if (directorDisabled) {
+      next.autoFallback = false
+      next.manualOverrideSteamId = null
+    }
     const previousOverride = this.settings.manualOverrideSteamId
     const aerialReturnTarget =
-      next.aerialPresentationEnabled === false && this.aerialActiveAnchor
+      (next.aerialPresentationEnabled === false || directorDisabled) && this.aerialActiveAnchor
         ? this.getAerialReturnTarget()
         : null
     this.settings = await persistSettingsCandidate(this.settings, next, (candidate) =>
       this.persistSettings(candidate)
     )
-    if (next.enabled === false) {
+    if (directorDisabled) {
       this.engine.setCurrent(null)
       this.pendingTargetSteamId = null
+      this.decision = null
+      this.cameraDebug = emptyCameraDebugStatus()
     }
     if (
-      next.aerialPresentationEnabled === false &&
+      (next.aerialPresentationEnabled === false || directorDisabled) &&
       this.aerialActiveAnchor &&
       !this.commandInFlight
     ) {
       if (aerialReturnTarget) {
-        void this.exitAerial(aerialReturnTarget, 'Operator disabled Aerial presentation')
-      } else this.clearAerialPresentation(Date.now(), 'Operator disabled Aerial presentation')
+        void this.exitAerial(
+          aerialReturnTarget,
+          directorDisabled ? 'Operator disabled Auto Director' : 'Operator disabled Aerial presentation'
+        )
+      } else {
+        this.clearAerialPresentation(
+          Date.now(),
+          directorDisabled ? 'Operator disabled Auto Director' : 'Operator disabled Aerial presentation'
+        )
+      }
+    } else if (directorDisabled) {
+      this.clearAerialPresentation(Date.now(), 'Operator disabled Auto Director')
     }
     if (
       next.manualOverrideSteamId !== undefined &&
@@ -382,7 +401,18 @@ export class AutoDirectorService {
     transport: CameraTransport,
     observerSlot?: number
   ): Promise<AutoDirectorStatus['lastCommand']> {
-    this.lastCommand = await this.camera.test(transport, this.settings, observerSlot)
+    if (!this.settings.enabled) {
+      const message = 'Auto-director is disabled'
+      this.lastCommand = {
+        ok: false,
+        transport,
+        message,
+        at: Date.now(),
+        attempts: [{ transport, ok: false, message }]
+      }
+    } else {
+      this.lastCommand = await this.camera.test(transport, this.settings, observerSlot)
+    }
     this.updateTransportHealth(this.lastCommand)
     this.addHistory({
       at: this.lastCommand.at,
@@ -435,10 +465,26 @@ export class AutoDirectorService {
     }
 
     const players = normalizePlayers(payload)
+    const roundKey = `${payload.map?.name ?? ''}:${payload.map?.round ?? ''}`
+    if (this.roundStartedAt === 0 || roundKey !== this.lastRoundKey) {
+      if (this.roundStartedAt !== 0 && roundKey !== this.lastRoundKey) this.resetAerialSequence()
+      this.lastRoundKey = roundKey
+      this.roundStartedAt = now
+      const currentSteamId = this.engine.getCurrent()
+      this.engine.reset()
+      if (currentSteamId) this.engine.setCurrent(currentSteamId, now)
+      this.temporal.reset()
+      this.previousTopologyPlayers.clear()
+      this.previousTopologyAt = 0
+    }
+    const temporalFeatures = this.temporal.update(players, now)
+    const needsGeometry =
+      this.settings.geometryAdvisoryEnabled ||
+      (this.settings.mlAdvisoryEnabled && this.mlRanker !== null) ||
+      this.settings.sceneAdvisoryEnabled ||
+      this.settings.aerialPresentationEnabled
     const geometryMap =
-      this.settings.geometryAdvisoryEnabled && payload.map?.name
-        ? this.geometry.load(payload.map.name)
-        : null
+      needsGeometry && payload.map?.name ? this.geometry.load(payload.map.name) : null
     const geometryFeatures = geometryMap
       ? computeGeometryFeatures(
           players.filter((player) => player.alive),
@@ -455,17 +501,12 @@ export class AutoDirectorService {
           players.filter((player) => player.alive),
           topologyMap,
           geometryMap,
-          this.previousTopologyPlayers
+          this.previousTopologyPlayers,
+          this.previousTopologyAt
+            ? Math.max(25, Math.min(1000, now - this.previousTopologyAt))
+            : 100
         )
       : null
-    const roundKey = `${payload.map?.name ?? ''}:${payload.map?.round ?? ''}`
-    if (this.roundStartedAt === 0 || roundKey !== this.lastRoundKey) {
-      if (this.roundStartedAt !== 0 && roundKey !== this.lastRoundKey) {
-        this.resetAerialSequence()
-      }
-      this.lastRoundKey = roundKey
-      this.roundStartedAt = now
-    }
     const advisory: ScoreAdvisory | undefined =
       this.settings.geometryAdvisoryEnabled || (this.settings.mlAdvisoryEnabled && this.mlRanker)
         ? (player, score, allPlayers) => {
@@ -487,20 +528,23 @@ export class AutoDirectorService {
               })
             }
             if (this.settings.mlAdvisoryEnabled && this.mlRanker) {
-              const raw = this.mlRanker.predict(
+              const prediction = autoDirectorMlAdvisory(
+                this.mlRanker,
                 buildAutoDirectorMlFeatures(
                   player,
                   score,
                   allPlayers,
                   now - this.roundStartedAt,
                   playerGeometry,
-                  geometryMap !== null
+                  geometryMap !== null,
+                  temporalFeatures.get(player.steamId) ?? null,
+                  this.mlRanker.featureNames
                 )
               )
               results.push({
                 key: 'mlAdvisory' as const,
-                value: Math.tanh(raw) * 8,
-                detail: `ML ${raw >= 0 ? '+' : ''}${raw.toFixed(2)}; ${geometryMap ? 'geometry available' : 'no geometry'}`
+                value: prediction.value,
+                detail: `${prediction.detail}; ${geometryMap ? 'geometry available' : 'no geometry'}`
               })
             }
             return results
@@ -528,6 +572,7 @@ export class AutoDirectorService {
       geometryMessage: this.geometry.getStatus().message
     })
     this.previousTopologyPlayers = new Map(players.map((player) => [player.steamId, player]))
+    this.previousTopologyAt = now
     this.recordDecision(this.decision, now)
 
     const aerialPhase = getAerialPresentationPhase(payload)
@@ -566,6 +611,7 @@ export class AutoDirectorService {
   private async executeSwitch(
     target: NonNullable<AutoDirectorStatus['decision']>['scores'][number]
   ): Promise<void> {
+    if (!this.settings.enabled) return
     this.commandInFlight = true
     const fromSteamId = this.decision?.currentSteamId ?? null
     try {

@@ -281,6 +281,38 @@ const combat = decideAerialPresentation(
 assert.equal(combat.eligible, false)
 assert.equal(combat.actionBlocked, true)
 
+const predictedContact = decideAerialPresentation(
+  quietPayload,
+  settings,
+  players,
+  decision({
+    scores: [
+      {
+        steamId: 'ct-1',
+        name: 'ct-1',
+        team: 'CT',
+        observerSlot: 1,
+        alive: true,
+        total: 10,
+        nearestEnemyDistance: null,
+        switchEligible: true,
+        factors: [
+          {
+            key: 'mlAdvisory',
+            label: 'ML advisory',
+            value: 8,
+            detail: 'future contact'
+          }
+        ]
+      }
+    ]
+  }),
+  aerialMap,
+  geometry
+)
+assert.equal(predictedContact.eligible, false)
+assert.equal(predictedContact.actionBlocked, true)
+
 const firstPersonSwitch = decideAerialPresentation(
   quietPayload,
   settings,

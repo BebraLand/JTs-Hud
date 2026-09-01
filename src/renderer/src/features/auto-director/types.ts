@@ -83,6 +83,7 @@ export interface AutoDirectorSettings {
   autoFallback: boolean
   rulesEnabled: boolean
   sceneAdvisoryEnabled: boolean
+  storyPlannerEnabled: boolean
   geometryAdvisoryEnabled: boolean
   mlAdvisoryEnabled: boolean
   aerialPresentationEnabled: boolean
@@ -120,6 +121,10 @@ export interface AutoDirectorDecision {
   dominantSceneConfidence?: number
   currentScenePhase?: 'forming' | 'approaching' | 'contact' | 'objective' | null
   currentSceneConfidence?: number
+  storyTargetSteamId?: string | null
+  storyPhase?: string | null
+  storyConfidence?: number
+  storyUtility?: number
 }
 
 export interface CameraCommandResult {

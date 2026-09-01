@@ -7,16 +7,16 @@ import type {
 export const AUTO_DIRECTOR_PROFILES: Record<AutoDirectorMode, AutoDirectorProfile> = {
   balanced: {
     mode: 'balanced',
-    minDwellMs: 2500,
-    switchMargin: 14,
-    combatSoftLockMs: 1400,
-    postKillHoldMs: 1200,
+    minDwellMs: 2400,
+    switchMargin: 12,
+    combatSoftLockMs: 800,
+    postKillHoldMs: 700,
     weights: {
       base: 5,
       objective: 72,
-      combat: 34,
-      damage: 24,
-      recentKill: 32,
+      combat: 26,
+      damage: 16,
+      recentKill: 20,
       proximity: 24,
       aimAlignment: 18,
       clutch: 34,
@@ -27,23 +27,23 @@ export const AUTO_DIRECTOR_PROFILES: Record<AutoDirectorMode, AutoDirectorProfil
       bombCarrier: 10,
       lowHealthDrama: 8,
       continuity: 10,
-      portalControl: 0,
-      fightPrediction: 0,
-      crossfire: 0
+      portalControl: 6,
+      fightPrediction: 8,
+      crossfire: 5
     }
   },
   reactive: {
     mode: 'reactive',
-    minDwellMs: 1250,
-    switchMargin: 7,
-    combatSoftLockMs: 850,
-    postKillHoldMs: 800,
+    minDwellMs: 1500,
+    switchMargin: 8,
+    combatSoftLockMs: 550,
+    postKillHoldMs: 450,
     weights: {
       base: 4,
       objective: 76,
-      combat: 46,
-      damage: 32,
-      recentKill: 36,
+      combat: 34,
+      damage: 22,
+      recentKill: 24,
       proximity: 30,
       aimAlignment: 24,
       clutch: 30,
@@ -54,23 +54,23 @@ export const AUTO_DIRECTOR_PROFILES: Record<AutoDirectorMode, AutoDirectorProfil
       bombCarrier: 8,
       lowHealthDrama: 7,
       continuity: 5,
-      portalControl: 0,
-      fightPrediction: 0,
-      crossfire: 0
+      portalControl: 5,
+      fightPrediction: 10,
+      crossfire: 4
     }
   },
   calm: {
     mode: 'calm',
-    minDwellMs: 4000,
-    switchMargin: 22,
-    combatSoftLockMs: 1900,
-    postKillHoldMs: 1600,
+    minDwellMs: 3400,
+    switchMargin: 17,
+    combatSoftLockMs: 950,
+    postKillHoldMs: 850,
     weights: {
       base: 5,
       objective: 80,
-      combat: 28,
-      damage: 18,
-      recentKill: 24,
+      combat: 22,
+      damage: 12,
+      recentKill: 16,
       proximity: 18,
       aimAlignment: 14,
       clutch: 40,
@@ -81,9 +81,9 @@ export const AUTO_DIRECTOR_PROFILES: Record<AutoDirectorMode, AutoDirectorProfil
       bombCarrier: 14,
       lowHealthDrama: 10,
       continuity: 20,
-      portalControl: 0,
-      fightPrediction: 0,
-      crossfire: 0
+      portalControl: 7,
+      fightPrediction: 6,
+      crossfire: 7
     }
   }
 }
@@ -95,6 +95,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   autoFallback: false,
   rulesEnabled: true,
   sceneAdvisoryEnabled: true,
+  storyPlannerEnabled: true,
   geometryAdvisoryEnabled: true,
   mlAdvisoryEnabled: true,
   aerialPresentationEnabled: false,

@@ -1,6 +1,7 @@
 import { PlayerRepository } from './player.repository'
 import { CreatePlayerDTO, UpdatePlayerDTO } from './player.types'
 import { matIntegrationService } from '../../integrations/mat.integration'
+import { proxyAssetUrl } from '../../utils/assetProxy'
 
 export class PlayerService {
   private repo = new PlayerRepository()
@@ -16,20 +17,24 @@ export class PlayerService {
     const matPlayers = matIntegrationService.getPlayers(steamidsArray)
     if (matPlayers) return matPlayers
     if (matIntegrationService.isEnabled()) return []
-    return this.repo.getPlayers(steamidsArray)
+    const players = await this.repo.getPlayers(steamidsArray)
+    return players.map((player) => ({ ...player, avatar: proxyAssetUrl(player.avatar) }))
   }
 
   async getPlayerAvatar(steamid: string) {
     const matPlayer = matIntegrationService.getPlayerBySteamId(steamid)
-    if (matPlayer) return { custom: matPlayer.avatar || '', steam: matPlayer.avatar || '' }
+    if (matPlayer?.avatar) return { custom: matPlayer.avatar, steam: matPlayer.avatar }
+    if (matPlayer) return { custom: '', steam: '' }
+
     const player = await this.repo.getPlayerBySteamId(steamid)
     if (!player) {
       return { custom: '', steam: '' } // If player doesnt exist
     }
 
+    const avatar = proxyAssetUrl(player.avatar)
     return {
-      custom: player.avatar || '',
-      steam: player.avatar || ''
+      custom: avatar,
+      steam: avatar
     }
   }
 
