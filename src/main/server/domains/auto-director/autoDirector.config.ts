@@ -95,6 +95,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   autoFallback: false,
   rulesEnabled: true,
   sceneAdvisoryEnabled: true,
+  storyPlannerEnabled: true,
   geometryAdvisoryEnabled: true,
   mlAdvisoryEnabled: true,
   aerialPresentationEnabled: false,

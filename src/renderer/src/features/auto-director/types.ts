@@ -83,6 +83,7 @@ export interface AutoDirectorSettings {
   autoFallback: boolean
   rulesEnabled: boolean
   sceneAdvisoryEnabled: boolean
+  storyPlannerEnabled: boolean
   geometryAdvisoryEnabled: boolean
   mlAdvisoryEnabled: boolean
   aerialPresentationEnabled: boolean

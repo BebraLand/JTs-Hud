@@ -692,6 +692,24 @@ const healthClass = (state: string) =>
                 />
                 Enable Rules scoring
               </label>
+              <label class="mt-2 flex items-start gap-2 text-[10px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  :checked="status.settings.storyPlannerEnabled"
+                  @change="
+                    updateSettings({
+                      storyPlannerEnabled: ($event.target as HTMLInputElement).checked
+                    })
+                  "
+                  class="mt-0.5 accent-fuchsia-400"
+                />
+                <span>
+                  <span class="block font-semibold text-fuchsia-300">Enable Story Planner</span>
+                  <span class="mt-0.5 block text-[10px] text-zinc-500">
+                    Uses Rules, Scene, Geometry and ML evidence for Story Planner only.
+                  </span>
+                </span>
+              </label>
               <label class="mt-2 flex items-center gap-2 text-[10px] text-zinc-400">
                 <input
                   type="checkbox"

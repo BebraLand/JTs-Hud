@@ -107,6 +107,8 @@ const sanitizeSettings = (
   if (typeof input.rulesEnabled === 'boolean') output.rulesEnabled = input.rulesEnabled
   if (typeof input.sceneAdvisoryEnabled === 'boolean')
     output.sceneAdvisoryEnabled = input.sceneAdvisoryEnabled
+  if (typeof input.storyPlannerEnabled === 'boolean')
+    output.storyPlannerEnabled = input.storyPlannerEnabled
   if (typeof input.geometryAdvisoryEnabled === 'boolean')
     output.geometryAdvisoryEnabled = input.geometryAdvisoryEnabled
   if (typeof input.mlAdvisoryEnabled === 'boolean')

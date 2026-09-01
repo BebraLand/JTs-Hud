@@ -765,10 +765,14 @@ export class AutoDirectorEngine {
     const currentScore = scores.find((score) => score.steamId === this.currentSteamId) ?? null
     const ranked =
       settings.rulesEnabled || advisory ? scores.filter((score) => score.switchEligible) : []
-    const storyPlan = settings.sceneAdvisoryEnabled
-      ? planBroadcastStory(scores, trackedScene)
-      : null
-    if (storyPlan) {
+    const storyPlannerActive = settings.storyPlannerEnabled && settings.sceneAdvisoryEnabled
+    const storyPlan = storyPlannerActive ? planBroadcastStory(scores, trackedScene) : null
+    if (!storyPlannerActive) {
+      this.storyReservation = null
+      this.storyReservationUntil = 0
+      this.storyCandidateSteamId = null
+      this.storyCandidateStreak = 0
+    } else if (storyPlan) {
       this.storyCandidateStreak =
         this.storyCandidateSteamId === storyPlan.targetSteamId
           ? this.storyCandidateStreak + 1
