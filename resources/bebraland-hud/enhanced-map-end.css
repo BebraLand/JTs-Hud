@@ -94,12 +94,36 @@
   text-align: right;
 }
 
-.enhanced-map-end-scoreteam.winner {
-  background: linear-gradient(90deg, rgba(245, 155, 84, 0.04), rgba(245, 155, 84, 0.16) 68%, transparent 100%);
+.enhanced-map-end-scoreteam.CT {
+  background: linear-gradient(90deg, rgba(84, 215, 255, 0.24), rgba(84, 215, 255, 0.06) 52%, transparent 100%);
 }
 
-.enhanced-map-end-scoreteam:last-child.winner {
-  background: linear-gradient(270deg, rgba(245, 155, 84, 0.04), rgba(245, 155, 84, 0.16) 68%, transparent 100%);
+.enhanced-map-end-scoreteam.T {
+  background: linear-gradient(90deg, rgba(255, 189, 124, 0.24), rgba(255, 189, 124, 0.06) 52%, transparent 100%);
+}
+
+.enhanced-map-end-scoreteam:last-child.CT {
+  background: linear-gradient(270deg, rgba(84, 215, 255, 0.24), rgba(84, 215, 255, 0.06) 52%, transparent 100%);
+}
+
+.enhanced-map-end-scoreteam:last-child.T {
+  background: linear-gradient(270deg, rgba(255, 189, 124, 0.24), rgba(255, 189, 124, 0.06) 52%, transparent 100%);
+}
+
+.enhanced-map-end-scoreteam.CT {
+  box-shadow: inset 3px 0 var(--blue);
+}
+
+.enhanced-map-end-scoreteam.T {
+  box-shadow: inset 3px 0 var(--orange-bright);
+}
+
+.enhanced-map-end-scoreteam:last-child.CT {
+  box-shadow: inset -3px 0 var(--blue);
+}
+
+.enhanced-map-end-scoreteam:last-child.T {
+  box-shadow: inset -3px 0 var(--orange-bright);
 }
 
 .enhanced-map-end-scoreteam img {
@@ -232,8 +256,8 @@
   overflow: hidden;
 }
 
-.enhanced-map-end-team.winner { border-color: rgba(245, 155, 84, 0.8); }
-.enhanced-map-end-team.opponent { border-color: rgba(84, 215, 255, 0.5); }
+.enhanced-map-end-team.CT { border-color: rgba(84, 215, 255, 0.65); }
+.enhanced-map-end-team.T { border-color: rgba(255, 189, 124, 0.8); }
 
 .enhanced-map-end-team-header {
   display: flex;
@@ -264,14 +288,14 @@
 }
 
 .enhanced-map-end-team-status {
-  color: var(--orange-bright);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.enhanced-map-end-team.opponent .enhanced-map-end-team-status { color: var(--blue); }
+.enhanced-map-end-team.CT .enhanced-map-end-team-status { color: var(--blue); }
+.enhanced-map-end-team.T .enhanced-map-end-team-status { color: var(--orange-bright); }
 
 .enhanced-map-end-table {
   display: grid;
@@ -303,7 +327,8 @@
   font-weight: 700;
 }
 
-.enhanced-map-end-player.mvp-row { background: rgba(245, 155, 84, 0.18); }
+.enhanced-map-end-team.CT .enhanced-map-end-player.mvp-row { background: rgba(84, 215, 255, 0.18); }
+.enhanced-map-end-team.T .enhanced-map-end-player.mvp-row { background: rgba(255, 189, 124, 0.18); }
 .enhanced-map-end-player img {
   width: 24px;
   height: 24px;
@@ -325,7 +350,8 @@
   text-align: center;
 }
 
-.enhanced-map-end-stat.rating { color: var(--orange-bright); }
+.enhanced-map-end-team.CT .enhanced-map-end-stat.rating { color: var(--blue); }
+.enhanced-map-end-team.T .enhanced-map-end-stat.rating { color: var(--orange-bright); }
 
 .enhanced-map-end-mvp-side {
   display: grid;
@@ -403,7 +429,6 @@
 .enhanced-map-end-metric strong {
   display: block;
   margin-top: 4px;
-  color: var(--orange-bright);
   font-size: 17px;
 }
 
@@ -423,8 +448,17 @@
   grid-template-columns: 1fr 1fr;
 }
 
+.enhanced-map-end-mvp.CT,
+.enhanced-map-end-fragger.CT { border-color: rgba(84, 215, 255, 0.65); }
+.enhanced-map-end-mvp.T,
+.enhanced-map-end-fragger.T { border-color: rgba(255, 189, 124, 0.8); }
+.enhanced-map-end-mvp.CT .enhanced-map-end-metric { border-color: rgba(84, 215, 255, 0.35); background: rgba(84, 215, 255, 0.13); }
+.enhanced-map-end-mvp.T .enhanced-map-end-metric { border-color: rgba(255, 189, 124, 0.35); background: rgba(255, 189, 124, 0.13); }
+.enhanced-map-end-mvp.CT .enhanced-map-end-metric strong,
+.enhanced-map-end-fragger.CT .enhanced-map-end-fragger-metrics strong { color: var(--blue); }
+.enhanced-map-end-mvp.T .enhanced-map-end-metric strong,
+.enhanced-map-end-fragger.T .enhanced-map-end-fragger-metrics strong { color: var(--orange-bright); }
 .enhanced-map-end-fragger-metrics strong {
-  color: var(--orange-bright);
   font-size: 18px;
 }
 

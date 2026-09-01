@@ -26,12 +26,14 @@
     return bestOf > 0 ? bestOf : 1
   }
   const seriesPipCount = (format) => Math.ceil(bestOfNumber(format) / 2)
-  const liveTeamSide = (team) => {
+  const liveTeamState = (team) => {
     const name = String(team?.name || '').trim().toLowerCase()
     if (!name) return null
     for (const node of document.querySelectorAll('#matchbar .team')) {
       if (String(node.querySelector('.team-name')?.textContent || '').trim().toLowerCase() !== name) continue
-      return node.classList.contains('T') ? 'T' : node.classList.contains('CT') ? 'CT' : null
+      const side = node.classList.contains('T') ? 'T' : node.classList.contains('CT') ? 'CT' : null
+      const slot = node.classList.contains('left') ? 0 : node.classList.contains('right') ? 1 : null
+      return side ? { side, slot } : null
     }
     return null
   }
@@ -202,7 +204,7 @@
   const playerImage = (player, steamFallback, side) => {
     const custom = cleanUrl(player.photoUrl)
     const steam = steamAvatars && steamFallback ? cleanUrl(player.avatarUrl) : ''
-    return custom || steam || asset(side === 0 ? 'default_CT-cadc51be.png' : 'default_T-9ac0f200.png')
+    return custom || steam || asset(side === 'T' || side === 1 ? 'default_T-9ac0f200.png' : 'default_CT-cadc51be.png')
   }
 
   const renderPlayer = (player, stats, side, mvpSteamId) => {
@@ -225,10 +227,10 @@
       player, stats: statFor(player, lines)
     })).sort((a, b) => b.stats.rating - a.stats.rating || b.stats.kills - a.stats.kills)
     const rows = players.map(({ player, stats }) => renderPlayer(player, stats, side, mvpSteamId)).join('')
-    return `<section class="enhanced-map-end-team ${winner ? 'winner' : 'opponent'}">
+    return `<section class="enhanced-map-end-team ${side} ${winner ? 'winner' : 'opponent'}">
       <div class="enhanced-map-end-team-header">
         <div class="enhanced-map-end-team-title">
-          <img src="${esc(cleanUrl(team.logoUrl) || asset(side === 0 ? 'logo_CT_default-98efc38d.png' : 'logo_T_default-e8ec7778.png'))}" alt="">
+          <img src="${esc(cleanUrl(team.logoUrl) || asset(side === 'T' ? 'logo_T_default-e8ec7778.png' : 'logo_CT_default-98efc38d.png'))}" alt="">
           <strong>${esc(team.name)}</strong>
         </div>
         <span class="enhanced-map-end-team-status">${winner ? 'Victory' : 'Opponent'}</span>
@@ -258,21 +260,25 @@
     }
     const score = map.score || { team1: 0, team2: 0 }
     const winnerId = map.winnerTeamId || (score.team1 === score.team2 ? null : score.team1 > score.team2 ? match.team1.id : match.team2.id)
-    const teams = [match.team1, match.team2]
     const lines = map.playerStats || { team1: [], team2: [] }
-    const players = teams.flatMap((team, side) => (team.players || []).map((player) => ({
-      player, side, stats: statFor(player, lines[`team${side + 1}`]) , team
-    })))
-    const mvp = players.sort((a, b) => b.stats.rating - a.stats.rating || b.stats.kills - a.stats.kills)[0]
     const mapKey = String(map.name || '').replace(/^de_/, '')
     const seriesScore = match.seriesScore || { team1: 0, team2: 0 }
     const defaultTeam1Side = map.startingSideTeam1 === 'T' ? 'T' : 'CT'
-    const team1Side = liveTeamSide(match.team1) || defaultTeam1Side
-    const team2Side = liveTeamSide(match.team2) || (team1Side === 'CT' ? 'T' : 'CT')
+    const team1Live = liveTeamState(match.team1)
+    const team2Live = liveTeamState(match.team2)
+    const team1Side = team1Live?.side || defaultTeam1Side
+    const team2Side = team2Live?.side || (team1Side === 'CT' ? 'T' : 'CT')
+    const team1 = { team: match.team1, lines: lines.team1, score: score.team1, series: seriesScore.team1, side: team1Side, winner: winnerId === match.team1.id }
+    const team2 = { team: match.team2, lines: lines.team2, score: score.team2, series: seriesScore.team2, side: team2Side, winner: winnerId === match.team2.id }
+    const [leftTeam, rightTeam] = team1Live?.slot === 1 || team2Live?.slot === 0 ? [team2, team1] : [team1, team2]
+    const players = [team1, team2].flatMap(({ team, lines: teamLines, side }) => (team.players || []).map((player) => ({
+      player, side, stats: statFor(player, teamLines), team
+    })))
+    const mvp = players.sort((a, b) => b.stats.rating - a.stats.rating || b.stats.kills - a.stats.kills)[0]
     const statsSignature = [...(lines.team1 || []), ...(lines.team2 || [])]
       .map((line) => `${line.steamId}:${line.kills}:${line.deaths}:${line.assists}:${line.damage}`)
       .join('|')
-    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${mvp?.player.steamId || ''}:${statsSignature}`
+    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${team1Live?.slot ?? ''}:${team2Live?.slot ?? ''}:${mvp?.player.steamId || ''}:${statsSignature}`
     if (signature === lastRendered) {
       pending = false
       document.documentElement.classList.remove('enhanced-map-end-pending')
@@ -286,25 +292,25 @@
     root.style.setProperty('--map-bg', `url("${asset(mapAssets[mapKey] || mapAssets.ancient)}")`)
     root.innerHTML = `<main class="enhanced-map-end-shell">
       <header class="enhanced-map-end-scorebar">
-        <div class="enhanced-map-end-scoreteam ${winnerId === match.team1.id ? 'winner' : ''}">
-          <img src="${esc(cleanUrl(match.team1.logoUrl) || asset('logo_CT_default-98efc38d.png'))}" alt=""><div><small>${winnerId === match.team1.id ? 'Winner' : 'Opponent'}</small><strong>${esc(match.team1.name)}</strong></div>
+        <div class="enhanced-map-end-scoreteam ${leftTeam.side} ${leftTeam.winner ? 'winner' : ''}">
+          <img src="${esc(cleanUrl(leftTeam.team.logoUrl) || asset(leftTeam.side === 'T' ? 'logo_T_default-e8ec7778.png' : 'logo_CT_default-98efc38d.png'))}" alt=""><div><small>${leftTeam.winner ? 'Winner' : 'Opponent'}</small><strong>${esc(leftTeam.team.name)}</strong></div>
         </div>
         <div class="enhanced-map-end-scorecenter">
           <div class="enhanced-map-end-score-context"><span>ROUND SCORE</span><i></i><span>MAP ${map.number || 1} · ${esc(mapLabel(map.name))}</span></div>
           <div class="enhanced-map-end-score">
-            <div class="enhanced-map-end-score-side"><b class="${team1Side}">${score.team1}</b><div class="enhanced-map-end-score-pips"><div class="wins_box_container">${renderSeriesPips(team1Side, seriesScore.team1)}</div></div></div>
+            <div class="enhanced-map-end-score-side"><b class="${leftTeam.side}">${leftTeam.score}</b><div class="enhanced-map-end-score-pips"><div class="wins_box_container">${renderSeriesPips(leftTeam.side, leftTeam.series)}</div></div></div>
             <span>:</span>
-            <div class="enhanced-map-end-score-side"><b class="${team2Side}">${score.team2}</b><div class="enhanced-map-end-score-pips"><div class="wins_box_container">${renderSeriesPips(team2Side, seriesScore.team2)}</div></div></div>
+            <div class="enhanced-map-end-score-side"><b class="${rightTeam.side}">${rightTeam.score}</b><div class="enhanced-map-end-score-pips"><div class="wins_box_container">${renderSeriesPips(rightTeam.side, rightTeam.series)}</div></div></div>
           </div>
         </div>
-        <div class="enhanced-map-end-scoreteam ${winnerId === match.team2.id ? 'winner' : ''}">
-          <div><small>${winnerId === match.team2.id ? 'Winner' : 'Opponent'}</small><strong>${esc(match.team2.name)}</strong></div><img src="${esc(cleanUrl(match.team2.logoUrl) || asset('logo_T_default-e8ec7778.png'))}" alt="">
+        <div class="enhanced-map-end-scoreteam ${rightTeam.side} ${rightTeam.winner ? 'winner' : ''}">
+          <div><small>${rightTeam.winner ? 'Winner' : 'Opponent'}</small><strong>${esc(rightTeam.team.name)}</strong></div><img src="${esc(cleanUrl(rightTeam.team.logoUrl) || asset(rightTeam.side === 'T' ? 'logo_T_default-e8ec7778.png' : 'logo_CT_default-98efc38d.png'))}" alt="">
         </div>
       </header>
-      <div class="enhanced-map-end-teams">${renderTeam(match.team1, lines.team1, 0, winnerId === match.team1.id, mvp?.player.steamId)}${renderTeam(match.team2, lines.team2, 1, winnerId === match.team2.id, mvp?.player.steamId)}</div>
+      <div class="enhanced-map-end-teams">${renderTeam(leftTeam.team, leftTeam.lines, leftTeam.side, leftTeam.winner, mvp?.player.steamId)}${renderTeam(rightTeam.team, rightTeam.lines, rightTeam.side, rightTeam.winner, mvp?.player.steamId)}</div>
       <aside class="enhanced-map-end-mvp-side">
-        ${mvp ? `<section class="enhanced-map-end-mvp"><span class="enhanced-map-end-mvp-badge">MVP</span><img class="enhanced-map-end-mvp-photo" src="${esc(mvpImage)}" alt=""><div class="enhanced-map-end-mvp-copy"><span class="enhanced-map-end-mvp-label">${esc(mvp.team.name)}</span><div class="enhanced-map-end-mvp-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-mvp-metrics"><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">Rating</span><strong>${mvp.stats.rating.toFixed(2)}</strong></div><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">K · D · A</span><strong>${mvp.stats.kills} · ${mvp.stats.deaths} · ${mvp.stats.assists}</strong></div></div></div></section>` : ''}
-        ${mvp ? `<section class="enhanced-map-end-fragger"><span class="enhanced-map-end-kicker">Top fragger</span><div class="enhanced-map-end-fragger-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-fragger-metrics"><div><span class="enhanced-map-end-kicker">Kills</span><strong>${mvp.stats.kills}</strong></div><div><span class="enhanced-map-end-kicker">K/D</span><strong>${mvp.stats.deaths ? (mvp.stats.kills / mvp.stats.deaths).toFixed(2) : '∞'}</strong></div></div></section>` : ''}
+        ${mvp ? `<section class="enhanced-map-end-mvp ${mvp.side}"><span class="enhanced-map-end-mvp-badge">MVP</span><img class="enhanced-map-end-mvp-photo" src="${esc(mvpImage)}" alt=""><div class="enhanced-map-end-mvp-copy"><span class="enhanced-map-end-mvp-label">${esc(mvp.team.name)}</span><div class="enhanced-map-end-mvp-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-mvp-metrics"><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">Rating</span><strong>${mvp.stats.rating.toFixed(2)}</strong></div><div class="enhanced-map-end-metric"><span class="enhanced-map-end-kicker">K · D · A</span><strong>${mvp.stats.kills} · ${mvp.stats.deaths} · ${mvp.stats.assists}</strong></div></div></div></section>` : ''}
+        ${mvp ? `<section class="enhanced-map-end-fragger ${mvp.side}"><span class="enhanced-map-end-kicker">Top fragger</span><div class="enhanced-map-end-fragger-name">${esc(mvp.player.nickname)}</div><div class="enhanced-map-end-fragger-metrics"><div><span class="enhanced-map-end-kicker">Kills</span><strong>${mvp.stats.kills}</strong></div><div><span class="enhanced-map-end-kicker">K/D</span><strong>${mvp.stats.deaths ? (mvp.stats.kills / mvp.stats.deaths).toFixed(2) : '∞'}</strong></div></div></section>` : ''}
       </aside>
     </main>`
     pending = false
