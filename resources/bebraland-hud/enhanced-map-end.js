@@ -49,6 +49,7 @@
   let steamAvatars = false
   let showVeto = false
   let vetoPosition = 'right'
+  let ratingModel = 'five_factor'
   let projection = null
   let lastRendered = ''
   let projectionRequest = null
@@ -78,10 +79,12 @@
     const nextEnabled = value !== false && value !== 'false' && value !== 0
     const nextShowVeto = isTrue(config?.display_settings?.show_map_end_veto)
     const nextVetoPosition = config?.display_settings?.map_end_veto_position === 'left' ? 'left' : 'right'
-    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition
+    const nextRatingModel = config?.display_settings?.map_end_rating_model === 'hltv_like' ? 'hltv_like' : 'five_factor'
+    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition || nextRatingModel !== ratingModel
     enabled = nextEnabled
     showVeto = nextShowVeto
     vetoPosition = nextVetoPosition
+    ratingModel = nextRatingModel
     if (!enabled && !debugPreview) clearEnhanced()
     else if (changed && (debugPreview || oldOverlay())) {
       lastRendered = ''
@@ -152,7 +155,10 @@
     kills: Math.max(0, kills - index * 2),
     deaths: Math.max(0, deaths + index),
     assists: Math.max(0, 3 - index),
+    flashAssists: Math.max(0, 2 - index),
     damage: Math.max(0, damage - index * 35),
+    utilityDamage: Math.max(0, 80 - index * 15),
+    enemiesFlashed: Math.max(0, 4 - index),
     headshotKills: Math.max(0, kills - index * 3),
     kast: 70,
     mvps: index === 0 ? 2 : 0,
@@ -212,13 +218,33 @@
     const kills = Number(line?.kills || 0)
     const deaths = Number(line?.deaths || 0)
     const assists = Number(line?.assists || 0)
+    const flashAssists = Number(line?.flashAssists || 0)
     const damage = Number(line?.damage || 0)
+    const utilityDamage = Number(line?.utilityDamage || 0)
+    const enemiesFlashed = Number(line?.enemiesFlashed || 0)
+    const headshotKills = Number(line?.headshotKills || 0)
+    const mvps = Number(line?.mvps || 0)
     const rounds = Number(line?.roundsPlayed || 0)
-    const rating = (kills + assists * 0.5) / Math.max(1, deaths)
+    const kast = Number(line?.kast || 0)
+    const perRound = (value) => value / Math.max(1, rounds)
+    const relative = (value, baseline) => Math.max(0, value / baseline)
+    const kill = relative(perRound(kills), 0.68)
+    const survival = relative(Math.max(0, 1 - perRound(deaths)), 0.36)
+    const consistency = relative(kast, 70)
+    const damageRating = relative(perRound(damage), 75)
+    const simpleImpact = relative(perRound(kills + assists * 0.5), 0.82)
+    // ponytail: HLTV's opening, multikill, clutch, and traded-death inputs are not in the HUD contract; add them here if MAT exposes them.
+    const advancedImpact = relative(
+      perRound(kills + assists * 0.5 + flashAssists * 0.35 + headshotKills * 0.1 + mvps * 0.3) + perRound(utilityDamage) / 100 + perRound(enemiesFlashed) * 0.03,
+      0.95
+    )
+    const rating = rounds <= 0 ? 0 : ratingModel === 'hltv_like'
+      ? kill * 0.25 + survival * 0.15 + consistency * 0.2 + advancedImpact * 0.3 + damageRating * 0.1
+      : (kill + survival + consistency + simpleImpact + damageRating) / 5
     return {
-      kills, deaths, assists, damage, rounds,
+      kills, deaths, assists, flashAssists, damage, utilityDamage, enemiesFlashed, headshotKills, mvps, rounds,
       adr: rounds ? damage / rounds : 0,
-      kast: Number(line?.kast || 0),
+      kast,
       score: Number(line?.score || 0),
       rating,
       line
@@ -344,9 +370,9 @@
     const mvp = players.sort((a, b) => b.stats.rating - a.stats.rating || b.stats.kills - a.stats.kills)[0]
     const veto = showVeto ? renderVeto(match) : ''
     const statsSignature = [...(lines.team1 || []), ...(lines.team2 || [])]
-      .map((line) => `${line.steamId}:${line.kills}:${line.deaths}:${line.assists}:${line.damage}`)
+      .map((line) => `${line.steamId}:${line.kills}:${line.deaths}:${line.assists}:${line.flashAssists}:${line.damage}:${line.utilityDamage}:${line.enemiesFlashed}:${line.headshotKills}:${line.mvps}:${line.kast}:${line.roundsPlayed}`)
       .join('|')
-    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${team1Live?.slot ?? ''}:${team2Live?.slot ?? ''}:${mvp?.player.steamId || ''}:${showVeto}:${vetoPosition}:${veto}:${statsSignature}`
+    const signature = `${match.id}:${map.number}:${score.team1}:${score.team2}:${winnerId || ''}:${seriesScore.team1}:${seriesScore.team2}:${team1Side}:${team2Side}:${team1Live?.slot ?? ''}:${team2Live?.slot ?? ''}:${mvp?.player.steamId || ''}:${ratingModel}:${showVeto}:${vetoPosition}:${veto}:${statsSignature}`
     if (signature === lastRendered) {
       pending = false
       document.documentElement.classList.remove('enhanced-map-end-pending')

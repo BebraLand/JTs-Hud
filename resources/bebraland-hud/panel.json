@@ -62,6 +62,16 @@
         "default": true
       },
       {
+        "type": "select",
+        "name": "map_end_rating_model",
+        "label": "Map-end rating model",
+        "default": "five_factor",
+        "values": [
+          { "name": "five_factor", "label": "Simple five-factor" },
+          { "name": "hltv_like", "label": "HLTV-like (advanced)" }
+        ]
+      },
+      {
         "type": "checkbox",
         "name": "show_map_end_veto",
         "label": "Show map veto on map-end screen",

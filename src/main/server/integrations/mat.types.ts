@@ -25,7 +25,10 @@ export interface MatHudPlayerStat {
   kills: number
   deaths: number
   assists: number
+  flashAssists: number
+  enemiesFlashed: number
   damage: number
+  utilityDamage: number
   headshotKills: number
   kast: number
   mvps: number
