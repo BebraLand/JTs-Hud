@@ -57,6 +57,12 @@
       },
       {
         "type": "checkbox",
+        "name": "use_enhanced_map_end_screen",
+        "label": "Use enhanced map-end screen",
+        "default": true
+      },
+      {
+        "type": "checkbox",
         "name": "show_side_player_metadata",
         "label": "Show player details on side cards",
         "default": false

@@ -92,6 +92,10 @@ router.get('/mat/status', async (_req: Request, res: Response) => {
   res.json(matIntegrationService.getStatus())
 })
 
+router.get('/mat/projection', (_req: Request, res: Response) => {
+  res.json(matIntegrationService.getProjection())
+})
+
 router.post('/mat/test', requireLocalOrigin, async (req: Request, res: Response) => {
   try {
     res.json(await matIntegrationService.testConnection(req.body))

@@ -19,6 +19,20 @@ export interface MatHudTeam {
   players: MatHudPlayer[]
 }
 
+export interface MatHudPlayerStat {
+  steamId: string
+  name: string
+  kills: number
+  deaths: number
+  assists: number
+  damage: number
+  headshotKills: number
+  kast: number
+  mvps: number
+  score: number
+  roundsPlayed: number
+}
+
 export interface MatHudVetoAction {
   step: number
   teamId: string | null
@@ -35,6 +49,7 @@ export interface MatHudMap {
   score: { team1: number; team2: number } | null
   winnerTeamId: string | null
   completedAt: string | null
+  playerStats?: { team1: MatHudPlayerStat[]; team2: MatHudPlayerStat[] } | null
 }
 
 export interface MatHudProjectionV1 {
