@@ -36,6 +36,10 @@
     const parsed = Number(value)
     return Number.isFinite(parsed) && parsed >= 0 ? Math.min(parsed, 600) : 30
   }
+  const milliseconds = (value) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.min(parsed, 2000) : 350
+  }
   const liveTeamState = (team) => {
     const name = String(team?.name || '').trim().toLowerCase()
     if (!name) return null
@@ -55,7 +59,8 @@
   let vetoPosition = 'right'
   let ratingModel = 'five_factor'
   let lastMapSeconds = 30
-  let seriesSeconds = 30
+  let fadeEnabled = true
+  let fadeMs = 350
   let projection = null
   let lastRendered = ''
   let projectionRequest = null
@@ -65,8 +70,8 @@
   let debugSeriesPreview = false
   let presentationKey = ''
   let presentationStartedAt = 0
-  let seriesEndUntil = 0
-  let finishedSeriesKey = ''
+  let seriesEndActive = false
+  let seriesEndMatch = null
   let phaseTimer = null
 
   const oldOverlay = () => document.querySelector('.eg-overlay')
@@ -76,13 +81,14 @@
     retryTimer = null
     if (phaseTimer) clearTimeout(phaseTimer)
     phaseTimer = null
+    seriesEndActive = false
+    seriesEndMatch = null
     document.documentElement.classList.remove('enhanced-map-end-active', 'enhanced-map-end-pending')
-    root.replaceChildren()
     lastRendered = ''
   }
 
   const holdEnhanced = () => {
-    if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending)) return clearEnhanced()
+    if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending && !seriesEndActive)) return clearEnhanced()
     pending = true
     document.documentElement.classList.remove('enhanced-map-end-active')
     document.documentElement.classList.add('enhanced-map-end-pending')
@@ -95,16 +101,19 @@
     const nextVetoPosition = config?.display_settings?.map_end_veto_position === 'left' ? 'left' : 'right'
     const nextRatingModel = config?.display_settings?.map_end_rating_model === 'hltv_like' ? 'hltv_like' : 'five_factor'
     const nextLastMapSeconds = seconds(config?.display_settings?.map_end_last_map_seconds)
-    const nextSeriesSeconds = seconds(config?.display_settings?.map_end_series_seconds)
-    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition || nextRatingModel !== ratingModel || nextLastMapSeconds !== lastMapSeconds || nextSeriesSeconds !== seriesSeconds
+    const nextFadeEnabled = config?.display_settings?.map_end_fade_enabled !== false && config?.display_settings?.map_end_fade_enabled !== 'false' && config?.display_settings?.map_end_fade_enabled !== 0
+    const nextFadeMs = milliseconds(config?.display_settings?.map_end_fade_duration_ms)
+    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition || nextRatingModel !== ratingModel || nextLastMapSeconds !== lastMapSeconds || nextFadeEnabled !== fadeEnabled || nextFadeMs !== fadeMs
     enabled = nextEnabled
     showVeto = nextShowVeto
     vetoPosition = nextVetoPosition
     ratingModel = nextRatingModel
     lastMapSeconds = nextLastMapSeconds
-    seriesSeconds = nextSeriesSeconds
+    fadeEnabled = nextFadeEnabled
+    fadeMs = nextFadeMs
+    root.style.setProperty('--map-end-fade-duration', fadeEnabled ? `${fadeMs}ms` : '0ms')
     if (!enabled && !debugPreview && !debugSeriesPreview) clearEnhanced()
-    else if (changed && (debugPreview || debugSeriesPreview || oldOverlay() || Date.now() < seriesEndUntil)) {
+    else if (changed && (debugPreview || debugSeriesPreview || oldOverlay() || seriesEndActive)) {
       lastRendered = ''
       loadProjection().then(render)
     }
@@ -145,8 +154,8 @@
       debugSeriesPreview = nextSeries
       presentationKey = ''
       presentationStartedAt = 0
-      seriesEndUntil = 0
-      finishedSeriesKey = ''
+      seriesEndActive = false
+      seriesEndMatch = null
       if (debugPreview || debugSeriesPreview) loadProjection().then(render)
       else clearEnhanced()
     })
@@ -414,8 +423,15 @@
   }
 
   const render = () => {
-    const match = debugSeriesPreview ? debugMatch(true) : debugPreview ? debugMatch() : projection?.match
-    if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending && Date.now() >= seriesEndUntil)) return clearEnhanced()
+    const liveMatch = projection?.match
+    const match = debugSeriesPreview
+      ? debugMatch(true)
+      : debugPreview
+        ? debugMatch()
+        : seriesEndActive && seriesEndMatch && liveMatch?.id === seriesEndMatch.id
+          ? seriesEndMatch
+          : liveMatch || (seriesEndActive ? seriesEndMatch : null)
+    if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending && !seriesEndActive)) return clearEnhanced()
     if (!match) {
       holdEnhanced()
       retryProjection()
@@ -434,7 +450,8 @@
     if (currentKey !== presentationKey) {
       presentationKey = currentKey
       presentationStartedAt = Date.now()
-      seriesEndUntil = 0
+      seriesEndActive = false
+      seriesEndMatch = null
     }
     const mapSeriesScore = seriesResult(match, completedMaps)
     const projectedSeriesScore = match.seriesScore || { team1: 0, team2: 0 }
@@ -443,14 +460,13 @@
       team2: Math.max(Number(projectedSeriesScore.team2 || 0), mapSeriesScore.team2)
     }
     const seriesComplete = debugSeriesPreview || (bestOfNumber(match.format) > 1 && Math.max(seriesScore.team1, seriesScore.team2) >= seriesPipCount(match.format))
-    if (seriesComplete && finishedSeriesKey !== currentKey) seriesEndUntil = presentationStartedAt + (lastMapSeconds + seriesSeconds) * 1000
+    if (seriesComplete) {
+      seriesEndActive = true
+      seriesEndMatch = match
+    }
     const elapsed = Date.now() - presentationStartedAt
     const showSeries = seriesComplete && elapsed >= lastMapSeconds * 1000
-    if (seriesComplete && Date.now() >= seriesEndUntil) {
-      finishedSeriesKey = currentKey
-      return clearEnhanced()
-    }
-    if (seriesComplete) schedulePhase(showSeries ? seriesEndUntil - Date.now() : lastMapSeconds * 1000 - elapsed)
+    if (seriesComplete && !showSeries) schedulePhase(lastMapSeconds * 1000 - elapsed)
     const score = showSeries ? seriesScore : map.score || { team1: 0, team2: 0 }
     const winnerId = showSeries
       ? (seriesScore.team1 === seriesScore.team2 ? null : seriesScore.team1 > seriesScore.team2 ? match.team1.id : match.team2.id)
@@ -517,11 +533,11 @@
   new MutationObserver(() => {
     if (debugPreview || debugSeriesPreview) return
     if (oldOverlay()) startMapEnd()
-    else if (!pending && Date.now() >= seriesEndUntil) clearEnhanced()
+    else if (!pending && !seriesEndActive) clearEnhanced()
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
   setInterval(() => {
     loadConfig().then(loadSettings)
     loadDebugPreview()
-    if (pending || debugPreview || debugSeriesPreview || Date.now() < seriesEndUntil) loadProjection().then(render)
+    if (pending || debugPreview || debugSeriesPreview || seriesEndActive) loadProjection().then(render)
   }, 1500)
 })()

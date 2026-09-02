@@ -62,6 +62,18 @@
         "default": true
       },
       {
+        "type": "checkbox",
+        "name": "map_end_fade_enabled",
+        "label": "Animate enhanced map-end transitions",
+        "default": true
+      },
+      {
+        "type": "text",
+        "name": "map_end_fade_duration_ms",
+        "label": "Map-end fade duration (milliseconds)",
+        "default": "350"
+      },
+      {
         "type": "select",
         "name": "map_end_rating_model",
         "label": "Map-end rating model",
@@ -75,12 +87,6 @@
         "type": "text",
         "name": "map_end_last_map_seconds",
         "label": "Series-end last-map stats (seconds)",
-        "default": "30"
-      },
-      {
-        "type": "text",
-        "name": "map_end_series_seconds",
-        "label": "Series-end combined stats (seconds)",
         "default": "30"
       },
       {

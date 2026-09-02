@@ -11,6 +11,7 @@ import { autoDirectorService } from '../domains/auto-director/autoDirector.servi
 import { databaseReady } from '../database/sqlite'
 import { normalizeObserverSlot } from './observerSlot'
 import { challongeIntegrationService } from './challonge.integration'
+import { getHudPhase, type HudPhase } from './gsiPhase'
 
 const matchService = new MatchService()
 const teamService = new TeamService()
@@ -85,10 +86,31 @@ export const syncGSITeams = async () => {
 let lastGSIState: CSGORaw | null = null
 let lastGSIStateAt: string | null = null
 let lastHudState: CSGORaw | null = null
+let lastHudPhase: HudPhase | null = null
+const hudPhaseListeners = new Set<(phase: HudPhase) => void>()
 
 export const getLastGSIState = (): CSGORaw | null => lastGSIState
 export const getLastGSIStateAt = (): string | null => lastGSIStateAt
 export const getLastHudState = (): CSGORaw | null => lastHudState
+export const getLastHudPhase = (): HudPhase | null => lastHudPhase
+export const subscribeHudPhase = (listener: (phase: HudPhase) => void): (() => void) => {
+  hudPhaseListeners.add(listener)
+  return () => hudPhaseListeners.delete(listener)
+}
+
+const publishHudPhase = (state: CSGORaw) => {
+  const phase = getHudPhase(state)
+
+  if (lastHudPhase?.warmup === phase.warmup) return
+  lastHudPhase = phase
+  for (const listener of hudPhaseListeners) {
+    try {
+      listener(phase)
+    } catch {
+      hudPhaseListeners.delete(listener)
+    }
+  }
+}
 
 // Spectator slot map
 // Populated via PUT /api/spectator/slots from the Spectator Binds page
@@ -416,6 +438,8 @@ export const setupGSI = (io: Server) => {
       io.except('huds').emit('update', req.body)
       // HUDs get filtered payload
       io.to('huds').emit('update', hudPayload)
+      // This is deliberately a tiny edge-triggered stream: HUD overlays only need phase changes.
+      publishHudPhase(lastHudState)
 
       // CS2 expects a 200 OK so it doesn't throttle the GSI engine
       res.status(200).send('OK')
