@@ -8,7 +8,7 @@ import cors from 'cors'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
 import { setupSockets } from './socket'
-import { setupGSI } from './integrations/gsi'
+import { getLastHudState, setupGSI } from './integrations/gsi'
 
 import createMatchRouter from './domains/matches/match.routes'
 import createPlayerRouter from './domains/players/player.routes'
@@ -67,6 +67,16 @@ app.use('/api/match', createMatchRouter(io))
 app.use('/api/settings', settingsRoutes)
 app.use('/api/spectator', spectatorRoutes)
 app.use('/api/auto-director', autoDirectorRoutes)
+app.get('/api/gsi/state', (_req, res) => {
+  const state = getLastHudState()
+  if (!state) {
+    res.status(204).end()
+    return
+  }
+
+  res.setHeader('cache-control', 'no-store')
+  res.json(state)
+})
 app.get('/api/system/stats', (_req, res) => {
   res.json(getSystemStats())
 })
