@@ -1,40 +1,54 @@
 (() => {
-  let warmup = null
+  const style = document.createElement('style')
+  style.textContent = `
+    #timer.jts-warmup #round_now,
+    #timer.jts-warmup #round_timer_text { visibility: hidden; }
+    #timer.jts-warmup::after {
+      content: 'WARMUP';
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      z-index: 1;
+    }
+  `
+  document.head.append(style)
 
-  const isWarmup = (state) => {
-    const mapPhase = String(state?.map?.phase || '').toLowerCase()
-    const countdownPhase = String(state?.phase_countdowns?.phase || '').toLowerCase()
-    return mapPhase === 'warmup' || countdownPhase === 'warmup'
-  }
+  let warmup = false
+  let releaseTimer = 0
 
   const render = () => {
-    if (warmup === null) return
-
     const timer = document.querySelector('#timer')
-    const round = document.querySelector('#round_now')
-    const timerText = document.querySelector('#round_timer_text')
-    if (!timer || !round || !timerText) return
+    if (!timer) return
 
     timer.classList.toggle('jts-warmup', warmup)
-    round.style.display = warmup ? 'none' : ''
-    timerText.style.height = warmup ? '100%' : ''
-    timerText.style.fontSize = warmup ? '20px' : ''
-    timerText.style.alignItems = warmup ? 'center' : ''
-    if (warmup && timerText.textContent.trim() !== 'WARMUP') timerText.textContent = 'WARMUP'
   }
 
-  const readState = async () => {
-    try {
-      const response = await fetch('/api/gsi/state', { cache: 'no-store' })
-      if (!response.ok) return
-      warmup = isWarmup(await response.json())
+  const setPhase = (nextWarmup) => {
+    clearTimeout(releaseTimer)
+    if (nextWarmup) {
+      warmup = true
       render()
-    } catch {
-      // The HUD can still render normally when the local GSI listener is down.
+      return
     }
+
+    // Let the already-emitted Socket.IO update paint the first live round before revealing it.
+    releaseTimer = setTimeout(() => {
+      warmup = false
+      render()
+    }, 100)
   }
 
   new MutationObserver(render).observe(document.body, { childList: true, subtree: true })
-  readState()
-  setInterval(readState, 500)
+  const stream = new EventSource('/api/gsi/phase')
+  stream.onmessage = ({ data }) => {
+    try {
+      setPhase(JSON.parse(data).warmup === true)
+    } catch {
+      // EventSource reconnects automatically if the server restarts.
+    }
+  }
 })()

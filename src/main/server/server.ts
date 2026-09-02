@@ -8,7 +8,7 @@ import cors from 'cors'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
 import { setupSockets } from './socket'
-import { getLastHudState, setupGSI } from './integrations/gsi'
+import { getLastHudPhase, setupGSI, subscribeHudPhase } from './integrations/gsi'
 
 import createMatchRouter from './domains/matches/match.routes'
 import createPlayerRouter from './domains/players/player.routes'
@@ -67,15 +67,20 @@ app.use('/api/match', createMatchRouter(io))
 app.use('/api/settings', settingsRoutes)
 app.use('/api/spectator', spectatorRoutes)
 app.use('/api/auto-director', autoDirectorRoutes)
-app.get('/api/gsi/state', (_req, res) => {
-  const state = getLastHudState()
-  if (!state) {
-    res.status(204).end()
-    return
-  }
+app.get('/api/gsi/phase', (req, res) => {
+  res.status(200).set({
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+    'content-type': 'text/event-stream'
+  })
+  res.flushHeaders()
 
-  res.setHeader('cache-control', 'no-store')
-  res.json(state)
+  const send = (phase: { warmup: boolean }) => res.write(`data: ${JSON.stringify(phase)}\n\n`)
+  const phase = getLastHudPhase()
+  if (phase) send(phase)
+
+  const unsubscribe = subscribeHudPhase(send)
+  req.on('close', unsubscribe)
 })
 app.get('/api/system/stats', (_req, res) => {
   res.json(getSystemStats())
