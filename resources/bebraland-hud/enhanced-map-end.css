@@ -8,7 +8,10 @@
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: none;
+  display: block;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
   box-sizing: border-box;
   padding: 7vh 6.5vw;
   color: #f7f9ff;
@@ -17,6 +20,7 @@
   background:
     radial-gradient(ellipse at 50% 110%, rgba(15, 115, 255, 0.56), transparent 54%),
     linear-gradient(135deg, #111832 0%, #071027 48%, #12142e 100%);
+  transition: opacity var(--map-end-fade-duration, 350ms) ease, visibility 0s linear var(--map-end-fade-duration, 350ms);
 }
 
 #enhanced-map-end-root::before {
@@ -33,21 +37,33 @@
 }
 
 .enhanced-map-end-active #enhanced-map-end-root {
-  display: block;
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0s;
 }
 
 .enhanced-map-end-pending #enhanced-map-end-root {
-  display: block;
+  visibility: visible;
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 0s;
+}
+
+.eg-overlay {
+  transition: opacity var(--map-end-fade-duration, 350ms) ease, visibility 0s linear var(--map-end-fade-duration, 350ms);
 }
 
 .enhanced-map-end-active .eg-overlay {
   visibility: hidden;
   opacity: 0 !important;
+  transition-delay: 0s;
 }
 
 .enhanced-map-end-pending .eg-overlay {
   visibility: hidden;
   opacity: 0 !important;
+  transition-delay: 0s;
 }
 
 .enhanced-map-end-shell {

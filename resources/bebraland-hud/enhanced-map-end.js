@@ -36,6 +36,10 @@
     const parsed = Number(value)
     return Number.isFinite(parsed) && parsed >= 0 ? Math.min(parsed, 600) : 30
   }
+  const milliseconds = (value) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.min(parsed, 2000) : 350
+  }
   const liveTeamState = (team) => {
     const name = String(team?.name || '').trim().toLowerCase()
     if (!name) return null
@@ -55,6 +59,8 @@
   let vetoPosition = 'right'
   let ratingModel = 'five_factor'
   let lastMapSeconds = 30
+  let fadeEnabled = true
+  let fadeMs = 350
   let projection = null
   let lastRendered = ''
   let projectionRequest = null
@@ -78,12 +84,11 @@
     seriesEndActive = false
     seriesEndMatch = null
     document.documentElement.classList.remove('enhanced-map-end-active', 'enhanced-map-end-pending')
-    root.replaceChildren()
     lastRendered = ''
   }
 
   const holdEnhanced = () => {
-  if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending && !seriesEndActive)) return clearEnhanced()
+    if ((!enabled && !debugPreview && !debugSeriesPreview) || (!debugPreview && !debugSeriesPreview && !oldOverlay() && !pending && !seriesEndActive)) return clearEnhanced()
     pending = true
     document.documentElement.classList.remove('enhanced-map-end-active')
     document.documentElement.classList.add('enhanced-map-end-pending')
@@ -96,12 +101,17 @@
     const nextVetoPosition = config?.display_settings?.map_end_veto_position === 'left' ? 'left' : 'right'
     const nextRatingModel = config?.display_settings?.map_end_rating_model === 'hltv_like' ? 'hltv_like' : 'five_factor'
     const nextLastMapSeconds = seconds(config?.display_settings?.map_end_last_map_seconds)
-    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition || nextRatingModel !== ratingModel || nextLastMapSeconds !== lastMapSeconds
+    const nextFadeEnabled = config?.display_settings?.map_end_fade_enabled !== false && config?.display_settings?.map_end_fade_enabled !== 'false' && config?.display_settings?.map_end_fade_enabled !== 0
+    const nextFadeMs = milliseconds(config?.display_settings?.map_end_fade_duration_ms)
+    const changed = nextEnabled !== enabled || nextShowVeto !== showVeto || nextVetoPosition !== vetoPosition || nextRatingModel !== ratingModel || nextLastMapSeconds !== lastMapSeconds || nextFadeEnabled !== fadeEnabled || nextFadeMs !== fadeMs
     enabled = nextEnabled
     showVeto = nextShowVeto
     vetoPosition = nextVetoPosition
     ratingModel = nextRatingModel
     lastMapSeconds = nextLastMapSeconds
+    fadeEnabled = nextFadeEnabled
+    fadeMs = nextFadeMs
+    root.style.setProperty('--map-end-fade-duration', fadeEnabled ? `${fadeMs}ms` : '0ms')
     if (!enabled && !debugPreview && !debugSeriesPreview) clearEnhanced()
     else if (changed && (debugPreview || debugSeriesPreview || oldOverlay() || seriesEndActive)) {
       lastRendered = ''
