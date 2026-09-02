@@ -78,12 +78,6 @@
         "default": "30"
       },
       {
-        "type": "text",
-        "name": "map_end_series_seconds",
-        "label": "Series-end combined stats (seconds)",
-        "default": "30"
-      },
-      {
         "type": "checkbox",
         "name": "show_map_end_veto",
         "label": "Show map veto on map-end screen",
