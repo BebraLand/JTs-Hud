@@ -77,7 +77,8 @@ const cameraConePoints = computed(() => {
   if (!pose || !center) return ''
   const angle = (pose.angles[1] * Math.PI) / 180
   const length = 150
-  const halfFov = Math.min(Math.PI / 3, ((pose.fov || 90) * Math.PI) / 360)
+  const fov = Math.max(1, Math.min(179, pose.fov))
+  const halfFov = (fov * Math.PI) / 360
   const left = {
     x: center.x + Math.cos(angle - halfFov) * length,
     y: center.y - Math.sin(angle - halfFov) * length
@@ -240,6 +241,7 @@ const resetDuration = async (pathId: string, baseDuration: number) => {
               <span class="text-emerald-300">{{ hlae.visibleSteamIds.length }} visible</span>
               <span class="text-red-300">{{ hlae.occludedSteamIds.length }} occluded</span>
               <span>{{ hlae.inFrustumSteamIds.length }} in frustum</span>
+              <span v-if="hlae.activePose">FOV {{ hlae.activePose.fov.toFixed(1) }}°</span>
             </div>
           </div>
           <div
