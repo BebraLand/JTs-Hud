@@ -30,7 +30,7 @@ The Auto Director and aerial features are experimental; the core HUD manager and
 
 Experimental map-geometry tooling is powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
 
-_Disclaimer: A small portion of this is ai generated, and while I don't entirely love the idea of vibe coding, it helped in areas that I struggled to understand. I have tried to comment the places that were generated and that could lead to some bugs_
+_Note: parts of the BebraLand-specific fork work were developed with AI-assisted / vibe-coding workflows. This applies to the fork additions, especially the experimental Auto Director and map-geometry tooling, not to the original upstream project. Please report anything that behaves unexpectedly._
 
 ## Have questions? Join the community [Discord](https://discord.gg/HApB9HyaWM)!
 
