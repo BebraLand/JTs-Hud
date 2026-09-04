@@ -377,7 +377,7 @@ const launchPath = async (pathId: string) => {
               </p>
             </div>
             <span class="text-[10px] text-zinc-600"
-              >Aerial and HLAE cannot own the camera at the same time.</span
+              >Freeze-time/round-end: HLAE first · mid-round: Aerial first</span
             >
           </div>
           <div

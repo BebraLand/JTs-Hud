@@ -885,7 +885,8 @@ const healthClass = (state: string) =>
                   }}
                 </p>
                 <p class="mt-1 text-[9px] text-zinc-600">
-                  Aerial and HLAE are mutually exclusive; enabling one disables the other.
+                  Both can run together: HLAE has priority in freeze-time and round-end, while
+                  Aerial has priority mid-round. The second system is used as fallback.
                 </p>
               </div>
             </div>
