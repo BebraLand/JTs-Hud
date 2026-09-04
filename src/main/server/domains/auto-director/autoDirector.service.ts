@@ -15,7 +15,11 @@ import {
 import { buildAutoDirectorMlFeatures } from './autoDirector.mlFeatures'
 import { AutoDirectorTemporalTracker } from './autoDirector.temporal'
 import { autoDirectorMlAdvisory, LightGbmRanker, loadLightGbmRanker } from './autoDirector.ml'
-import { persistSettingsCandidate, sanitizeAerialPresentationPhases } from './autoDirector.settings'
+import {
+  persistSettingsCandidate,
+  sanitizeAerialPresentationPhases,
+  sanitizeHlaePresentationPhases
+} from './autoDirector.settings'
 import { CameraController } from './cameraController'
 import { getAutoDirectorResourceDir } from '../../../paths'
 import { computeGeometryFeatures } from './geometry/geometryFeatures'
@@ -29,6 +33,14 @@ import {
   type AerialPresentationDecision
 } from './aerial/aerialPresentation'
 import { computeCameraDebugStatus, emptyCameraDebugStatus } from './cameraDebug'
+import {
+  HlaeCameraRegistry,
+  getHlaeCameraPose,
+  type HlaeCameraMap,
+  type HlaeCameraPath
+} from './hlae/hlaeCameraRegistry'
+import { computeCameraVisibility } from './geometry/cameraVisibility'
+import type { GeometryMap } from './geometry/geometryMap'
 import type {
   AutoDirectorSettings,
   AutoDirectorPreset,
@@ -36,7 +48,8 @@ import type {
   CameraTransport,
   DirectorPlayer,
   DirectorHistoryEntry,
-  GsiLikePayload
+  GsiLikePayload,
+  PlayerScore
 } from './autoDirector.types'
 
 const SETTINGS_KEY = 'autoDirectorSettings'
@@ -45,6 +58,8 @@ const AERIAL_MIN_CONFIRMATIONS = 2
 const AERIAL_MAX_HOLD_MS = 6000
 const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
+const HLAE_PROBE_INTERVAL_MS = 5000
+const HLAE_COOLDOWN_MS = 10000
 const MAX_CUSTOM_PRESETS = 20
 const MAX_PRESET_NAME_LENGTH = 40
 
@@ -97,7 +112,8 @@ const sanitizePreset = (input: unknown): AutoDirectorPreset => {
 
 const sanitizeSettings = (
   input: Partial<AutoDirectorSettings>,
-  aerialPresentationPhases = DEFAULT_AUTO_DIRECTOR_SETTINGS.aerialPresentationPhases
+  aerialPresentationPhases = DEFAULT_AUTO_DIRECTOR_SETTINGS.aerialPresentationPhases,
+  hlaePresentationPhases = DEFAULT_AUTO_DIRECTOR_SETTINGS.hlaePresentationPhases
 ): Partial<AutoDirectorSettings> => {
   const output: Partial<AutoDirectorSettings> = {}
   if (typeof input.enabled === 'boolean') output.enabled = input.enabled
@@ -120,6 +136,24 @@ const sanitizeSettings = (
     output.aerialPresentationPhases = sanitizeAerialPresentationPhases(
       input.aerialPresentationPhases,
       aerialPresentationPhases
+    )
+  }
+  if (typeof input.hlaePresentationEnabled === 'boolean') {
+    output.hlaePresentationEnabled = input.hlaePresentationEnabled
+  }
+  if (input.hlaePresentationPhases && typeof input.hlaePresentationPhases === 'object') {
+    output.hlaePresentationPhases = sanitizeHlaePresentationPhases(
+      input.hlaePresentationPhases,
+      hlaePresentationPhases
+    )
+  }
+  if (input.hlaeDurationOverrides && typeof input.hlaeDurationOverrides === 'object') {
+    output.hlaeDurationOverrides = Object.fromEntries(
+      Object.entries(input.hlaeDurationOverrides)
+        .filter(([key]) => /^[a-z0-9_-]+\/[a-z0-9_-]+$/i.test(key))
+        .map(([key, value]) => [key, Number(value)] as const)
+        .filter(([, value]) => Number.isFinite(value) && value >= 0.5 && value <= 300)
+        .map(([key, value]) => [key, Math.round(value * 10) / 10] as const)
     )
   }
   if (input.minimumDwellOverrideMs !== undefined) {
@@ -190,6 +224,7 @@ export class AutoDirectorService {
   private readonly aerial = new AerialCameraRegistry(
     path.join(getAutoDirectorResourceDir(), 'aerial')
   )
+  private readonly hlae = new HlaeCameraRegistry(path.join(getAutoDirectorResourceDir(), 'hlae'))
   private mlRanker: LightGbmRanker | null = null
   private mlModelMessage = 'Model not loaded'
   private roundStartedAt = 0
@@ -238,6 +273,35 @@ export class AutoDirectorService {
   private aerialActivePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private aerialSequencePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private aerialSequenceAnchorIds = new Set<string>()
+  private hlaeActivePath: HlaeCameraPath | null = null
+  private hlaeActivePhase: ReturnType<typeof getAerialPresentationPhase> = null
+  private hlaeActiveStartedAt = 0
+  private hlaeActiveUntil = 0
+  private hlaeCooldownUntil = 0
+  private hlaeLastProbeAt = 0
+  private hlaeProbeInFlight = false
+  private hlaeAvailable = false
+  private hlaeState: 'disabled' | 'missing' | 'checking' | 'ready' | 'unavailable' | 'error' =
+    'disabled'
+  private hlaeMessage = 'HLAE presentation disabled'
+  private hlaeLastVisibleAt = 0
+  private hlaePathCoverage = new Map<string, { startVisibleCount: number; startScore: number }>()
+  private hlaeDebug: Pick<
+    AutoDirectorStatus['hlae'],
+    | 'activePose'
+    | 'visibleSteamIds'
+    | 'occludedSteamIds'
+    | 'inFrustumSteamIds'
+    | 'players'
+    | 'summary'
+  > = {
+    activePose: null,
+    visibleSteamIds: [],
+    occludedSteamIds: [],
+    inFrustumSteamIds: [],
+    players: [],
+    summary: 'Waiting for GSI state'
+  }
   private cameraDebug = emptyCameraDebugStatus()
 
   async initialize(io: Server): Promise<void> {
@@ -304,6 +368,7 @@ export class AutoDirectorService {
     const now = Date.now()
     const connected = this.lastGsiAt !== null && now - this.lastGsiAt < 5000
     const aerialStatus = this.aerial.getStatus()
+    const hlaeStatus = this.hlae.getStatus()
     return {
       settings: structuredClone(this.settings),
       connected,
@@ -332,6 +397,30 @@ export class AutoDirectorService {
         reason: this.aerialReason,
         visibleSteamIds: [...this.aerialVisibleSteamIds]
       },
+      hlae: {
+        enabled: this.settings.hlaePresentationEnabled,
+        mapName: hlaeStatus.mapName,
+        state: this.settings.hlaePresentationEnabled ? this.hlaeState : 'disabled',
+        pathCount: hlaeStatus.pathCount,
+        message: this.settings.hlaePresentationEnabled
+          ? this.hlaeMessage
+          : 'HLAE presentation disabled',
+        activePathId: this.hlaeActivePath?.id ?? null,
+        activePathLabel: this.hlaeActivePath?.label ?? null,
+        activeUntil: this.hlaeActivePath ? this.hlaeActiveUntil : null,
+        ...this.hlaeDebug,
+        paths: hlaeStatus.paths.map((pathEntry) => ({
+          ...pathEntry,
+          durationSeconds: this.getHlaeDuration(
+            hlaeStatus.mapName,
+            pathEntry.id,
+            pathEntry.durationSeconds
+          ),
+          baseDurationSeconds: pathEntry.durationSeconds,
+          startVisibleCount: this.hlaePathCoverage.get(pathEntry.id)?.startVisibleCount ?? 0,
+          startScore: this.hlaePathCoverage.get(pathEntry.id)?.startScore ?? 0
+        }))
+      },
       cameraDebug: structuredClone(this.cameraDebug)
     }
   }
@@ -342,7 +431,13 @@ export class AutoDirectorService {
   }
 
   async updateSettings(input: Partial<AutoDirectorSettings>): Promise<AutoDirectorStatus> {
-    const next = sanitizeSettings(input, this.settings.aerialPresentationPhases)
+    const next = sanitizeSettings(
+      input,
+      this.settings.aerialPresentationPhases,
+      this.settings.hlaePresentationPhases
+    )
+    if (next.aerialPresentationEnabled === true) next.hlaePresentationEnabled = false
+    if (next.hlaePresentationEnabled === true) next.aerialPresentationEnabled = false
     const directorDisabled = (next.enabled ?? this.settings.enabled) === false
     if (directorDisabled) {
       next.autoFallback = false
@@ -356,6 +451,19 @@ export class AutoDirectorService {
     this.settings = await persistSettingsCandidate(this.settings, next, (candidate) =>
       this.persistSettings(candidate)
     )
+    const activeMapName = this.hlae.getStatus().mapName
+    const activeDuration =
+      this.hlaeActivePath && activeMapName
+        ? next.hlaeDurationOverrides?.[`${activeMapName}/${this.hlaeActivePath.id}`]
+        : undefined
+    if (
+      this.settings.hlaePresentationEnabled &&
+      this.hlaeActivePath &&
+      Number.isFinite(activeDuration) &&
+      !this.commandInFlight
+    ) {
+      void this.updateActiveHlaeDuration(Number(activeDuration))
+    }
     if (directorDisabled) {
       this.engine.setCurrent(null)
       this.pendingTargetSteamId = null
@@ -370,16 +478,29 @@ export class AutoDirectorService {
       if (aerialReturnTarget) {
         void this.exitAerial(
           aerialReturnTarget,
-          directorDisabled ? 'Operator disabled Auto Director' : 'Operator disabled Aerial presentation'
+          directorDisabled
+            ? 'Operator disabled Auto Director'
+            : 'Operator disabled Aerial presentation'
         )
       } else {
         this.clearAerialPresentation(
           Date.now(),
-          directorDisabled ? 'Operator disabled Auto Director' : 'Operator disabled Aerial presentation'
+          directorDisabled
+            ? 'Operator disabled Auto Director'
+            : 'Operator disabled Aerial presentation'
         )
       }
     } else if (directorDisabled) {
       this.clearAerialPresentation(Date.now(), 'Operator disabled Auto Director')
+    }
+    if (next.hlaePresentationEnabled === false || directorDisabled) {
+      if (this.hlaeActivePath && !this.commandInFlight)
+        void this.exitHlae('HLAE presentation disabled')
+      else if (directorDisabled) this.clearHlaePresentation(Date.now(), 'Auto Director disabled')
+    } else if (next.hlaePresentationEnabled === true) {
+      this.hlaeState = 'checking'
+      this.hlaeMessage = 'Checking HLAE connection'
+      void this.refreshHlaeAvailability(true)
     }
     if (
       next.manualOverrideSteamId !== undefined &&
@@ -492,6 +613,8 @@ export class AutoDirectorService {
         )
       : null
     const aerialMap = payload.map?.name ? this.aerial.load(payload.map.name) : null
+    const hlaeMap = payload.map?.name ? this.hlae.load(payload.map.name) : null
+    if (this.settings.hlaePresentationEnabled) void this.refreshHlaeAvailability()
     const topologyMap =
       this.settings.sceneAdvisoryEnabled && payload.map?.name
         ? this.topology.load(payload.map.name)
@@ -591,7 +714,16 @@ export class AutoDirectorService {
         excludedAnchorIds: this.aerialActiveAnchor ? undefined : this.aerialSequenceAnchorIds
       }
     )
-    const presentationControlsCamera = this.handleAerialPresentation(aerialDecision, now)
+    const hlaePresentationControlsCamera = this.handleHlaePresentation(
+      hlaeMap,
+      aerialPhase,
+      now,
+      players,
+      this.decision.scores,
+      geometryMap
+    )
+    const presentationControlsCamera =
+      hlaePresentationControlsCamera || this.handleAerialPresentation(aerialDecision, now)
 
     if (
       this.decision.shouldSwitch &&
@@ -646,6 +778,389 @@ export class AutoDirectorService {
       this.commandInFlight = false
       this.emitStatus()
     }
+  }
+
+  private async refreshHlaeAvailability(force = false): Promise<void> {
+    if (!this.settings.hlaePresentationEnabled) {
+      this.hlaeAvailable = false
+      this.hlaeState = 'disabled'
+      this.hlaeMessage = 'HLAE presentation disabled'
+      return
+    }
+    const registryStatus = this.hlae.getStatus()
+    if (registryStatus.pathCount === 0) {
+      this.hlaeAvailable = false
+      this.hlaeState = registryStatus.state === 'error' ? 'error' : 'missing'
+      this.hlaeMessage = registryStatus.message
+      return
+    }
+    const now = Date.now()
+    if (
+      this.hlaeProbeInFlight ||
+      (!force && this.hlaeAvailable && now - this.hlaeLastProbeAt < HLAE_PROBE_INTERVAL_MS)
+    ) {
+      return
+    }
+    this.hlaeProbeInFlight = true
+    this.hlaeLastProbeAt = now
+    this.hlaeState = 'checking'
+    this.hlaeMessage = 'Checking HLAE connection'
+    this.emitStatus()
+    try {
+      const result = await this.camera.probeHlae()
+      this.lastCommand = result
+      this.updateTransportHealth(result)
+      this.hlaeAvailable = result.ok
+      this.hlaeState = result.ok ? 'ready' : 'unavailable'
+      this.hlaeMessage = result.ok ? 'HLAE detected and ready' : result.message
+      if (!result.ok) this.hlaeCooldownUntil = result.at + HLAE_PROBE_INTERVAL_MS
+    } catch (error) {
+      this.hlaeAvailable = false
+      this.hlaeState = 'error'
+      this.hlaeMessage = error instanceof Error ? error.message : String(error)
+    } finally {
+      this.hlaeProbeInFlight = false
+      this.emitStatus()
+    }
+  }
+
+  private getHlaeDuration(mapName: string | null, pathId: string, rawDuration: number): number {
+    const key = mapName ? `${mapName}/${pathId}` : pathId
+    return this.settings.hlaeDurationOverrides[key] ?? rawDuration
+  }
+
+  private evaluateHlaePath(
+    pathEntry: HlaeCameraPath,
+    elapsedSeconds: number,
+    players: DirectorPlayer[],
+    scores: PlayerScore[],
+    geometry: GeometryMap | null,
+    durationSeconds: number
+  ) {
+    const pose = getHlaeCameraPose(pathEntry, elapsedSeconds, durationSeconds)
+    const visibility = geometry
+      ? computeCameraVisibility(
+          { position: pose.position, angles: pose.angles },
+          players,
+          geometry,
+          { horizontalFovDegrees: pose.fov }
+        )
+      : new Map()
+    const alive = players.filter((player) => player.alive && player.position)
+    const inFrustumSteamIds = alive
+      .filter((player) => visibility.get(player.steamId)?.inFrustum)
+      .map((player) => player.steamId)
+    const visibleSteamIds = alive
+      .filter((player) => visibility.get(player.steamId)?.visible)
+      .map((player) => player.steamId)
+    const occludedSteamIds = inFrustumSteamIds.filter((id) => !visibleSteamIds.includes(id))
+    const scoreById = new Map(scores.map((score) => [score.steamId, score]))
+    const actionScore = visibleSteamIds.reduce(
+      (sum, id) => sum + Math.max(0, Math.min(100, scoreById.get(id)?.total ?? 0)),
+      0
+    )
+    return {
+      pose,
+      visibleSteamIds,
+      occludedSteamIds,
+      inFrustumSteamIds,
+      score: Math.round((visibleSteamIds.length * 20 + actionScore * 0.25) * 10) / 10
+    }
+  }
+
+  private updateHlaeDebug(
+    pathEntry: HlaeCameraPath | null,
+    players: DirectorPlayer[],
+    scores: PlayerScore[],
+    geometry: GeometryMap | null,
+    now: number,
+    durationSeconds = pathEntry ? pathEntry.durationSeconds : 0
+  ): void {
+    this.hlaeDebug.players = players.map((player) => ({
+      steamId: player.steamId,
+      name: player.name,
+      team: player.team,
+      alive: player.alive,
+      position: player.position ? [...player.position] : null
+    }))
+    if (!pathEntry || !this.hlaeActiveStartedAt) {
+      this.hlaeDebug.activePose = null
+      this.hlaeDebug.visibleSteamIds = []
+      this.hlaeDebug.occludedSteamIds = []
+      this.hlaeDebug.inFrustumSteamIds = []
+      this.hlaeDebug.summary = geometry
+        ? `${players.filter((player) => player.alive).length} alive · no active campath`
+        : 'Player positions live · geometry unavailable'
+      return
+    }
+    const evaluation = this.evaluateHlaePath(
+      pathEntry,
+      (now - this.hlaeActiveStartedAt) / 1000,
+      players,
+      scores,
+      geometry,
+      durationSeconds
+    )
+    this.hlaeDebug.activePose = {
+      position: [...evaluation.pose.position],
+      angles: [...evaluation.pose.angles],
+      fov: evaluation.pose.fov,
+      progress: evaluation.pose.progress
+    }
+    this.hlaeDebug.visibleSteamIds = evaluation.visibleSteamIds
+    this.hlaeDebug.occludedSteamIds = evaluation.occludedSteamIds
+    this.hlaeDebug.inFrustumSteamIds = evaluation.inFrustumSteamIds
+    this.hlaeDebug.summary = geometry
+      ? `${evaluation.visibleSteamIds.length} visible · ${evaluation.occludedSteamIds.length} occluded · ${Math.round(evaluation.pose.progress * 100)}% path`
+      : 'Player positions live · geometry unavailable'
+  }
+
+  private selectHlaePath(
+    map: HlaeCameraMap,
+    players: DirectorPlayer[],
+    scores: PlayerScore[],
+    geometry: GeometryMap | null
+  ): HlaeCameraPath | null {
+    this.hlaePathCoverage.clear()
+    if (!geometry) return null
+    const evaluations = map.paths.map((pathEntry) => {
+      const durationSeconds = this.getHlaeDuration(
+        map.mapName,
+        pathEntry.id,
+        pathEntry.durationSeconds
+      )
+      const evaluation = this.evaluateHlaePath(
+        pathEntry,
+        0,
+        players,
+        scores,
+        geometry,
+        durationSeconds
+      )
+      this.hlaePathCoverage.set(pathEntry.id, {
+        startVisibleCount: evaluation.visibleSteamIds.length,
+        startScore: evaluation.score
+      })
+      return { pathEntry, evaluation }
+    })
+    const eligible = evaluations
+      .filter(({ evaluation }) => evaluation.visibleSteamIds.length > 0)
+      .sort(
+        (left, right) =>
+          right.evaluation.score - left.evaluation.score ||
+          right.evaluation.visibleSteamIds.length - left.evaluation.visibleSteamIds.length ||
+          left.pathEntry.id.localeCompare(right.pathEntry.id)
+      )
+    if (!eligible.length) return null
+    const preferred = this.hlae.next(map.mapName)
+    return (
+      eligible.find(({ pathEntry }) => pathEntry.id === preferred?.id)?.pathEntry ??
+      eligible[0].pathEntry
+    )
+  }
+
+  private isHlaePhaseEnabled(phase: ReturnType<typeof getAerialPresentationPhase>): boolean {
+    if (phase === 'freeze-time') return this.settings.hlaePresentationPhases.freezeTime
+    if (phase === 'post-round') return this.settings.hlaePresentationPhases.roundEnd
+    if (phase) return this.settings.hlaePresentationPhases.midRound
+    return false
+  }
+
+  private isSameHlaePhase(
+    left: ReturnType<typeof getAerialPresentationPhase>,
+    right: ReturnType<typeof getAerialPresentationPhase>
+  ): boolean {
+    const bucket = (phase: ReturnType<typeof getAerialPresentationPhase>) =>
+      phase === 'freeze-time'
+        ? 'freeze-time'
+        : phase === 'post-round'
+          ? 'post-round'
+          : phase
+            ? 'mid-round'
+            : null
+    return bucket(left) === bucket(right)
+  }
+
+  /** HLAE owns the camera only while a selected campath is running. */
+  private handleHlaePresentation(
+    map: HlaeCameraMap | null,
+    phase: ReturnType<typeof getAerialPresentationPhase>,
+    now: number,
+    players: DirectorPlayer[],
+    scores: PlayerScore[],
+    geometry: GeometryMap | null
+  ): boolean {
+    if (!this.settings.hlaePresentationEnabled) {
+      if (this.hlaeActivePath && !this.commandInFlight)
+        void this.exitHlae('HLAE presentation disabled')
+      return Boolean(this.hlaeActivePath || this.commandInFlight)
+    }
+    if (!map?.paths.length) {
+      this.updateHlaeDebug(null, players, scores, geometry, now)
+      this.hlaeState = 'missing'
+      this.hlaeMessage = map ? `No HLAE campaths for ${map.mapName}` : 'Waiting for a GSI map'
+      return false
+    }
+    if (!this.hlaeAvailable) {
+      this.updateHlaeDebug(null, players, scores, geometry, now)
+      return false
+    }
+    if (this.hlaeActivePath) {
+      if (this.commandInFlight) return true
+      const durationSeconds = this.getHlaeDuration(
+        map.mapName,
+        this.hlaeActivePath.id,
+        this.hlaeActivePath.durationSeconds
+      )
+      this.updateHlaeDebug(this.hlaeActivePath, players, scores, geometry, now, durationSeconds)
+      if (this.hlaeDebug.visibleSteamIds.length > 0) this.hlaeLastVisibleAt = now
+      const phaseChanged = !this.isSameHlaePhase(phase, this.hlaeActivePhase)
+      const visibilityLost =
+        geometry !== null && this.hlaeLastVisibleAt > 0 && now - this.hlaeLastVisibleAt >= 1200
+      if (
+        phaseChanged ||
+        now >= this.hlaeActiveUntil ||
+        !this.isHlaePhaseEnabled(phase) ||
+        visibilityLost
+      ) {
+        void this.exitHlae(
+          phaseChanged
+            ? `HLAE phase changed to ${phase ?? 'unknown'}`
+            : visibilityLost
+              ? 'No players visible from the active HLAE path'
+              : `HLAE campath finished: ${this.hlaeActivePath.label}`
+        )
+      }
+      return true
+    }
+    if (!this.isHlaePhaseEnabled(phase) || now < this.hlaeCooldownUntil || this.commandInFlight) {
+      this.updateHlaeDebug(null, players, scores, geometry, now)
+      return false
+    }
+    const pathEntry = this.selectHlaePath(map, players, scores, geometry)
+    this.updateHlaeDebug(null, players, scores, geometry, now)
+    if (!pathEntry) {
+      this.hlaeMessage = geometry
+        ? 'No campath currently sees a living player'
+        : 'Waiting for map geometry to evaluate visibility'
+      return false
+    }
+    void this.enterHlae(pathEntry, map.mapName, phase, now)
+    return true
+  }
+
+  private async enterHlae(
+    pathEntry: HlaeCameraPath,
+    mapName: string,
+    phase: ReturnType<typeof getAerialPresentationPhase>,
+    now: number
+  ): Promise<void> {
+    this.commandInFlight = true
+    try {
+      const durationSeconds = this.getHlaeDuration(mapName, pathEntry.id, pathEntry.durationSeconds)
+      this.lastCommand = await this.camera.loadHlaePath(pathEntry.sourcePath, durationSeconds)
+      this.updateTransportHealth(this.lastCommand)
+      if (this.lastCommand.ok) {
+        this.hlaeActivePath = pathEntry
+        this.hlaeActivePhase = phase
+        this.hlaeActiveStartedAt = this.lastCommand.at || now
+        this.hlaeActiveUntil = this.hlaeActiveStartedAt + durationSeconds * 1000
+        this.hlaeLastVisibleAt = this.hlaeActiveStartedAt
+        this.hlaeState = 'ready'
+        this.hlaeMessage = `LIVE: ${pathEntry.label}`
+        this.addHistory({
+          at: this.lastCommand.at,
+          type: 'presentation',
+          message: `HLAE campath started: ${pathEntry.label}`,
+          transport: this.lastCommand.transport
+        })
+      } else {
+        this.hlaeAvailable = false
+        this.hlaeState = 'unavailable'
+        this.hlaeMessage = `HLAE campath failed: ${this.lastCommand.message}`
+        this.hlaeCooldownUntil = this.lastCommand.at + HLAE_COOLDOWN_MS
+        this.addHistory({
+          at: this.lastCommand.at,
+          type: 'transport-error',
+          message: this.hlaeMessage,
+          transport: this.lastCommand.transport
+        })
+      }
+    } finally {
+      this.commandInFlight = false
+      this.emitStatus()
+    }
+  }
+
+  private async updateActiveHlaeDuration(durationSeconds: number): Promise<void> {
+    if (!this.hlaeActivePath) return
+    this.commandInFlight = true
+    try {
+      this.lastCommand = await this.camera.setHlaeDuration(durationSeconds)
+      this.updateTransportHealth(this.lastCommand)
+      if (this.lastCommand.ok) {
+        this.hlaeActiveUntil = this.hlaeActiveStartedAt + durationSeconds * 1000
+        this.hlaeMessage = `LIVE: ${this.hlaeActivePath.label} · ${durationSeconds.toFixed(1)}s`
+      }
+    } finally {
+      this.commandInFlight = false
+      this.emitStatus()
+    }
+  }
+
+  private async exitHlae(reason: string): Promise<void> {
+    const pathLabel = this.hlaeActivePath?.label ?? 'HLAE campath'
+    const target = this.getAerialReturnTarget()
+    const shouldConfirmSwitch = Boolean(this.decision?.shouldSwitch)
+    this.commandInFlight = true
+    try {
+      const disabled = await this.camera.disableHlae()
+      this.lastCommand = disabled
+      this.updateTransportHealth(disabled)
+      if (!disabled.ok) {
+        this.hlaeState = 'error'
+        this.hlaeMessage = `Could not disable HLAE: ${disabled.message}`
+        this.addHistory({
+          at: disabled.at,
+          type: 'transport-error',
+          message: this.hlaeMessage,
+          transport: disabled.transport
+        })
+        return
+      }
+      if (target) {
+        this.lastCommand = await this.camera.switchTo(target, this.settings)
+        this.updateTransportHealth(this.lastCommand)
+        if (this.lastCommand.ok && shouldConfirmSwitch) {
+          this.engine.confirmSwitch(target.steamId, this.lastCommand.at)
+          if (this.observerConfirmationAvailable) {
+            this.pendingTargetSteamId = target.steamId
+            this.pendingTargetAt = this.lastCommand.at
+          }
+        }
+      }
+      this.addHistory({
+        at: this.lastCommand.at,
+        type: 'presentation',
+        message: `Returned from ${pathLabel}: ${reason}`,
+        toSteamId: target?.steamId,
+        transport: this.lastCommand.transport
+      })
+      this.clearHlaePresentation(this.lastCommand.at, reason)
+    } finally {
+      this.commandInFlight = false
+      this.emitStatus()
+    }
+  }
+
+  private clearHlaePresentation(now: number, reason: string): void {
+    this.hlaeActivePath = null
+    this.hlaeActivePhase = null
+    this.hlaeActiveStartedAt = 0
+    this.hlaeActiveUntil = 0
+    this.hlaeLastVisibleAt = 0
+    this.hlaeCooldownUntil = now + HLAE_COOLDOWN_MS
+    this.hlaeMessage = reason
   }
 
   /** Returns true while presentation owns the camera or a presentation command is in flight. */

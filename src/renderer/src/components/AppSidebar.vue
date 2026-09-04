@@ -82,7 +82,7 @@ function openTwitch() {
 
   <aside
     :class="[collapsed ? 'w-16' : 'w-56']"
-    class="transition-all duration-200 ease-in-out bg-surface border-r border-border flex flex-col overflow-hidden shrink-0"
+    class="h-full min-h-0 transition-all duration-200 ease-in-out bg-surface border-r border-border flex flex-col overflow-hidden shrink-0"
   >
     <!-- Logo -->
     <div
@@ -126,7 +126,7 @@ function openTwitch() {
 
     <!-- Nav -->
     <nav
-      class="flex-1 py-3 flex flex-col gap-0.5 overflow-hidden"
+      class="min-h-0 flex-1 py-3 flex flex-col gap-0.5 overflow-y-auto"
       :class="collapsed ? 'px-2' : 'px-3'"
     >
       <!-- Expand button — only visible when collapsed -->
@@ -261,7 +261,12 @@ function openTwitch() {
         </svg>
       </SidebarNavLink>
 
-      <SidebarNavLink to="/camera-debug" label="Camera Debug" :collapsed="collapsed" :badge="hasLiveData">
+      <SidebarNavLink
+        to="/camera-debug"
+        label="Camera Debug"
+        :collapsed="collapsed"
+        :badge="hasLiveData"
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           height="20px"
@@ -271,6 +276,20 @@ function openTwitch() {
         >
           <path
             d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm-40-120v-160H280v-80h160v-160h80v160h160v80H520v160h-80Zm40-200Z"
+          />
+        </svg>
+      </SidebarNavLink>
+
+      <SidebarNavLink to="/hlae-cams" label="HLAE Cams" :collapsed="collapsed" :badge="hasLiveData">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          height="20px"
+          viewBox="0 -960 960 960"
+          width="20px"
+          fill="currentColor"
+        >
+          <path
+            d="M160-120q-33 0-56.5-23.5T80-200v-400q0-33 23.5-56.5T160-680h80l48-72q11-17 29-22.5t39-5.5h248q21 0 39 5.5t29 22.5l48 72h80q33 0 56.5 23.5T880-600v400q0 33-23.5 56.5T800-120H160Zm0-80h640v-400H640l-72-100H392l-72 100H160v400Zm320-60q83 0 141.5-58.5T680-460q0-83-58.5-141.5T480-660q-83 0-141.5 58.5T280-460q0 83 58.5 141.5T480-260Zm0-80q-50 0-85-35t-35-85q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35Z"
           />
         </svg>
       </SidebarNavLink>
@@ -287,7 +306,11 @@ function openTwitch() {
         <button
           @click="refreshHuds"
           class="relative transition-colors"
-          :class="hudRefreshPending ? 'text-red-400 hover:text-red-300' : 'text-zinc-500 hover:text-zinc-300'"
+          :class="
+            hudRefreshPending
+              ? 'text-red-400 hover:text-red-300'
+              : 'text-zinc-500 hover:text-zinc-300'
+          "
           :title="hudRefreshPending ? 'HUD data changed — refresh HUDs' : 'Refresh HUDs'"
           :disabled="hudRefreshing"
           aria-label="Refresh HUDs"
@@ -387,7 +410,11 @@ function openTwitch() {
         <button
           @click="refreshHuds"
           class="relative transition-colors"
-          :class="hudRefreshPending ? 'text-red-400 hover:text-red-300' : 'text-zinc-500 hover:text-zinc-300'"
+          :class="
+            hudRefreshPending
+              ? 'text-red-400 hover:text-red-300'
+              : 'text-zinc-500 hover:text-zinc-300'
+          "
           :title="hudRefreshPending ? 'HUD data changed — refresh HUDs' : 'Refresh HUDs'"
           :disabled="hudRefreshing"
           aria-label="Refresh HUDs"

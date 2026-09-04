@@ -256,6 +256,14 @@ const setAerialPhase = (phase: 'freezeTime' | 'midRound' | 'roundEnd', enabled: 
     }
   })
 
+const setHlaePhase = (phase: 'freezeTime' | 'midRound' | 'roundEnd', enabled: boolean) =>
+  void updateSettings({
+    hlaePresentationPhases: {
+      ...status.value.settings.hlaePresentationPhases,
+      [phase]: enabled
+    }
+  })
+
 const lockRemaining = computed(() => {
   const until = status.value.decision?.lockUntil
   return until ? Math.max(0, until - Date.now()) : 0
@@ -814,6 +822,70 @@ const healthClass = (state: string) =>
                       ? `LIVE: ${status.aerial.activeAnchorLabel} · visible ${status.aerial.visibleSteamIds.length} players`
                       : 'No active Aerial anchor'
                   }}
+                </p>
+              </div>
+              <label class="mt-3 flex items-start gap-2 text-[10px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  :checked="status.settings.hlaePresentationEnabled"
+                  :disabled="!status.settings.enabled || status.hlae.pathCount === 0"
+                  @change="
+                    updateSettings({
+                      hlaePresentationEnabled: ($event.target as HTMLInputElement).checked
+                    })
+                  "
+                  class="mt-0.5 accent-violet-400"
+                />
+                <span>
+                  <span class="block font-semibold text-violet-300"
+                    >Enable HLAE cinematic presentation</span
+                  >
+                  <span class="mt-0.5 block text-[10px] text-zinc-500">
+                    Loads the next map campath during enabled phases. If HLAE is not running, Auto
+                    Director keeps using normal player cameras.
+                  </span>
+                </span>
+              </label>
+              <div class="mt-2 grid gap-2 sm:grid-cols-3">
+                <label
+                  v-for="phase in [
+                    ['freezeTime', 'Freeze-time', 'Spawn establishing shots'],
+                    ['midRound', 'Mid-round', 'Calm cinematic transitions'],
+                    ['roundEnd', 'Round end', 'Post-round cinematic']
+                  ] as const"
+                  :key="phase[0]"
+                  class="flex items-start gap-2 rounded border border-violet-500/15 bg-violet-500/[0.03] p-2 text-[10px] text-zinc-400"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="status.settings.hlaePresentationPhases[phase[0]]"
+                    :disabled="!status.settings.hlaePresentationEnabled"
+                    @change="setHlaePhase(phase[0], ($event.target as HTMLInputElement).checked)"
+                    class="mt-0.5 accent-violet-400"
+                  />
+                  <span>
+                    <span class="block font-semibold text-violet-200">{{ phase[1] }}</span>
+                    <span class="mt-0.5 block text-[9px] text-zinc-600">{{ phase[2] }}</span>
+                  </span>
+                </label>
+              </div>
+              <div
+                class="mt-2 rounded border border-violet-500/15 bg-violet-500/[0.03] p-2 text-[10px]"
+              >
+                <p class="font-semibold text-violet-200">
+                  HLAE {{ status.hlae.state }} · {{ status.hlae.pathCount }} campaths
+                  <span v-if="status.hlae.mapName">· {{ status.hlae.mapName }}</span>
+                </p>
+                <p class="mt-1 text-zinc-500">{{ status.hlae.message }}</p>
+                <p class="mt-1 min-h-4 text-violet-300">
+                  {{
+                    status.hlae.activePathLabel
+                      ? `LIVE: ${status.hlae.activePathLabel}`
+                      : 'No active HLAE campath'
+                  }}
+                </p>
+                <p class="mt-1 text-[9px] text-zinc-600">
+                  Aerial and HLAE are mutually exclusive; enabling one disables the other.
                 </p>
               </div>
             </div>

@@ -182,4 +182,128 @@ export class CameraController {
       }
     }
   }
+
+  async probeHlae(): Promise<CameraCommandResult> {
+    try {
+      const telnet = await this.readTelnetSettings()
+      const result = await this.sendTelnet('mirv_campath', {
+        host: telnet.host,
+        port: telnet.port,
+        timeoutMs: 3000,
+        requireAck: true
+      })
+      if (/unknown command|not found/i.test(result.response)) {
+        throw new Error('HLAE commands are unavailable in the current CS2 session')
+      }
+      return {
+        ok: true,
+        transport: 'telnet',
+        message: 'HLAE commands are available',
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: true, message: 'HLAE probe passed' }]
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        transport: 'telnet',
+        message,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message }]
+      }
+    }
+  }
+
+  async loadHlaePath(sourcePath: string, durationSeconds?: number): Promise<CameraCommandResult> {
+    try {
+      const telnet = await this.readTelnetSettings()
+      const safePath = sourcePath.replace(/["\r\n]/g, '')
+      const durationCommand = Number.isFinite(durationSeconds)
+        ? `\nmirv_campath edit duration ${Math.max(0.5, Math.min(300, Number(durationSeconds))).toFixed(1)}`
+        : ''
+      await this.sendTelnet(
+        `mirv_campath load "${safePath}"\nmirv_campath edit start${durationCommand}\nmirv_campath enabled 1`,
+        {
+          host: telnet.host,
+          port: telnet.port,
+          timeoutMs: 5000,
+          requireAck: true
+        }
+      )
+      return {
+        ok: true,
+        transport: 'telnet',
+        message: `Loaded HLAE campath ${sourcePath}`,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: true, message: 'HLAE campath enabled' }]
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        transport: 'telnet',
+        message,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message }]
+      }
+    }
+  }
+
+  async disableHlae(): Promise<CameraCommandResult> {
+    try {
+      const telnet = await this.readTelnetSettings()
+      await this.sendTelnet('mirv_campath enabled 0', {
+        host: telnet.host,
+        port: telnet.port,
+        timeoutMs: 3000,
+        requireAck: true
+      })
+      return {
+        ok: true,
+        transport: 'telnet',
+        message: 'HLAE campath disabled',
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: true, message: 'HLAE disabled' }]
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        transport: 'telnet',
+        message,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message }]
+      }
+    }
+  }
+
+  async setHlaeDuration(durationSeconds: number): Promise<CameraCommandResult> {
+    try {
+      const telnet = await this.readTelnetSettings()
+      const duration = Math.max(0.5, Math.min(300, Number(durationSeconds)))
+      if (!Number.isFinite(duration)) throw new Error('Invalid HLAE duration')
+      await this.sendTelnet(`mirv_campath edit duration ${duration.toFixed(1)}`, {
+        host: telnet.host,
+        port: telnet.port,
+        timeoutMs: 3000,
+        requireAck: true
+      })
+      return {
+        ok: true,
+        transport: 'telnet',
+        message: `HLAE campath duration set to ${duration.toFixed(1)}s`,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: true, message: 'HLAE duration updated' }]
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        transport: 'telnet',
+        message,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message }]
+      }
+    }
+  }
 }

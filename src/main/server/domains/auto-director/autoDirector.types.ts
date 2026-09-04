@@ -171,6 +171,13 @@ export interface AutoDirectorSettings {
     midRound: boolean
     roundEnd: boolean
   }
+  hlaePresentationEnabled: boolean
+  hlaePresentationPhases: {
+    freezeTime: boolean
+    midRound: boolean
+    roundEnd: boolean
+  }
+  hlaeDurationOverrides: Record<string, number>
   minimumDwellOverrideMs: number | null
   postDeathHoldMs: number
   customPresets: AutoDirectorPreset[]
@@ -281,6 +288,42 @@ export interface AutoDirectorStatus {
     activeUntil: number | null
     reason: string
     visibleSteamIds: string[]
+  }
+  hlae: {
+    enabled: boolean
+    mapName: string | null
+    state: 'disabled' | 'missing' | 'checking' | 'ready' | 'unavailable' | 'error'
+    pathCount: number
+    message: string
+    activePathId: string | null
+    activePathLabel: string | null
+    activeUntil: number | null
+    activePose: {
+      position: [number, number, number]
+      angles: [number, number, number]
+      fov: number
+      progress: number
+    } | null
+    visibleSteamIds: string[]
+    occludedSteamIds: string[]
+    inFrustumSteamIds: string[]
+    players: Array<{
+      steamId: string
+      name: string
+      team: string
+      alive: boolean
+      position: [number, number, number] | null
+    }>
+    summary: string
+    paths: Array<{
+      id: string
+      label: string
+      kind: string
+      durationSeconds: number
+      baseDurationSeconds: number
+      startVisibleCount: number
+      startScore: number
+    }>
   }
   cameraDebug: CameraDebugStatus
 }

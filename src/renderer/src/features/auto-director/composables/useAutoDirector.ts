@@ -20,6 +20,13 @@ const emptyStatus = (): AutoDirectorStatus => ({
       midRound: true,
       roundEnd: true
     },
+    hlaePresentationEnabled: false,
+    hlaePresentationPhases: {
+      freezeTime: true,
+      midRound: true,
+      roundEnd: true
+    },
+    hlaeDurationOverrides: {},
     minimumDwellOverrideMs: null,
     postDeathHoldMs: 1000,
     customPresets: [],
@@ -76,6 +83,23 @@ const emptyStatus = (): AutoDirectorStatus => ({
     activeUntil: null,
     reason: 'Aerial presentation disabled',
     visibleSteamIds: []
+  },
+  hlae: {
+    enabled: false,
+    mapName: null,
+    state: 'disabled',
+    pathCount: 0,
+    message: 'HLAE presentation disabled',
+    activePathId: null,
+    activePathLabel: null,
+    activeUntil: null,
+    activePose: null,
+    visibleSteamIds: [],
+    occludedSteamIds: [],
+    inFrustumSteamIds: [],
+    players: [],
+    summary: 'Waiting for GSI state',
+    paths: []
   },
   cameraDebug: {
     mapName: null,

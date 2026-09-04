@@ -104,6 +104,13 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
     midRound: true,
     roundEnd: true
   },
+  hlaePresentationEnabled: false,
+  hlaePresentationPhases: {
+    freezeTime: true,
+    midRound: true,
+    roundEnd: true
+  },
+  hlaeDurationOverrides: {},
   minimumDwellOverrideMs: null,
   postDeathHoldMs: 1000,
   customPresets: [],

@@ -13,6 +13,16 @@ export const sanitizeAerialPresentationPhases = (
   ...(typeof input?.roundEnd === 'boolean' ? { roundEnd: input.roundEnd } : {})
 })
 
+export const sanitizeHlaePresentationPhases = (
+  input: Partial<AutoDirectorSettings['hlaePresentationPhases']> | undefined,
+  current = DEFAULT_AUTO_DIRECTOR_SETTINGS.hlaePresentationPhases
+): AutoDirectorSettings['hlaePresentationPhases'] => ({
+  ...current,
+  ...(typeof input?.freezeTime === 'boolean' ? { freezeTime: input.freezeTime } : {}),
+  ...(typeof input?.midRound === 'boolean' ? { midRound: input.midRound } : {}),
+  ...(typeof input?.roundEnd === 'boolean' ? { roundEnd: input.roundEnd } : {})
+})
+
 export const persistSettingsCandidate = async (
   current: AutoDirectorSettings,
   update: Partial<AutoDirectorSettings>,
