@@ -4,9 +4,10 @@ import { useAutoDirector } from '../features/auto-director/composables/useAutoDi
 import { API_URL } from '../index'
 import { getRadarMapConfig, worldToRadar } from '../features/auto-director/radar'
 
-const { status, loading, error, saving, updateSettings } = useAutoDirector()
+const { status, loading, error, saving, updateSettings, launchHlaePath } = useAutoDirector()
 const hlae = computed(() => status.value.hlae)
 const durationDraft = ref<Record<string, string>>({})
+const launchingPathId = ref<string | null>(null)
 
 const phases = [
   ['freezeTime', 'Freeze-time', 'Spawn establishing shots'],
@@ -132,6 +133,15 @@ const resetDuration = async (pathId: string, baseDuration: number) => {
   durationDraft.value[pathId] = baseDuration.toFixed(1)
   await updateSettings({ hlaeDurationOverrides: overrides })
   delete durationDraft.value[pathId]
+}
+
+const launchPath = async (pathId: string) => {
+  launchingPathId.value = pathId
+  try {
+    await launchHlaePath(pathId)
+  } finally {
+    launchingPathId.value = null
+  }
 }
 </script>
 
@@ -430,6 +440,22 @@ const resetDuration = async (pathId: string, baseDuration: number) => {
                 Start visibility: {{ path.startVisibleCount }} · score
                 {{ path.startScore.toFixed(1) }}
               </p>
+              <button
+                type="button"
+                :disabled="
+                  saving || launchingPathId !== null || status.aerial.activeAnchorId !== null
+                "
+                @click="void launchPath(path.id)"
+                class="mt-3 w-full rounded border border-violet-400/50 px-2 py-1.5 text-[10px] font-semibold text-violet-300 hover:bg-violet-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {{
+                  launchingPathId === path.id
+                    ? 'Launching…'
+                    : path.id === hlae.activePathId
+                      ? 'Restart campath'
+                      : 'Launch campath'
+                }}
+              </button>
               <p
                 v-if="path.id === hlae.activePathId"
                 class="mt-2 text-[10px] font-semibold text-violet-300"

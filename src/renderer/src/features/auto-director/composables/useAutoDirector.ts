@@ -212,6 +212,25 @@ export function useAutoDirector() {
     }
   }
 
+  const launchHlaePath = async (pathId: string) => {
+    saving.value = true
+    error.value = null
+    try {
+      status.value = await readJson(
+        await fetch(`${API_URL}/auto-director/hlae/launch`, {
+          method: 'POST',
+          headers: await controlHeaders(),
+          body: JSON.stringify({ pathId })
+        })
+      )
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : String(cause)
+      throw cause
+    } finally {
+      saving.value = false
+    }
+  }
+
   const onStatus = (next: AutoDirectorStatus) => {
     status.value = next
     loading.value = false
@@ -237,6 +256,7 @@ export function useAutoDirector() {
     refresh,
     updateSettings,
     forcePlayer,
-    testTransport
+    testTransport,
+    launchHlaePath
   }
 }

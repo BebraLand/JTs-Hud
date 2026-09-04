@@ -274,6 +274,7 @@ export class AutoDirectorService {
   private aerialSequencePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private aerialSequenceAnchorIds = new Set<string>()
   private hlaeActivePath: HlaeCameraPath | null = null
+  private hlaeManualOverride = false
   private hlaeActivePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private hlaeActiveStartedAt = 0
   private hlaeActiveUntil = 0
@@ -400,11 +401,15 @@ export class AutoDirectorService {
       hlae: {
         enabled: this.settings.hlaePresentationEnabled,
         mapName: hlaeStatus.mapName,
-        state: this.settings.hlaePresentationEnabled ? this.hlaeState : 'disabled',
+        state:
+          this.settings.hlaePresentationEnabled || this.hlaeManualOverride
+            ? this.hlaeState
+            : 'disabled',
         pathCount: hlaeStatus.pathCount,
-        message: this.settings.hlaePresentationEnabled
-          ? this.hlaeMessage
-          : 'HLAE presentation disabled',
+        message:
+          this.settings.hlaePresentationEnabled || this.hlaeManualOverride
+            ? this.hlaeMessage
+            : 'HLAE presentation disabled',
         activePathId: this.hlaeActivePath?.id ?? null,
         activePathLabel: this.hlaeActivePath?.label ?? null,
         activeUntil: this.hlaeActivePath ? this.hlaeActiveUntil : null,
@@ -543,6 +548,24 @@ export class AutoDirectorService {
     })
     this.emitStatus()
     return this.lastCommand
+  }
+
+  async launchHlaePath(pathId: string): Promise<AutoDirectorStatus> {
+    const mapName = this.hlae.getStatus().mapName
+    if (!mapName) throw new Error('Waiting for a GSI map before launching HLAE')
+    const map = this.hlae.load(mapName)
+    const normalizedPathId = String(pathId).trim().toLowerCase()
+    const pathEntry = map?.paths.find((entry) => entry.id === normalizedPathId)
+    if (!pathEntry) throw new Error(`HLAE campath not found: ${pathId}`)
+    if (this.commandInFlight) throw new Error('A camera command is already in flight')
+    if (this.aerialActiveAnchor) {
+      const target = this.getAerialReturnTarget()
+      if (!target) throw new Error('Cannot launch HLAE while Aerial camera is active')
+      await this.exitAerial(target, 'Operator launched HLAE campath')
+      if (this.aerialActiveAnchor) throw new Error('Could not release the Aerial camera')
+    }
+    await this.enterHlae(pathEntry, mapName, null, Date.now(), true)
+    return this.getStatus()
   }
 
   processGsi(payload: GsiLikePayload): void {
@@ -990,7 +1013,7 @@ export class AutoDirectorService {
     scores: PlayerScore[],
     geometry: GeometryMap | null
   ): boolean {
-    if (!this.settings.hlaePresentationEnabled) {
+    if (!this.settings.hlaePresentationEnabled && !this.hlaeManualOverride) {
       if (this.hlaeActivePath && !this.commandInFlight)
         void this.exitHlae('HLAE presentation disabled')
       return Boolean(this.hlaeActivePath || this.commandInFlight)
@@ -1004,6 +1027,17 @@ export class AutoDirectorService {
     if (!this.hlaeAvailable) {
       this.updateHlaeDebug(null, players, scores, geometry, now)
       return false
+    }
+    if (this.hlaeManualOverride && this.hlaeActivePath) {
+      if (this.commandInFlight) return true
+      const durationSeconds = this.getHlaeDuration(
+        map?.mapName ?? this.hlae.getStatus().mapName,
+        this.hlaeActivePath.id,
+        this.hlaeActivePath.durationSeconds
+      )
+      this.updateHlaeDebug(this.hlaeActivePath, players, scores, geometry, now, durationSeconds)
+      if (now >= this.hlaeActiveUntil) void this.exitHlae('Manual HLAE campath finished')
+      return true
     }
     if (this.hlaeActivePath) {
       if (this.commandInFlight) return true
@@ -1053,7 +1087,8 @@ export class AutoDirectorService {
     pathEntry: HlaeCameraPath,
     mapName: string,
     phase: ReturnType<typeof getAerialPresentationPhase>,
-    now: number
+    now: number,
+    manual = false
   ): Promise<void> {
     this.commandInFlight = true
     try {
@@ -1061,6 +1096,8 @@ export class AutoDirectorService {
       this.lastCommand = await this.camera.loadHlaePath(pathEntry.sourcePath, durationSeconds)
       this.updateTransportHealth(this.lastCommand)
       if (this.lastCommand.ok) {
+        this.hlaeAvailable = true
+        this.hlaeManualOverride = manual
         this.hlaeActivePath = pathEntry
         this.hlaeActivePhase = phase
         this.hlaeActiveStartedAt = this.lastCommand.at || now
@@ -1155,6 +1192,7 @@ export class AutoDirectorService {
 
   private clearHlaePresentation(now: number, reason: string): void {
     this.hlaeActivePath = null
+    this.hlaeManualOverride = false
     this.hlaeActivePhase = null
     this.hlaeActiveStartedAt = 0
     this.hlaeActiveUntil = 0

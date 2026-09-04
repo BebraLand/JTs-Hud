@@ -78,4 +78,21 @@ router.post('/test-transport', requireControlToken, async (req: Request, res: Re
   return res.json(await autoDirectorService.testTransport(transport, observerSlot))
 })
 
+router.post(
+  '/hlae/launch',
+  requireControlToken,
+  requireDatabaseReady,
+  async (req: Request, res: Response) => {
+    const pathId = req.body?.pathId
+    if (typeof pathId !== 'string' || !pathId.trim()) {
+      return res.status(400).json({ error: 'pathId must be a non-empty string' })
+    }
+    try {
+      return res.json(await autoDirectorService.launchHlaePath(pathId))
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+)
+
 export default router
