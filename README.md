@@ -2,6 +2,30 @@
 
 A simple open-source Counter-Strike 2 Custom Hud and Hud manager. Manage overlays, players, teams, and matches. This project is passively updated, and community PRs are much appreciated!
 
+## ✨ What's Enhanced in the BebraLand fork
+
+The original project is a flexible HUD manager. The BebraLand fork turns it into the broadcast client of a complete tournament ecosystem: admins manage the match once in MAT, and JTs Hud automatically receives the correct teams, players, assets, veto, map, and series state.
+
+### Tournament & HUD integration
+
+- 🧠 **MAT as the single source of truth** — admins configure teams, players, logos, avatars, maps, vetoes, and match state once in MAT; they do not have to maintain the same information again inside the HUD.
+- ⚡ **Automatic match and asset sync** — JTs Hud selects the active match and receives the correct team identities, player data, map, veto, sides, and series state without manual overlay reconfiguration.
+- 🔗 **One admin workflow for tournament and broadcast** — changes made by the operator in MAT flow into the HUD and public views, eliminating the usual drift between the server, scoreboard, and broadcast graphics.
+
+### Broadcast improvements
+
+- 🗺️ **Enhanced map-end and veto screens** — map picks, bans, decider information, series progress, and rating previews are presented as broadcast states rather than raw admin data.
+- 🏁 **Series-end presentation** — the overlay can keep the final series state visible through its preview phases instead of disappearing immediately after the server event.
+- 🌅 **Warmup and transition polish** — warmup state, map-end fades, live-side alignment, and smart refreshes make production changes visible without unnecessary HUD reloads.
+
+### Auto Director & camera tooling
+
+- 🎬 **Predictive Auto Director** — plans broadcast moments from the game state, uses story planning and sustained transitions, and controls POV dwell/hold timing instead of randomly jumping between cameras.
+- 🧭 **Map-aware camera intelligence** — geometry, topology, radar scoring, and debug views let the director reason about positions and threats on the actual map rather than switching blindly.
+- 📡 **Calibrated aerial production** — deterministic spawn shots, team-lineup framing, and standalone aerial capture create repeatable freeze-time openings on supported maps.
+
+The Auto Director and aerial features are experimental; the core HUD manager and broadcast integration work independently.
+
 - Tech: Electron, Vue, Typescript, NodeJS/Express, Socketio, SQLite3
 
 Experimental map-geometry tooling is powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
@@ -10,9 +34,9 @@ _Disclaimer: A small portion of this is ai generated, and while I don't entirely
 
 ## Have questions? Join the community [Discord](https://discord.gg/HApB9HyaWM)!
 
-![Horizontal](.github/images/hero.png)
+![JTs Hud broadcast overlay](.github/images/hero.png)
 
-![Vertical](.github/images/hero2.png)
+![JTs Hud vertical broadcast layout](.github/images/hero2.png)
 
 ---
 
