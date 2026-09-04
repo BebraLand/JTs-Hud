@@ -92,8 +92,9 @@ if (!window.aerial || window.aerial.apiVersion !== 'gsi-state-fix-1') {
     '<main style="padding:32px;font:16px sans-serif;color:#fff;background:#080a10">This Aerial Capture build is stale or incomplete. Download the latest gsi-state-fix portable build.</main>'
   throw new Error('Aerial preload bridge is missing or stale')
 }
-const hostInput = $('host')
-const portInput = $('port')
+let netconHost = ''
+let netconPort = 0
+let netconReady = false
 const mapInput = $('map')
 
 const list = $('anchor-list')
@@ -114,6 +115,17 @@ const detectMapButton = $('detect-map')
 const debugLogOutput = $('debug-log')
 const copyDebugButton = $('copy-debug')
 const clearDebugButton = $('clear-debug')
+const hlaeNameInput = $('hlae-name')
+const hlaePresetInput = $('hlae-preset')
+const hlaeSourceInput = $('hlae-source')
+const hlaeSaveButton = $('hlae-save')
+const hlaeRefreshButton = $('hlae-refresh')
+const hlaeExportButton = $('hlae-export')
+const hlaeImportButton = $('hlae-import')
+const hlaeList = $('hlae-list')
+const hlaeResult = $('hlae-result')
+const connectionSummary = $('connection-summary')
+let suggestedHlaeName = ''
 let selectedId = null
 let manifest = createManifest(mapInput.value)
 let lastMapDetection = null
@@ -125,6 +137,29 @@ function debugLog(event, details = {}) {
   debugLogOutput.textContent = `${current}${current ? '\n' : ''}${line}`.slice(-24000)
   debugLogOutput.scrollTop = debugLogOutput.scrollHeight
   console.debug(`[Aerial] ${event}`, details)
+}
+
+async function syncTelnetSettings() {
+  try {
+    const settings = await window.aerial.getTelnetSettings()
+    netconHost = settings.host
+    netconPort = settings.port
+    netconReady = true
+    connectionSummary.textContent = `NetCon ${netconHost}:${netconPort} · map from JTs-Hud GSI`
+    return true
+  } catch (error) {
+    netconReady = false
+    connectionSummary.textContent = 'JTs-Hud connection settings unavailable'
+    debugLog('telnet-settings-failed', {
+      error: error instanceof Error ? error.message : String(error)
+    })
+    return false
+  }
+}
+
+function getNetconOptions() {
+  if (!netconReady) throw new Error('Start JTs-Hud first so Aerial can read the Telnet settings.')
+  return { host: netconHost, port: netconPort }
 }
 
 function createManifest(map) {
@@ -283,7 +318,7 @@ async function captureSelected() {
   debugLog('capture-start', {
     map: manifest.map,
     anchor: selectedId,
-    telnet: `${hostInput.value.trim()}:${portInput.value}`
+    telnet: `${netconHost}:${netconPort}`
   })
   resultOutput.className = 'capture-result'
   resultOutput.textContent = 'Reading current camera position...'
@@ -296,10 +331,7 @@ async function captureSelected() {
   try {
     const anchor = manifest.anchors[selectedId]
     if (!anchor) throw new Error('The selected anchor is not available on the selected map.')
-    const captured = await window.aerial.capturePose({
-      host: hostInput.value.trim(),
-      port: Number(portInput.value)
-    })
+    const captured = await window.aerial.capturePose(getNetconOptions())
     anchor.position = captured.pose.position
     anchor.angles = captured.pose.angles
     anchor.raw = captured.raw
@@ -345,14 +377,14 @@ async function teleportSelected() {
   debugLog('teleport-start', {
     map: manifest.map,
     anchor: selectedId,
-    telnet: `${hostInput.value.trim()}:${portInput.value}`
+    telnet: `${netconHost}:${netconPort}`
   })
 
   try {
     const anchor = manifest.anchors[selectedId]
     if (!isCaptured(anchor)) throw new Error('This anchor is not captured on the selected map.')
     const result = await window.aerial.teleportPose({
-      options: { host: hostInput.value.trim(), port: Number(portInput.value) },
+      options: getNetconOptions(),
       pose: { position: anchor.position, angles: anchor.angles }
     })
     if (!result?.acknowledged)
@@ -408,6 +440,8 @@ async function detectAndSelectCurrentMap({
       ? preserveAnchorId
       : Object.keys(manifest.anchors)[0] || null
     render()
+    await refreshHlaeCampaths()
+    await suggestHlaeName()
   }
   return detectedMap
 }
@@ -509,6 +543,152 @@ async function exportManifest() {
   }
 }
 
+async function refreshHlaeCampaths() {
+  try {
+    const files = await window.aerial.listHlaeCampaths(mapInput.value)
+    hlaeList.replaceChildren()
+    if (!files.length) {
+      hlaeList.innerHTML = '<span class="muted">No campaths saved yet.</span>'
+      return
+    }
+    for (const file of files) {
+      const item = document.createElement('div')
+      item.className = 'hlae-file'
+      const name = document.createElement('strong')
+      name.textContent = `${file.label || file.name}.xml`
+      const details = document.createElement('span')
+      details.textContent = `${file.name}.xml · ${Math.ceil(file.size / 1024)} KB`
+      const actions = document.createElement('span')
+      actions.className = 'hlae-file-actions'
+      const loadButton = document.createElement('button')
+      loadButton.className = 'button secondary'
+      loadButton.textContent = 'Load into HLAE'
+      loadButton.addEventListener('click', () => loadHlaeCampath(file.name))
+      const deleteButton = document.createElement('button')
+      deleteButton.className = 'button danger'
+      deleteButton.textContent = 'Delete'
+      deleteButton.addEventListener('click', () => deleteHlaeCampath(file.name))
+      actions.append(loadButton, deleteButton)
+      item.append(name, details, actions)
+      hlaeList.append(item)
+    }
+  } catch (error) {
+    hlaeResult.className = 'capture-result error'
+    hlaeResult.textContent = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function suggestHlaeName() {
+  if (hlaePresetInput.value === 'custom') {
+    if (hlaeNameInput.value === suggestedHlaeName) hlaeNameInput.value = ''
+    suggestedHlaeName = ''
+    return
+  }
+  const mapName = mapInput.value.replace(/^de_/, '')
+  const prefix = `${mapName}_${hlaePresetInput.value}`
+  const files = await window.aerial.listHlaeCampaths(mapInput.value)
+  const used = new Set(files.map((file) => file.name))
+  const previousSuggestion = suggestedHlaeName
+  let variant = 1
+  while (used.has(`${prefix}_${String(variant).padStart(2, '0')}`)) variant += 1
+  suggestedHlaeName = `${prefix}_${String(variant).padStart(2, '0')}`
+  if (!hlaeNameInput.value || hlaeNameInput.value === previousSuggestion) {
+    hlaeNameInput.value = suggestedHlaeName
+  }
+}
+
+async function saveHlaeCampath() {
+  const name = hlaeNameInput.value.trim()
+  if (!name) {
+    hlaeResult.className = 'capture-result error'
+    hlaeResult.textContent = 'Enter a campath name first.'
+    return
+  }
+  hlaeSaveButton.disabled = true
+  hlaeResult.className = 'capture-result'
+  hlaeResult.textContent = `Saving ${name}.xml through HLAE...`
+  try {
+    const saved = await window.aerial.saveHlaeCampath({
+      map: mapInput.value,
+      name,
+      preset: hlaePresetInput.value,
+      label: hlaePresetInput.options[hlaePresetInput.selectedIndex].text,
+      sourceDirectory: hlaeSourceInput.value.trim(),
+      ...getNetconOptions()
+    })
+    hlaeResult.textContent = `Saved ${saved.name}.xml for ${saved.map}.`
+    hlaeNameInput.value = ''
+    await refreshHlaeCampaths()
+  } catch (error) {
+    hlaeResult.className = 'capture-result error'
+    hlaeResult.textContent = error instanceof Error ? error.message : String(error)
+  } finally {
+    hlaeSaveButton.disabled = false
+  }
+}
+
+async function loadHlaeCampath(name) {
+  hlaeResult.className = 'capture-result'
+  hlaeResult.textContent = `Loading ${name}.xml into HLAE...`
+  try {
+    await window.aerial.loadHlaeCampath({
+      map: mapInput.value,
+      name,
+      sourceDirectory: hlaeSourceInput.value.trim(),
+      ...getNetconOptions()
+    })
+    hlaeResult.textContent = `Loaded ${name}.xml into HLAE.`
+  } catch (error) {
+    hlaeResult.className = 'capture-result error'
+    hlaeResult.textContent = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function deleteHlaeCampath(name) {
+  if (!window.confirm(`Delete ${name}.xml from the HLAE library?`)) return
+  try {
+    await window.aerial.deleteHlaeCampath({ map: mapInput.value, name })
+    hlaeResult.className = 'capture-result'
+    hlaeResult.textContent = `Deleted ${name}.xml from the library.`
+    await refreshHlaeCampaths()
+  } catch (error) {
+    hlaeResult.className = 'capture-result error'
+    hlaeResult.textContent = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function importHlaeCampath() {
+  try {
+    const imported = await window.aerial.importHlaeCampath({
+      map: mapInput.value,
+      name: hlaeNameInput.value.trim(),
+      preset: hlaePresetInput.value,
+      label: hlaePresetInput.options[hlaePresetInput.selectedIndex].text
+    })
+    if (imported.canceled) return
+    hlaeResult.className = 'capture-result'
+    hlaeResult.textContent = `Imported ${imported.name}.xml for ${imported.map}.`
+    await refreshHlaeCampaths()
+    await suggestHlaeName()
+  } catch (error) {
+    hlaeResult.className = 'capture-result error'
+    hlaeResult.textContent = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function exportHlaeCampaths() {
+  try {
+    const response = await window.aerial.exportHlaeCampaths()
+    if (!response.canceled) {
+      hlaeResult.className = 'capture-result'
+      hlaeResult.textContent = `Exported ${response.count} XML file(s) to ${response.filePath}`
+    }
+  } catch (error) {
+    hlaeResult.className = 'capture-result error'
+    hlaeResult.textContent = error instanceof Error ? error.message : String(error)
+  }
+}
+
 async function importManifest() {
   try {
     const response = await window.aerial.importManifest()
@@ -550,6 +730,8 @@ mapInput.addEventListener('change', async () => {
   selectedId = Object.keys(manifest.anchors)[0] || null
   resultOutput.textContent = ''
   render()
+  await refreshHlaeCampaths()
+  await suggestHlaeName()
 })
 notesInput.addEventListener('input', () => {
   if (selectedId && manifest.anchors[selectedId]) {
@@ -566,6 +748,11 @@ $('custom-anchor').addEventListener('keydown', (event) => {
 })
 exportButton.addEventListener('click', exportManifest)
 $('import-button').addEventListener('click', importManifest)
+hlaeSaveButton.addEventListener('click', saveHlaeCampath)
+hlaeRefreshButton.addEventListener('click', refreshHlaeCampaths)
+hlaeExportButton.addEventListener('click', exportHlaeCampaths)
+hlaeImportButton.addEventListener('click', importHlaeCampath)
+hlaePresetInput.addEventListener('change', () => void suggestHlaeName())
 detectMapButton.addEventListener('click', async () => {
   detectMapButton.disabled = true
   statusOutput.classList.remove('error')
@@ -588,12 +775,13 @@ detectMapButton.addEventListener('click', async () => {
 })
 
 async function initialize() {
+  await syncTelnetSettings()
   manifest = await loadDraft(mapInput.value)
   selectedId = 't_spawn'
   render()
   debugLog('startup', {
     selectedMap: mapInput.value,
-    telnet: `${hostInput.value}:${portInput.value}`,
+    telnet: `${netconHost}:${netconPort}`,
     gsi: 'JTs-Hud listener at http://127.0.0.1:23415/cs2/state'
   })
   try {
@@ -609,6 +797,8 @@ async function initialize() {
       response: lastMapDetection
     })
   }
+  await refreshHlaeCampaths()
+  await suggestHlaeName()
 }
 
 clearDebugButton.addEventListener('click', () => {

@@ -21,14 +21,6 @@
       </header>
 
       <section class="connection-card">
-        <div class="field compact">
-          <label for="host">CS2 Telnet host</label>
-          <input id="host" value="127.0.0.1" />
-        </div>
-        <div class="field compact">
-          <label for="port">CS2 Telnet port</label>
-          <input id="port" type="number" value="2020" min="1" max="65535" />
-        </div>
         <div class="field map-field">
           <label for="map">Map</label>
           <select id="map">
@@ -47,8 +39,69 @@
         </button>
         <div class="connection-status" id="connection-status">
           <span class="status-dot"></span>
-          Ready to capture
+          <span id="connection-summary">Reading connection from JTs-Hud...</span>
         </div>
+      </section>
+
+      <section class="panel hlae-panel">
+        <div class="panel-header">
+          <div>
+            <div class="eyebrow">HLAE CINEMATIC CAMERAS</div>
+            <h2>Campath library</h2>
+          </div>
+          <div class="hlae-header-actions">
+            <button class="button secondary" id="hlae-import">Import XML</button>
+            <button class="button primary" id="hlae-export">Export saved XMLs</button>
+          </div>
+        </div>
+        <p class="panel-help">
+          Создай или загрузи камеру в CS2, выбери preset и нажми сохранить. Карта определяется через
+          JTs-Hud GSI, а XML автоматически попадает в библиотеку.
+        </p>
+        <div class="hlae-form">
+          <div class="field">
+            <label for="hlae-preset">Camera preset</label>
+            <select id="hlae-preset">
+              <option value="t_spawn">T Spawn</option>
+              <option value="ct_spawn">CT Spawn</option>
+              <option value="mid">Mid</option>
+              <option value="a_main">A Main</option>
+              <option value="a_site">A Site</option>
+              <option value="b_main">B Main</option>
+              <option value="b_site">B Site</option>
+              <option value="long">Long</option>
+              <option value="short">Short</option>
+              <option value="postplant">Post-plant</option>
+              <option value="overview">Overview</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="hlae-name">Campath name</label>
+            <input id="hlae-name" placeholder="dust2_t_spawn_02" maxlength="64" />
+          </div>
+          <button class="capture-button hlae-save-button" id="hlae-save">
+            Save current campath
+          </button>
+        </div>
+        <details class="hlae-advanced">
+          <summary>Advanced: HLAE XML folder</summary>
+          <div class="field hlae-source-field">
+            <label for="hlae-source">HLAE save folder</label>
+            <input
+              id="hlae-source"
+              value="C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64"
+            />
+          </div>
+        </details>
+        <div class="hlae-library-header">
+          <span class="eyebrow">SAVED FOR CURRENT MAP</span>
+          <button class="button secondary" id="hlae-refresh">Refresh</button>
+        </div>
+        <div class="hlae-list" id="hlae-list">
+          <span class="muted">No campaths saved yet.</span>
+        </div>
+        <div class="capture-result" id="hlae-result"></div>
       </section>
 
       <main class="workspace">

@@ -13,16 +13,21 @@ const {
 const { DEFAULT_GSI_STATE_URL, parseGsiMap, validateGsiStateUrl } = require('./gsi.cjs')
 const draftSaveQueues = new Map()
 const AERIAL_USER_DATA_DIR = 'JTs-Aerial-Capture'
+const DEFAULT_HLAE_SOURCE_DIRECTORY =
+  'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64'
+const DEFAULT_JTS_API_URL = 'http://127.0.0.1:1349/api'
 let legacyUserDataPaths = []
 
 const configureUserDataPath = () => {
   const defaultUserDataPath = app.getPath('userData')
   const stableUserDataPath = path.join(app.getPath('appData'), AERIAL_USER_DATA_DIR)
-  legacyUserDataPaths = [...new Set([
-    defaultUserDataPath,
-    path.join(app.getPath('appData'), 'jts-hud'),
-    path.join(app.getPath('appData'), 'JTs Aerial Capture')
-  ])].filter((candidate) => candidate !== stableUserDataPath)
+  legacyUserDataPaths = [
+    ...new Set([
+      defaultUserDataPath,
+      path.join(app.getPath('appData'), 'jts-hud'),
+      path.join(app.getPath('appData'), 'JTs Aerial Capture')
+    ])
+  ].filter((candidate) => candidate !== stableUserDataPath)
   app.setPath('userData', stableUserDataPath)
 }
 
@@ -95,6 +100,62 @@ const sendNetconCommand = ({ host, port, command, timeoutMs = 4000 }) =>
     })
   })
 
+const normalizeCampathName = (value) => {
+  const name = path.basename(String(value || '').trim()).replace(/\.xml$/i, '')
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name)) {
+    throw new Error('Campath name must use only letters, numbers, underscore, or hyphen.')
+  }
+  return name
+}
+
+const getHlaeLibraryPath = (map, name) =>
+  path.join(app.getPath('userData'), 'hlae-campaths', map, `${name}.xml`)
+
+const getHlaeIndexPath = () => path.join(app.getPath('userData'), 'hlae-campaths', 'index.json')
+
+const readHlaeIndex = async () => {
+  try {
+    const value = JSON.parse(await fs.readFile(getHlaeIndexPath(), 'utf8'))
+    return Array.isArray(value) ? value : []
+  } catch (error) {
+    if (error?.code === 'ENOENT') return []
+    throw error
+  }
+}
+
+const writeHlaeIndex = async (entries) => {
+  const filePath = getHlaeIndexPath()
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  await fs.writeFile(filePath, `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
+}
+
+const upsertHlaeIndexEntry = async (entry) => {
+  const entries = await readHlaeIndex()
+  const index = entries.findIndex((item) => item.map === entry.map && item.name === entry.name)
+  const next = {
+    ...(index >= 0 ? entries[index] : {}),
+    ...entry,
+    updatedAt: new Date().toISOString()
+  }
+  if (index >= 0) entries[index] = next
+  else entries.push({ ...next, createdAt: next.updatedAt })
+  await writeHlaeIndex(entries)
+}
+
+const waitForFreshFile = async (filePath, startedAt, timeoutMs = 5000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const stats = await fs.stat(filePath)
+      if (stats.isFile() && stats.size > 0 && stats.mtimeMs >= startedAt - 1000) return stats
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+  throw new Error(`HLAE did not create a fresh campath file: ${filePath}`)
+}
+
 const captureGetpos = async (options) => {
   const result = await sendNetconCommand({ ...options, command: 'getpos' })
   const pose = parseGetposOutput(result.raw)
@@ -162,6 +223,20 @@ ipcMain.handle('detect-map', async (_event, options) => {
   return detectCurrentMap(options)
 })
 
+ipcMain.handle('get-telnet-settings', async () => {
+  const response = await fetch(`${DEFAULT_JTS_API_URL}/settings`, {
+    signal: AbortSignal.timeout(2500)
+  })
+  if (!response.ok) throw new Error(`JTs-Hud settings returned HTTP ${response.status}`)
+  const settings = await response.json()
+  const host = typeof settings.telnetHost === 'string' ? settings.telnetHost.trim() : ''
+  const port = Number(settings.telnetPort)
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('JTs-Hud returned invalid Telnet settings')
+  }
+  return { host, port, source: `${DEFAULT_JTS_API_URL}/settings` }
+})
+
 ipcMain.handle('teleport-pose', async (_event, { options, pose }) => {
   const result = await sendNetconCommand({
     ...options,
@@ -178,6 +253,193 @@ ipcMain.handle('teleport-pose', async (_event, { options, pose }) => {
   }
 })
 
+ipcMain.handle('save-hlae-campath', async (_event, options = {}) => {
+  const map = typeof options.map === 'string' && MAP_PATTERN.test(options.map) ? options.map : null
+  if (!map) throw new Error('Invalid map name')
+
+  const name = normalizeCampathName(options.name)
+  const sourceDirectory = path.resolve(
+    String(options.sourceDirectory || DEFAULT_HLAE_SOURCE_DIRECTORY)
+  )
+  const sourcePath = path.join(sourceDirectory, `${name}.xml`)
+  let previousMtime = 0
+  try {
+    previousMtime = (await fs.stat(sourcePath)).mtimeMs
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+
+  const startedAt = Date.now()
+  const commandResult = await sendNetconCommand({
+    host: options.host,
+    port: options.port,
+    command: `mirv_campath save ${name}.xml`,
+    timeoutMs: 6000
+  })
+  await waitForFreshFile(sourcePath, Math.max(startedAt, previousMtime + 1), 5000)
+
+  const targetPath = getHlaeLibraryPath(map, name)
+  await fs.mkdir(path.dirname(targetPath), { recursive: true })
+  await fs.copyFile(sourcePath, targetPath)
+  await upsertHlaeIndexEntry({
+    map,
+    name,
+    preset: typeof options.preset === 'string' ? options.preset : 'custom',
+    label: typeof options.label === 'string' ? options.label : name
+  })
+  return {
+    map,
+    name,
+    sourcePath,
+    filePath: targetPath,
+    diagnostic: {
+      transport: 'netcon',
+      command: commandResult.command,
+      endpoint: `${commandResult.host}:${commandResult.port}`,
+      responseTail: commandResult.raw.slice(-1800)
+    }
+  }
+})
+
+ipcMain.handle('list-hlae-campaths', async (_event, map) => {
+  if (typeof map !== 'string' || !MAP_PATTERN.test(map)) throw new Error('Invalid map name')
+  const directory = path.dirname(getHlaeLibraryPath(map, 'placeholder'))
+  const indexEntries = (await readHlaeIndex()).filter((entry) => entry.map === map)
+  try {
+    const entries = await fs.readdir(directory, { withFileTypes: true })
+    const files = []
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.xml')) continue
+      const filePath = path.join(directory, entry.name)
+      const stats = await fs.stat(filePath)
+      files.push({
+        name: entry.name.slice(0, -4),
+        preset:
+          indexEntries.find((item) => item.name === entry.name.slice(0, -4))?.preset || 'custom',
+        label:
+          indexEntries.find((item) => item.name === entry.name.slice(0, -4))?.label ||
+          entry.name.slice(0, -4),
+        filePath,
+        size: stats.size,
+        updatedAt: stats.mtime.toISOString()
+      })
+    }
+    return files.sort((left, right) => left.name.localeCompare(right.name))
+  } catch (error) {
+    if (error?.code === 'ENOENT') return []
+    throw error
+  }
+})
+
+ipcMain.handle('delete-hlae-campath', async (_event, { map, name }) => {
+  if (typeof map !== 'string' || !MAP_PATTERN.test(map)) throw new Error('Invalid map name')
+  const safeName = normalizeCampathName(name)
+  const filePath = getHlaeLibraryPath(map, safeName)
+  await fs.rm(filePath, { force: true })
+  const entries = (await readHlaeIndex()).filter(
+    (entry) => !(entry.map === map && entry.name === safeName)
+  )
+  await writeHlaeIndex(entries)
+  return { map, name: safeName }
+})
+
+ipcMain.handle('import-hlae-campath', async (_event, options = {}) => {
+  const map = typeof options.map === 'string' && MAP_PATTERN.test(options.map) ? options.map : null
+  if (!map) throw new Error('Invalid map name')
+  const result = await dialog.showOpenDialog({
+    title: 'Import HLAE campath XML',
+    properties: ['openFile'],
+    filters: [{ name: 'HLAE campath', extensions: ['xml'] }]
+  })
+  if (result.canceled || !result.filePaths[0]) return { canceled: true }
+
+  const sourcePath = result.filePaths[0]
+  const contents = await fs.readFile(sourcePath, 'utf8')
+  if (contents.length > 10 * 1024 * 1024 || !/<campath\b/i.test(contents)) {
+    throw new Error('The selected file does not look like an HLAE campath XML.')
+  }
+  const name = normalizeCampathName(
+    options.name || path.basename(sourcePath, path.extname(sourcePath))
+  )
+  const targetPath = getHlaeLibraryPath(map, name)
+  await fs.mkdir(path.dirname(targetPath), { recursive: true })
+  await fs.copyFile(sourcePath, targetPath)
+  await upsertHlaeIndexEntry({
+    map,
+    name,
+    preset: typeof options.preset === 'string' ? options.preset : 'custom',
+    label: typeof options.label === 'string' ? options.label : name
+  })
+  return { canceled: false, map, name, filePath: targetPath, sourcePath }
+})
+
+ipcMain.handle('load-hlae-campath', async (_event, options = {}) => {
+  const map = typeof options.map === 'string' && MAP_PATTERN.test(options.map) ? options.map : null
+  if (!map) throw new Error('Invalid map name')
+  const name = normalizeCampathName(options.name)
+  const sourceDirectory = path.resolve(
+    String(options.sourceDirectory || DEFAULT_HLAE_SOURCE_DIRECTORY)
+  )
+  const libraryPath = getHlaeLibraryPath(map, name)
+  const sourcePath = path.join(sourceDirectory, `${name}.xml`)
+  await fs.access(libraryPath)
+  await fs.mkdir(sourceDirectory, { recursive: true })
+  if (path.resolve(libraryPath) !== path.resolve(sourcePath))
+    await fs.copyFile(libraryPath, sourcePath)
+  const commandResult = await sendNetconCommand({
+    host: options.host,
+    port: options.port,
+    command: `mirv_campath load ${name}.xml`,
+    timeoutMs: 6000
+  })
+  return {
+    map,
+    name,
+    filePath: sourcePath,
+    diagnostic: {
+      transport: 'netcon',
+      command: commandResult.command,
+      endpoint: `${commandResult.host}:${commandResult.port}`,
+      responseTail: commandResult.raw.slice(-1800)
+    }
+  }
+})
+
+ipcMain.handle('export-hlae-campaths', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose folder for HLAE campaths export',
+    properties: ['openDirectory', 'createDirectory']
+  })
+  if (result.canceled || !result.filePaths[0]) return { canceled: true }
+
+  const sourceRoot = path.join(app.getPath('userData'), 'hlae-campaths')
+  const targetRoot = path.join(result.filePaths[0], 'jts-hlae-campaths')
+  let count = 0
+  try {
+    for (const mapEntry of await fs.readdir(sourceRoot, { withFileTypes: true })) {
+      if (!mapEntry.isDirectory() || !MAP_PATTERN.test(mapEntry.name)) continue
+      const sourceMap = path.join(sourceRoot, mapEntry.name)
+      const targetMap = path.join(targetRoot, mapEntry.name)
+      await fs.mkdir(targetMap, { recursive: true })
+      for (const file of await fs.readdir(sourceMap)) {
+        if (!file.toLowerCase().endsWith('.xml')) continue
+        await fs.copyFile(path.join(sourceMap, file), path.join(targetMap, file))
+        count += 1
+      }
+    }
+    const index = await readHlaeIndex()
+    await fs.writeFile(
+      path.join(targetRoot, 'index.json'),
+      `${JSON.stringify(index, null, 2)}\n`,
+      'utf8'
+    )
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  if (!count) throw new Error('No saved HLAE campaths to export.')
+  return { canceled: false, filePath: targetRoot, count }
+})
+
 const getDraftPath = (map) => {
   if (typeof map !== 'string' || !MAP_PATTERN.test(map)) throw new Error('Invalid map name')
   return path.join(app.getPath('userData'), 'aerial-drafts', `${map}.json`)
@@ -187,9 +449,7 @@ ipcMain.handle('load-draft', async (_event, map) => {
   const filePath = getDraftPath(map)
   const candidates = [
     filePath,
-    ...legacyUserDataPaths.map((basePath) =>
-      path.join(basePath, 'aerial-drafts', `${map}.json`)
-    )
+    ...legacyUserDataPaths.map((basePath) => path.join(basePath, 'aerial-drafts', `${map}.json`))
   ]
   for (const candidate of candidates) {
     try {
