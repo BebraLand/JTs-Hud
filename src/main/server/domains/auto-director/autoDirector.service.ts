@@ -415,7 +415,6 @@ export class AutoDirectorService {
     calmForMs: 0,
     reason: 'HLAE presentation disabled'
   }
-  private hlaeLastVisibleAt = 0
   private hlaePathCoverage = new Map<string, { startVisibleCount: number; startScore: number }>()
   private hlaeDebug: Pick<
     AutoDirectorStatus['hlae'],
@@ -434,6 +433,7 @@ export class AutoDirectorService {
     summary: 'Waiting for GSI state'
   }
   private hlaeFreezeSpawnTeams = new Set<HlaeSpawnTeam>()
+  private hlaeFreezeSpawnOrder: HlaeSpawnTeam[] = []
   private hlaeLastFreezeSpawnPathIds = new Map<HlaeSpawnTeam, string>()
   private cameraDebug = emptyCameraDebugStatus()
 
@@ -763,6 +763,7 @@ export class AutoDirectorService {
       if (this.roundStartedAt !== 0 && roundKey !== this.lastRoundKey) this.resetAerialSequence()
       if (this.roundStartedAt !== 0 && roundKey !== this.lastRoundKey) {
         this.hlaeFreezeSpawnTeams.clear()
+        this.hlaeFreezeSpawnOrder = []
       }
       this.lastRoundKey = roundKey
       this.roundStartedAt = now
@@ -1119,9 +1120,13 @@ export class AutoDirectorService {
     durationSeconds: number,
     phase: ReturnType<typeof getAerialPresentationPhase>
   ): boolean {
-    if (phase !== 'quiet-live' || !geometry) return true
-    // ponytail: static players across three poses; replace with HLAE/GSI prediction if available.
-    return [0, 0.5, 0.85].every((progress) => {
+    if ((phase !== 'quiet-live' && phase !== 'freeze-time') || !geometry) return true
+    // ponytail: cap long paths at 16 forecast samples; raise only after profiling geometry cost.
+    const sampleCount = Math.min(16, Math.max(2, Math.ceil(durationSeconds) + 1))
+    const visibleAtSample: boolean[] = []
+    const aimedAtSample: boolean[] = []
+    for (let index = 0; index < sampleCount; index += 1) {
+      const progress = index / (sampleCount - 1)
       const evaluation = this.evaluateHlaePath(
         pathEntry,
         durationSeconds * progress,
@@ -1129,8 +1134,13 @@ export class AutoDirectorService {
         geometry,
         durationSeconds
       )
-      return evaluation.visibleSteamIds.length > 0
-    })
+      visibleAtSample.push(evaluation.visibleSteamIds.length > 0)
+      aimedAtSample.push(evaluation.inFrustumSteamIds.length > 0)
+    }
+    if (phase === 'freeze-time') {
+      return aimedAtSample.some(Boolean) && visibleAtSample.some(Boolean)
+    }
+    return visibleAtSample.every(Boolean)
   }
 
   private selectHlaePath(
@@ -1148,13 +1158,18 @@ export class AutoDirectorService {
     const knownFreezeSpawnTeams = new Set(
       map.paths.map((pathEntry) => getHlaeSpawnTeam(pathEntry)).filter(Boolean)
     )
+    const availableFreezeSpawnTeams: HlaeSpawnTeam[] = (['T', 'CT'] as const).filter((team) =>
+      knownFreezeSpawnTeams.has(team)
+    )
+    if (phase === 'freeze-time' && this.hlaeFreezeSpawnOrder.length === 0) {
+      this.hlaeFreezeSpawnOrder = [...availableFreezeSpawnTeams]
+      if (this.hlaeFreezeSpawnOrder.length === 2 && randomInt(2) === 1) {
+        this.hlaeFreezeSpawnOrder.reverse()
+      }
+    }
     const requiredFreezeSpawnTeam =
       phase === 'freeze-time'
-        ? !knownFreezeSpawnTeams.has('T') || this.hlaeFreezeSpawnTeams.has('T')
-          ? !knownFreezeSpawnTeams.has('CT') || this.hlaeFreezeSpawnTeams.has('CT')
-            ? null
-            : 'CT'
-          : 'T'
+        ? (this.hlaeFreezeSpawnOrder.find((team) => !this.hlaeFreezeSpawnTeams.has(team)) ?? null)
         : null
     const evaluations = map.paths.map((pathEntry) => {
       const durationSeconds = this.getHlaeDuration(
@@ -1342,19 +1357,13 @@ export class AutoDirectorService {
         this.hlaeActivePath.durationSeconds
       )
       this.updateHlaeDebug(this.hlaeActivePath, players, geometry, now, durationSeconds)
-      if (this.hlaeDebug.visibleSteamIds.length > 0) this.hlaeLastVisibleAt = now
       const phaseChanged = !roundEndCarryover && !this.isSameHlaePhase(phase, this.hlaeActivePhase)
       const freezeTimePresentation =
         phase === 'freeze-time' && this.hlaeActivePhase === 'freeze-time' && genericPhaseEnabled
-      const spawnCinematic = phase === 'freeze-time' && this.hlaeActivePath.kind === 'spawn'
       const pathFinished = now >= this.hlaeActiveUntil
-      const visibilityLost =
-        !spawnCinematic &&
-        !roundEndCarryover &&
-        geometry !== null &&
-        this.hlaeLastVisibleAt > 0 &&
-        now - this.hlaeLastVisibleAt >= 1200
-      if (phaseChanged || pathFinished || !phaseEnabled || visibilityLost) {
+      const finalFrameNotVisible =
+        pathFinished && (geometry === null || this.hlaeDebug.visibleSteamIds.length === 0)
+      if (phaseChanged || pathFinished || !phaseEnabled) {
         if (
           pathFinished &&
           !phaseChanged &&
@@ -1374,11 +1383,15 @@ export class AutoDirectorService {
             temporalFeatures,
             phaseRemainingMs
           )
-          if (nextPath) {
+          if (nextPath && geometry !== null) {
             void this.enterHlae(nextPath, map.mapName, phase, now)
             return true
           }
-          if (freezeTimePresentation) {
+          if (
+            freezeTimePresentation &&
+            this.hlaeDebug.visibleSteamIds.length > 0 &&
+            !finalFrameNotVisible
+          ) {
             this.hlaeMessage = `LIVE: ${this.hlaeActivePath.label} · holding freeze-time`
             return true
           }
@@ -1386,8 +1399,8 @@ export class AutoDirectorService {
         void this.exitHlae(
           phaseChanged
             ? `HLAE phase changed to ${phase ?? 'unknown'}`
-            : visibilityLost
-              ? 'No players visible from the active HLAE path'
+            : finalFrameNotVisible
+              ? 'Final HLAE pose has no visible players'
               : `HLAE campath finished: ${this.hlaeActivePath.label}`
         )
       }
@@ -1448,7 +1461,6 @@ export class AutoDirectorService {
         this.hlaeActivePhase = phase
         this.hlaeActiveStartedAt = this.lastCommand.at || now
         this.hlaeActiveUntil = this.hlaeActiveStartedAt + durationSeconds * 1000
-        this.hlaeLastVisibleAt = this.hlaeActiveStartedAt
         const spawnTeam = phase === 'freeze-time' ? getHlaeSpawnTeam(pathEntry) : null
         if (spawnTeam) {
           this.hlaeFreezeSpawnTeams.add(spawnTeam)
@@ -1547,7 +1559,6 @@ export class AutoDirectorService {
     this.hlaeActivePhase = null
     this.hlaeActiveStartedAt = 0
     this.hlaeActiveUntil = 0
-    this.hlaeLastVisibleAt = 0
     this.hlaeCooldownUntil = now + HLAE_COOLDOWN_MS
     this.hlaeMessage = reason
   }
