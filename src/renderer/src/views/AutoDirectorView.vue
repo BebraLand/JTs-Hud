@@ -103,6 +103,12 @@ const profileDwellDefaults: Record<AutoDirectorMode, number> = {
   calm: 4000
 }
 
+const profileSwitchMarginDefaults: Record<AutoDirectorMode, number> = {
+  balanced: 12,
+  reactive: 8,
+  calm: 17
+}
+
 const effectiveWeight = (key: string): number =>
   status.value.settings.customWeights[key] ?? profileDefaults[status.value.settings.mode][key] ?? 0
 
@@ -111,8 +117,15 @@ const effectiveDwellMs = computed(
     status.value.settings.minimumDwellOverrideMs ?? profileDwellDefaults[status.value.settings.mode]
 )
 
+const effectiveSwitchMargin = computed(
+  () =>
+    status.value.settings.switchMarginOverride ??
+    profileSwitchMarginDefaults[status.value.settings.mode]
+)
+
 const weightDrafts = ref<Record<string, number>>({})
 const dwellDraft = ref<number | null>(null)
+const switchMarginDraft = ref<number | null>(null)
 const postDeathHoldDraft = ref<number | null>(null)
 const activePresetId = ref<string | null>(null)
 
@@ -133,6 +146,7 @@ const createPreset = async () => {
     mode: status.value.settings.mode,
     weights: effectiveWeights.value,
     minimumDwellOverrideMs: status.value.settings.minimumDwellOverrideMs,
+    switchMarginOverride: status.value.settings.switchMarginOverride,
     postDeathHoldMs: status.value.settings.postDeathHoldMs
   }
   await updateSettings({ customPresets: [...status.value.settings.customPresets, preset] })
@@ -143,11 +157,13 @@ const applyPreset = async (preset: AutoDirectorPreset) => {
   activePresetId.value = preset.id
   weightDrafts.value = {}
   dwellDraft.value = null
+  switchMarginDraft.value = null
   postDeathHoldDraft.value = null
   await updateSettings({
     mode: preset.mode,
     customWeights: { ...preset.weights },
     minimumDwellOverrideMs: preset.minimumDwellOverrideMs,
+    switchMarginOverride: preset.switchMarginOverride,
     postDeathHoldMs: preset.postDeathHoldMs
   })
 }
@@ -164,11 +180,13 @@ const selectMode = (mode: AutoDirectorMode) => {
   activePresetId.value = null
   weightDrafts.value = {}
   dwellDraft.value = null
+  switchMarginDraft.value = null
   postDeathHoldDraft.value = null
   void updateSettings({
     mode,
     customWeights: {},
     minimumDwellOverrideMs: null,
+    switchMarginOverride: null,
     postDeathHoldMs: 1000
   })
 }
@@ -233,6 +251,26 @@ const commitMinimumDwell = (value: number) => {
 const resetMinimumDwell = () => {
   dwellDraft.value = null
   void setMinimumDwell(null).catch(() => undefined)
+}
+
+const setSwitchMargin = (value: number | null) =>
+  updateSettings({
+    switchMarginOverride: value,
+    customPresets: updateActivePreset({ switchMarginOverride: value })
+  })
+
+const commitSwitchMargin = (value: number) => {
+  switchMarginDraft.value = value
+  void setSwitchMargin(value)
+    .then(() => {
+      if (switchMarginDraft.value === value) switchMarginDraft.value = null
+    })
+    .catch(() => undefined)
+}
+
+const resetSwitchMargin = () => {
+  switchMarginDraft.value = null
+  void setSwitchMargin(null).catch(() => undefined)
 }
 
 const setPostDeathHold = (value: number) =>
@@ -634,6 +672,47 @@ const healthClass = (state: string) =>
             <h2 class="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
               Camera Transport
             </h2>
+            <div
+              v-if="appSettings.developerTestingEnabled"
+              class="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold text-zinc-200">Switch threshold</p>
+                  <p class="mt-1 text-[10px] text-zinc-500">
+                    Required score lead before changing POV. Profile default is used until changed.
+                  </p>
+                </div>
+                <button
+                  v-if="status.settings.switchMarginOverride !== null"
+                  @click="resetSwitchMargin"
+                  class="text-[10px] text-zinc-500 hover:text-amber-300"
+                >
+                  Reset
+                </button>
+              </div>
+              <label class="mt-3 block text-[10px] text-zinc-400">
+                <span class="flex justify-between">
+                  <span>Score lead required</span>
+                  <strong class="text-amber-300"
+                    >{{ (switchMarginDraft ?? effectiveSwitchMargin).toFixed(1) }} points</strong
+                  >
+                </span>
+                <input
+                  type="range"
+                  min="4"
+                  max="24"
+                  step="1"
+                  :value="switchMarginDraft ?? effectiveSwitchMargin"
+                  @input="switchMarginDraft = Number(($event.target as HTMLInputElement).value)"
+                  @change="commitSwitchMargin(Number(($event.target as HTMLInputElement).value))"
+                  class="mt-1 w-full accent-amber-400"
+                />
+              </label>
+              <p class="mt-2 text-[10px] text-zinc-600">
+                Empty POV recovery uses 45% of this threshold.
+              </p>
+            </div>
             <div class="mb-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
               <div class="flex items-center justify-between gap-3">
                 <div>

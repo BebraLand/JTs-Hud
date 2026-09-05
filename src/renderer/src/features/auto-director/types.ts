@@ -7,6 +7,7 @@ export interface AutoDirectorPreset {
   mode: AutoDirectorMode
   weights: Record<string, number>
   minimumDwellOverrideMs: number | null
+  switchMarginOverride: number | null
   postDeathHoldMs: number
 }
 
@@ -100,6 +101,7 @@ export interface AutoDirectorSettings {
   }
   hlaeDurationOverrides: Record<string, number>
   minimumDwellOverrideMs: number | null
+  switchMarginOverride: number | null
   postDeathHoldMs: number
   customPresets: AutoDirectorPreset[]
   scoringIntervalMs: number

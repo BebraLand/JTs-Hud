@@ -112,6 +112,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   },
   hlaeDurationOverrides: {},
   minimumDwellOverrideMs: null,
+  switchMarginOverride: null,
   postDeathHoldMs: 1000,
   customPresets: [],
   scoringIntervalMs: 100,
@@ -124,6 +125,7 @@ export const getProfile = (settings: AutoDirectorSettings): AutoDirectorProfile 
   return {
     ...base,
     minDwellMs: settings.minimumDwellOverrideMs ?? base.minDwellMs,
+    switchMargin: settings.switchMarginOverride ?? base.switchMargin,
     weights: { ...base.weights, ...settings.customWeights }
   }
 }

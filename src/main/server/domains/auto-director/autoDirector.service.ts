@@ -205,12 +205,18 @@ const sanitizePreset = (input: unknown): AutoDirectorPreset => {
   )
   const minimumDwellOverrideMs =
     candidate.minimumDwellOverrideMs === null ? null : Number(candidate.minimumDwellOverrideMs)
+  const switchMarginOverride =
+    candidate.switchMarginOverride === null || candidate.switchMarginOverride === undefined
+      ? null
+      : Number(candidate.switchMarginOverride)
   const postDeathHoldMs = Number(candidate.postDeathHoldMs)
   if (
     (minimumDwellOverrideMs !== null &&
       (!Number.isFinite(minimumDwellOverrideMs) ||
         minimumDwellOverrideMs < 0 ||
         minimumDwellOverrideMs > 5000)) ||
+    (switchMarginOverride !== null &&
+      (!Number.isFinite(switchMarginOverride) || switchMarginOverride < 4 || switchMarginOverride > 24)) ||
     !Number.isFinite(postDeathHoldMs) ||
     postDeathHoldMs < 0 ||
     postDeathHoldMs > 2000
@@ -224,6 +230,8 @@ const sanitizePreset = (input: unknown): AutoDirectorPreset => {
     weights,
     minimumDwellOverrideMs:
       minimumDwellOverrideMs === null ? null : Math.round(minimumDwellOverrideMs),
+    switchMarginOverride:
+      switchMarginOverride === null ? null : Math.round(switchMarginOverride * 10) / 10,
     postDeathHoldMs: Math.round(postDeathHoldMs)
   }
 }
@@ -283,6 +291,17 @@ const sanitizeSettings = (
         throw new Error('POV lock must be 0-5000 ms')
       }
       output.minimumDwellOverrideMs = Math.round(dwell)
+    }
+  }
+  if (input.switchMarginOverride !== undefined) {
+    if (input.switchMarginOverride === null) {
+      output.switchMarginOverride = null
+    } else {
+      const margin = Number(input.switchMarginOverride)
+      if (!Number.isFinite(margin) || margin < 4 || margin > 24) {
+        throw new Error('Switch margin must be 4-24 points')
+      }
+      output.switchMarginOverride = Math.round(margin * 10) / 10
     }
   }
   if (input.postDeathHoldMs !== undefined) {

@@ -28,6 +28,7 @@ const emptyStatus = (): AutoDirectorStatus => ({
     },
     hlaeDurationOverrides: {},
     minimumDwellOverrideMs: null,
+    switchMarginOverride: null,
     postDeathHoldMs: 1000,
     customPresets: [],
     scoringIntervalMs: 100,

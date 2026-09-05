@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { DEFAULT_AUTO_DIRECTOR_SETTINGS } from '../src/main/server/domains/auto-director/autoDirector.config'
+import {
+  DEFAULT_AUTO_DIRECTOR_SETTINGS,
+  getProfile
+} from '../src/main/server/domains/auto-director/autoDirector.config'
 import {
   persistSettingsCandidate,
   sanitizeAerialPresentationPhases
@@ -12,6 +15,14 @@ import {
 const main = async (): Promise<void> => {
   assert.equal(DEFAULT_AUTO_DIRECTOR_SETTINGS.autoFallback, false)
   assert.deepEqual(DEFAULT_AUTO_DIRECTOR_SETTINGS.customPresets, [])
+  assert.equal(
+    getProfile({ ...DEFAULT_AUTO_DIRECTOR_SETTINGS, mode: 'balanced' }).switchMargin,
+    12
+  )
+  assert.equal(
+    getProfile({ ...DEFAULT_AUTO_DIRECTOR_SETTINGS, switchMarginOverride: 6 }).switchMargin,
+    6
+  )
   assert.deepEqual(resolveTelnetSettings({}), DEFAULT_TELNET_SETTINGS)
   assert.deepEqual(resolveTelnetSettings({ telnetHost: '10.0.0.5', telnetPort: '31337' }), {
     host: '10.0.0.5',
@@ -55,6 +66,7 @@ const main = async (): Promise<void> => {
     mode: 'reactive' as const,
     weights: { combat: 80, entry: 70 },
     minimumDwellOverrideMs: 1500,
+    switchMarginOverride: null,
     postDeathHoldMs: 1000
   }
   let persistedPresets: unknown
