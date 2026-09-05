@@ -71,6 +71,7 @@ const HLAE_PROBE_INTERVAL_MS = 5000
 const HLAE_COOLDOWN_MS = 10000
 const HLAE_OPENING_ROUTE_WINDOW_MS = 10000
 const HLAE_PHASE_START_BUFFER_MS = 1000
+const HLAE_FREEZE_CARRYOVER_MS = 2000
 const MAX_CUSTOM_PRESETS = 20
 const MAX_PRESET_NAME_LENGTH = 40
 type HlaeSpawnTeam = 'CT' | 'T'
@@ -1309,6 +1310,13 @@ export class AutoDirectorService {
     const roundEndCarryover = Boolean(
       this.hlaeActivePath && this.hlaeActivePhase === 'post-round' && phase === 'freeze-time'
     )
+    const freezeCarryover = Boolean(
+      this.hlaeActivePath &&
+      this.hlaeActivePhase === 'freeze-time' &&
+      phase === 'quiet-live' &&
+      this.roundLiveStartedAt > 0 &&
+      now - this.roundLiveStartedAt <= HLAE_FREEZE_CARRYOVER_MS
+    )
     const safety = getHlaeSafety({
       phase,
       now,
@@ -1325,7 +1333,8 @@ export class AutoDirectorService {
       (genericPhaseEnabled && phaseSafe) ||
       openingRouteAllowed ||
       (openingRouteActive && phase === 'quiet-live') ||
-      roundEndCarryover
+      roundEndCarryover ||
+      (freezeCarryover && !safety.actionBlocked)
     if (this.hlaeManualOverride && this.hlaeActivePath) {
       if (this.commandInFlight) return true
       const durationSeconds = this.getHlaeDuration(
@@ -1357,7 +1366,8 @@ export class AutoDirectorService {
         this.hlaeActivePath.durationSeconds
       )
       this.updateHlaeDebug(this.hlaeActivePath, players, geometry, now, durationSeconds)
-      const phaseChanged = !roundEndCarryover && !this.isSameHlaePhase(phase, this.hlaeActivePhase)
+      const phaseChanged =
+        !roundEndCarryover && !freezeCarryover && !this.isSameHlaePhase(phase, this.hlaeActivePhase)
       const freezeTimePresentation =
         phase === 'freeze-time' && this.hlaeActivePhase === 'freeze-time' && genericPhaseEnabled
       const pathFinished = now >= this.hlaeActiveUntil
