@@ -232,6 +232,12 @@ const launchPath = async (pathId: string) => {
         <p class="mt-3 text-[10px] text-violet-300">
           {{ hlae.activePathLabel ? `LIVE: ${hlae.activePathLabel}` : 'No active campath' }}
         </p>
+        <p class="mt-1 text-[10px] text-zinc-500">
+          {{ hlae.safety.reason }}
+          <span v-if="hlae.safety.calmForMs > 0">
+            · calm {{ (hlae.safety.calmForMs / 1000).toFixed(1) }}s</span
+          >
+        </p>
       </section>
 
       <div

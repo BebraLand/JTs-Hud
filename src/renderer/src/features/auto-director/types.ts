@@ -206,6 +206,12 @@ export interface AutoDirectorStatus {
     activePathId: string | null
     activePathLabel: string | null
     activeUntil: number | null
+    safety: {
+      allowed: boolean
+      actionBlocked: boolean
+      calmForMs: number
+      reason: string
+    }
     activePose: {
       position: [number, number, number]
       angles: [number, number, number]

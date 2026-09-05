@@ -93,6 +93,12 @@ const emptyStatus = (): AutoDirectorStatus => ({
     activePathId: null,
     activePathLabel: null,
     activeUntil: null,
+    safety: {
+      allowed: false,
+      actionBlocked: false,
+      calmForMs: 0,
+      reason: 'HLAE presentation disabled'
+    },
     activePose: null,
     visibleSteamIds: [],
     occludedSteamIds: [],

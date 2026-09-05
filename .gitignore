@@ -27,4 +27,5 @@ resources/auto-director/geometry/*.jgeo.json.gz
 .env.test
 
 todo.txt
+internal-notes/
 resources/auto-director/models/*.json
