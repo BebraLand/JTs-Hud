@@ -6,6 +6,12 @@ import type {
 } from '../autoDirector.types'
 
 export const HLAE_MIDROUND_CALM_MS = 5000
+export type HlaePresentationPhase =
+  | 'freeze-time'
+  | 'post-round'
+  | 'quiet-live'
+  | 'post-plant'
+  | null
 
 const HARD_ACTION_FACTORS = new Set<ScoreFactorKey>([
   'objective',
@@ -35,6 +41,16 @@ export interface HlaeSafetyState {
   calmForMs: number
   reason: string
 }
+
+export const isHlaeFreezePathInProgress = (
+  activePhase: HlaePresentationPhase,
+  phase: HlaePresentationPhase,
+  now: number,
+  activeUntil: number
+): boolean =>
+  activePhase === 'freeze-time' &&
+  (phase === 'freeze-time' || phase === 'quiet-live') &&
+  now < activeUntil
 
 const finite = (value: number | null): boolean => value !== null && Number.isFinite(value)
 
@@ -95,7 +111,7 @@ export const getHlaeSafety = ({
   rawActionDetected,
   povLockActive
 }: {
-  phase: 'freeze-time' | 'post-round' | 'quiet-live' | 'post-plant' | null
+  phase: HlaePresentationPhase
   now: number
   roundLiveStartedAt: number
   lastActionAt: number

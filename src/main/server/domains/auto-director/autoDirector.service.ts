@@ -46,6 +46,7 @@ import {
   getHlaePhaseRemainingMs,
   getHlaeSafety,
   hasHlaeAction,
+  isHlaeFreezePathInProgress,
   type HlaeRawAction,
   type HlaeSafetyState
 } from './hlae/presentationSafety'
@@ -1317,6 +1318,9 @@ export class AutoDirectorService {
       this.roundLiveStartedAt > 0 &&
       now - this.roundLiveStartedAt <= HLAE_FREEZE_CARRYOVER_MS
     )
+    const freezePathInProgress =
+      Boolean(this.hlaeActivePath) &&
+      isHlaeFreezePathInProgress(this.hlaeActivePhase, phase, now, this.hlaeActiveUntil)
     const safety = getHlaeSafety({
       phase,
       now,
@@ -1334,7 +1338,8 @@ export class AutoDirectorService {
       openingRouteAllowed ||
       (openingRouteActive && phase === 'quiet-live') ||
       roundEndCarryover ||
-      (freezeCarryover && !safety.actionBlocked)
+      (freezeCarryover && !safety.actionBlocked) ||
+      freezePathInProgress
     if (this.hlaeManualOverride && this.hlaeActivePath) {
       if (this.commandInFlight) return true
       const durationSeconds = this.getHlaeDuration(
@@ -1367,7 +1372,10 @@ export class AutoDirectorService {
       )
       this.updateHlaeDebug(this.hlaeActivePath, players, geometry, now, durationSeconds)
       const phaseChanged =
-        !roundEndCarryover && !freezeCarryover && !this.isSameHlaePhase(phase, this.hlaeActivePhase)
+        !roundEndCarryover &&
+        !freezeCarryover &&
+        !freezePathInProgress &&
+        !this.isSameHlaePhase(phase, this.hlaeActivePhase)
       const freezeTimePresentation =
         phase === 'freeze-time' && this.hlaeActivePhase === 'freeze-time' && genericPhaseEnabled
       const pathFinished = now >= this.hlaeActiveUntil

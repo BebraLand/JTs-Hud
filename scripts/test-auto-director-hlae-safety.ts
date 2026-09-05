@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import {
   detectHlaeRawAction,
-  getHlaeSafety
+  getHlaeSafety,
+  isHlaeFreezePathInProgress
 } from '../src/main/server/domains/auto-director/hlae/presentationSafety'
 import type { DirectorPlayer } from '../src/main/server/domains/auto-director/autoDirector.types'
 
@@ -59,5 +60,8 @@ const postPlant = getHlaeSafety({
   povLockActive: false
 })
 assert.equal(postPlant.allowed, false)
+assert.equal(isHlaeFreezePathInProgress('freeze-time', 'quiet-live', 5_000, 8_000), true)
+assert.equal(isHlaeFreezePathInProgress('freeze-time', 'quiet-live', 8_000, 8_000), false)
+assert.equal(isHlaeFreezePathInProgress('post-round', 'freeze-time', 5_000, 8_000), false)
 
 console.log('HLAE safety checks passed')
