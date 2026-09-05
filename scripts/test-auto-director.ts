@@ -247,6 +247,47 @@ assert.ok((dominantSceneScore.povQuality ?? 0) > 0)
 assert.ok(dominantSceneScore.factors.some((factor) => factor.key === 'scenePovQuality'))
 assert.equal(DEFAULT_AUTO_DIRECTOR_SETTINGS.sceneAdvisoryEnabled, true)
 
+const quietGroupedEngine = new AutoDirectorEngine()
+quietGroupedEngine.setCurrent('quietAnchor', 1_000)
+const quietGroupedDecision = quietGroupedEngine.evaluate(
+  snapshot({
+    allplayers: {
+      quietAnchor: player('Quiet anchor', 'CT', 1, '0, 0, 0', '1, 0, 0'),
+      quietSupport1: player('Quiet support 1', 'CT', 2, '120, 0, 0', '1, 0, 0'),
+      quietSupport2: player('Quiet support 2', 'CT', 3, '-120, 0, 0', '1, 0, 0'),
+      remoteEntry: player('Remote entry', 'T', 6, '3000, 3000, 0', '-1, 0, 0')
+    }
+  }),
+  settings,
+  2_000
+)
+const quietGroupedScore = quietGroupedDecision.scores.find(
+  (score) => score.steamId === 'quietAnchor'
+)!
+assert.equal(quietGroupedScore.isolatedNoAction, true)
+assert.equal(
+  quietGroupedScore.factors.some((factor) => factor.key === 'continuity'),
+  false
+)
+
+const quietRecoveryEngine = new AutoDirectorEngine()
+quietRecoveryEngine.confirmSwitch('quietCurrent', 0)
+const quietRecoveryDecision = quietRecoveryEngine.evaluate(
+  snapshot({
+    allplayers: {
+      quietCurrent: player('Quiet current', 'CT', 1, '0, 0, 0', '1, 0, 0'),
+      betterView: player('Better view', 'CT', 2, '2000, 0, 0', '1, 0, 0'),
+      remoteEnemy: player('Remote enemy', 'T', 6, '3000, 0, 0', '1, 0, 0')
+    }
+  }),
+  settings,
+  4_000
+)
+assert.equal(quietRecoveryDecision.currentName, 'Quiet current')
+assert.notEqual(quietRecoveryDecision.candidateName, 'Quiet current')
+assert.equal(quietRecoveryDecision.shouldSwitch, true)
+assert.match(quietRecoveryDecision.reason, /non-isolated view/i)
+
 const externalThreatViewCheck = new AutoDirectorEngine().evaluate(
   snapshot({
     allplayers: {

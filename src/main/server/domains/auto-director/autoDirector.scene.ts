@@ -345,7 +345,7 @@ export const analyzeScenes = (
       : 0
     const isolatedNoActionCandidate =
       player.alive &&
-      sceneMemberCount <= 2 &&
+      (sceneMemberCount <= 2 || opposingSceneMemberCount === 0) &&
       enemies.filter((enemy) => distance(player.position!, enemy.position!) <= 1400).length === 0 &&
       !player.hasBomb
     const sceneScore = scene?.score ?? 0

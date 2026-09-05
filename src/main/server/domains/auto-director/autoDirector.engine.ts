@@ -904,9 +904,11 @@ export class AutoDirectorEngine {
           (best.routeEntryTargetCount ?? 0) >= 3 &&
           (best.threatSceneActionableTargetCount ?? 0) > 0 &&
           (this.actionableRouteStreaks.get(best.steamId) ?? 0) >= 2
+        const quietCurrentRecovery =
+          Boolean(currentScore.isolatedNoAction) && !best.isolatedNoAction
         const effectiveSwitchMargin = predictiveTransition
           ? Math.max(4, profile.switchMargin * 0.35)
-          : routeEntryTransition || emptyAngleRecovery
+          : routeEntryTransition || emptyAngleRecovery || quietCurrentRecovery
             ? Math.max(5, profile.switchMargin * 0.45)
             : profile.switchMargin
         if (best.total >= currentScore.total + effectiveSwitchMargin) {
@@ -915,6 +917,8 @@ export class AutoDirectorEngine {
             ? `${best.name} has a stronger pre-contact prediction and leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
             : emptyAngleRecovery
               ? `${best.name} recovered an actionable group route while ${currentScore.name} holds an empty angle and leads by ${(best.total - currentScore.total).toFixed(1)} points`
+              : quietCurrentRecovery
+                ? `${best.name} recovered a non-isolated view while ${currentScore.name} holds an empty angle and leads by ${(best.total - currentScore.total).toFixed(1)} points`
               : routeEntryTransition
                 ? `${best.name} owns a stable group-entry route and leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
                 : `${best.name} leads ${currentScore.name} by ${(best.total - currentScore.total).toFixed(1)} points`
