@@ -385,6 +385,7 @@ export class AutoDirectorService {
   private previousObservedRoundKey = ''
   private previousObservedBombState: string | null = null
   private previousObservedPhaseKey = ''
+  private latestGsiPayload: GsiLikePayload | null = null
   private hlaeActionPending = false
   private hlaeStateVersion = 0
   private statusTimer: NodeJS.Timeout | null = null
@@ -656,6 +657,50 @@ export class AutoDirectorService {
     return this.getStatus()
   }
 
+  async setDebugPause(paused: boolean): Promise<AutoDirectorStatus> {
+    if (paused === this.settings.paused) return this.getStatus()
+
+    if (paused) {
+      await this.updateSettings({ paused: true })
+      this.lastCommand = await this.camera.pauseDemo()
+    } else {
+      const command = await this.camera.resumeDemo()
+      this.lastCommand = command
+      if (command.ok) await this.updateSettings({ paused: false })
+    }
+    this.updateTransportHealth(this.lastCommand)
+    this.addHistory({
+      at: this.lastCommand.at,
+      type: this.lastCommand.ok ? 'operator' : 'transport-error',
+      message: this.lastCommand.ok
+        ? this.lastCommand.message
+        : `Could not ${paused ? 'pause' : 'resume'} demo: ${this.lastCommand.message}`,
+      transport: this.lastCommand.transport
+    })
+    this.emitStatus()
+    return this.getStatus()
+  }
+
+  getDebugSnapshot() {
+    const status = this.getStatus()
+    return {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      source: 'JTs-Hud Auto Director',
+      runtime: {
+        paused: this.settings.paused,
+        lastGsiAt: this.lastGsiAt,
+        lastEvaluationAt: this.lastEvaluationAt || null,
+        roundStartedAt: this.roundStartedAt || null,
+        roundLiveStartedAt: this.roundLiveStartedAt || null,
+        hlaeStateVersion: this.hlaeStateVersion,
+        commandInFlight: this.commandInFlight
+      },
+      gsiPayload: this.latestGsiPayload ? structuredClone(this.latestGsiPayload) : null,
+      autoDirector: status
+    }
+  }
+
   async testTransport(
     transport: CameraTransport,
     observerSlot?: number
@@ -703,7 +748,9 @@ export class AutoDirectorService {
 
   processGsi(payload: GsiLikePayload): void {
     const now = Date.now()
+    if (this.settings.paused) return
     this.lastGsiAt = now
+    this.latestGsiPayload = structuredClone(payload)
     const players = normalizePlayers(payload)
     const roundKey = `${payload.map?.name ?? ''}:${payload.map?.round ?? ''}`
     const rawAction: HlaeRawAction = detectHlaeRawAction(

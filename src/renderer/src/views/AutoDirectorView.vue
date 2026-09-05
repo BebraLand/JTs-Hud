@@ -15,7 +15,9 @@ const {
   error,
   updateSettings,
   forcePlayer,
-  testTransport
+  testTransport,
+  setDebugPause,
+  exportDebugSnapshot
 } = useAutoDirector()
 const { confirm } = useConfirmation()
 const { settings: appSettings, fetchSettings: fetchAppSettings } = useSettings()
@@ -369,6 +371,23 @@ const healthClass = (state: string) =>
         </div>
         <div class="flex gap-2">
           <button
+            v-if="appSettings.developerTestingEnabled || status.settings.paused"
+            @click="setDebugPause(!status.settings.paused)"
+            :disabled="saving || !status.settings.enabled"
+            class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-5 text-sm font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-40"
+          >
+            {{ status.settings.paused ? 'Resume demo' : 'Pause demo' }}
+          </button>
+          <button
+            v-if="appSettings.developerTestingEnabled"
+            @click="exportDebugSnapshot"
+            :disabled="saving"
+            class="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-5 text-sm font-semibold text-cyan-300 hover:bg-cyan-400/20 disabled:opacity-40"
+          >
+            Export debug
+          </button>
+          <button
+            v-else
             @click="updateSettings({ paused: !status.settings.paused })"
             :disabled="saving || !status.settings.enabled"
             class="rounded-lg border border-zinc-700 bg-zinc-900 px-5 text-sm font-semibold text-zinc-300 hover:bg-zinc-700 disabled:opacity-40"

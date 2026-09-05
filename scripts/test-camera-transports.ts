@@ -111,6 +111,21 @@ const main = async (): Promise<void> => {
     assert.equal(invalidAerial.ok, false)
     assert.match(invalidAerial.message, /invalid pose/)
 
+    const playbackCommands: string[] = []
+    const playbackController = new CameraController(
+      async () => ({ host: '127.0.0.1', port: address.port }),
+      async (commands) => {
+        playbackCommands.push(commands)
+        return { response: 'fixture-ack', acknowledged: true }
+      },
+      async () => {
+        throw new Error('Demo playback must never use keyboard fallback')
+      }
+    )
+    assert.equal((await playbackController.pauseDemo()).ok, true)
+    assert.equal((await playbackController.resumeDemo()).ok, true)
+    assert.deepEqual(playbackCommands, ['demo_pause', 'demo_resume'])
+
     console.log(
       'Camera transport fixture passed: acknowledgement, shared settings, Aerial pose safety, fallback opt-in and platform guard'
     )

@@ -52,6 +52,26 @@ router.put(
 )
 
 router.post(
+  '/debug/pause',
+  requireControlToken,
+  requireDatabaseReady,
+  async (req: Request, res: Response) => {
+    if (typeof req.body?.paused !== 'boolean') {
+      return res.status(400).json({ error: 'paused must be a boolean' })
+    }
+    try {
+      return res.json(await autoDirectorService.setDebugPause(req.body.paused))
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+)
+
+router.get('/debug/export', requireControlToken, requireDatabaseReady, (_req: Request, res: Response) => {
+  res.json(autoDirectorService.getDebugSnapshot())
+})
+
+router.post(
   '/force',
   requireControlToken,
   requireDatabaseReady,

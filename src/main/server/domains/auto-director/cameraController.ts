@@ -277,6 +277,45 @@ export class CameraController {
     }
   }
 
+  async pauseDemo(): Promise<CameraCommandResult> {
+    return this.setDemoPlayback('demo_pause', 'Demo paused')
+  }
+
+  async resumeDemo(): Promise<CameraCommandResult> {
+    return this.setDemoPlayback('demo_resume', 'Demo resumed')
+  }
+
+  private async setDemoPlayback(
+    command: 'demo_pause' | 'demo_resume',
+    message: string
+  ): Promise<CameraCommandResult> {
+    try {
+      const telnet = await this.readTelnetSettings()
+      await this.sendTelnet(command, {
+        host: telnet.host,
+        port: telnet.port,
+        timeoutMs: 3000,
+        requireAck: true
+      })
+      return {
+        ok: true,
+        transport: 'telnet',
+        message,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: true, message: 'Demo playback acknowledged' }]
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        transport: 'telnet',
+        message: errorMessage,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message: errorMessage }]
+      }
+    }
+  }
+
   async setHlaeDuration(durationSeconds: number): Promise<CameraCommandResult> {
     try {
       const telnet = await this.readTelnetSettings()

@@ -218,6 +218,55 @@ export function useAutoDirector() {
     }
   }
 
+  const setDebugPause = async (paused: boolean) => {
+    saving.value = true
+    error.value = null
+    try {
+      status.value = await readJson(
+        await fetch(`${API_URL}/auto-director/debug/pause`, {
+          method: 'POST',
+          headers: await controlHeaders(),
+          body: JSON.stringify({ paused })
+        })
+      )
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : String(cause)
+    } finally {
+      saving.value = false
+    }
+  }
+
+  const exportDebugSnapshot = async () => {
+    saving.value = true
+    error.value = null
+    try {
+      const response = await fetch(`${API_URL}/auto-director/debug/export`, {
+        headers: await controlHeaders()
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error ?? `Request failed (${response.status})`)
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      const mapName = String(
+        status.value.cameraDebug.mapName ?? status.value.hlae.mapName ?? 'unknown-map'
+      ).replace(
+        /[^a-z0-9_-]+/gi,
+        '-'
+      )
+      anchor.href = url
+      anchor.download = `jts-auto-director-debug-${mapName}-${Date.now()}.json`
+      anchor.click()
+      setTimeout(() => URL.revokeObjectURL(url), 0)
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : String(cause)
+    } finally {
+      saving.value = false
+    }
+  }
+
   const launchHlaePath = async (pathId: string) => {
     saving.value = true
     error.value = null
@@ -263,6 +312,8 @@ export function useAutoDirector() {
     updateSettings,
     forcePlayer,
     testTransport,
+    setDebugPause,
+    exportDebugSnapshot,
     launchHlaePath
   }
 }
