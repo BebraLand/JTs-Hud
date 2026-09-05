@@ -13,7 +13,7 @@ import {
   type ScoreAdvisoryResult
 } from './autoDirector.engine'
 import { buildAutoDirectorMlFeatures } from './autoDirector.mlFeatures'
-import { AutoDirectorTemporalTracker } from './autoDirector.temporal'
+import { AutoDirectorTemporalTracker, type TemporalPlayerFeatures } from './autoDirector.temporal'
 import { autoDirectorMlAdvisory, LightGbmRanker, loadLightGbmRanker } from './autoDirector.ml'
 import {
   persistSettingsCandidate,
@@ -49,7 +49,8 @@ import type {
   DirectorPlayer,
   DirectorHistoryEntry,
   GsiLikePayload,
-  PlayerScore
+  PlayerScore,
+  ScoreFactorKey
 } from './autoDirector.types'
 
 const SETTINGS_KEY = 'autoDirectorSettings'
@@ -60,15 +61,133 @@ const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
 const HLAE_PROBE_INTERVAL_MS = 5000
 const HLAE_COOLDOWN_MS = 10000
+const HLAE_OPENING_ROUTE_WINDOW_MS = 10000
+const HLAE_MIDROUND_CALM_MS = 5000
+const HLAE_PHASE_START_BUFFER_MS = 1000
 const MAX_CUSTOM_PRESETS = 20
 const MAX_PRESET_NAME_LENGTH = 40
 type HlaeSpawnTeam = 'CT' | 'T'
+
+const HLAE_HARD_ACTION_FACTORS = new Set<ScoreFactorKey>([
+  'objective',
+  'combat',
+  'damage',
+  'recentKill',
+  'retake',
+  'grenade'
+])
+const HLAE_PREDICTIVE_ACTION_FACTORS = new Set<ScoreFactorKey>([
+  'entry',
+  'routeEntry',
+  'contactImminence',
+  'incomingGroupPressure',
+  'fightPrediction'
+])
+
+const hasHlaeAction = (scores: PlayerScore[]): boolean =>
+  scores.some((score) =>
+    score.factors.some(
+      (factor) =>
+        (HLAE_HARD_ACTION_FACTORS.has(factor.key) && factor.value > 0) ||
+        (HLAE_PREDICTIVE_ACTION_FACTORS.has(factor.key) && factor.value >= 3)
+    )
+  )
+
+const hasNewPlayerDeath = (
+  players: DirectorPlayer[],
+  previousPlayers: ReadonlyMap<string, DirectorPlayer>
+): boolean => players.some((player) => previousPlayers.get(player.steamId)?.alive && !player.alive)
+
+const getHlaePhaseRemainingMs = (payload: GsiLikePayload): number | null => {
+  const seconds = Number(payload.phase_countdowns?.phase_ends_in)
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null
+}
 
 const getHlaeSpawnTeam = (pathEntry: HlaeCameraPath): HlaeSpawnTeam | null => {
   const name = `${pathEntry.id} ${pathEntry.label}`.toLowerCase()
   if (/ct[_ -]?spawn/.test(name)) return 'CT'
   if (/(^|[_ -])t[_ -]?spawn/.test(name)) return 'T'
   return null
+}
+
+const isHlaeOpeningRoute = (pathEntry: HlaeCameraPath): boolean =>
+  /(?:running|opening|rush)/i.test(`${pathEntry.id} ${pathEntry.label}`)
+
+type HlaePlantSite = 'site_a' | 'site_b'
+
+const getHlaePlantSite = (pathEntry: HlaeCameraPath): HlaePlantSite | null => {
+  const name = `${pathEntry.id} ${pathEntry.label}`.toLowerCase()
+  if (/(?:^|[\s_-])a[\s_-]?site(?:[\s_-]|$)|site[\s_-]?a(?:[\s_-]|$)/.test(name)) {
+    return 'site_a'
+  }
+  if (/(?:^|[\s_-])b[\s_-]?site(?:[\s_-]|$)|site[\s_-]?b(?:[\s_-]|$)/.test(name)) {
+    return 'site_b'
+  }
+  return null
+}
+
+const isHlaeSiteRelevant = (
+  pathEntry: HlaeCameraPath,
+  visibleSteamIds: string[],
+  players: DirectorPlayer[],
+  scores: PlayerScore[]
+): boolean => {
+  const site = getHlaePlantSite(pathEntry)
+  if (!site) return true
+
+  const playersById = new Map(players.map((player) => [player.steamId, player]))
+  const scoresById = new Map(scores.map((score) => [score.steamId, score]))
+  const aliveT = players.filter((player) => player.alive && player.team === 'T')
+  const visibleT = visibleSteamIds.some((steamId) => playersById.get(steamId)?.team === 'T')
+  const bombCarrier = aliveT.find((player) => player.hasBomb)
+  const bombCarrierSite = bombCarrier
+    ? scoresById.get(bombCarrier.steamId)?.topologyPlantSite
+    : null
+  if (bombCarrierSite) return bombCarrierSite === site
+
+  const tSiteCounts = new Map<HlaePlantSite, number>([
+    ['site_a', 0],
+    ['site_b', 0]
+  ])
+  for (const player of aliveT) {
+    const playerSite = scoresById.get(player.steamId)?.topologyPlantSite
+    if (playerSite) tSiteCounts.set(playerSite, tSiteCounts.get(playerSite)! + 1)
+  }
+  const siteCount = tSiteCounts.get(site) ?? 0
+  const otherSiteCount = tSiteCounts.get(site === 'site_a' ? 'site_b' : 'site_a') ?? 0
+  if (siteCount >= 2 || otherSiteCount >= 2) return siteCount > otherSiteCount
+  return visibleT
+}
+
+const isTGroupRunning = (
+  players: DirectorPlayer[],
+  temporalFeatures: Map<string, TemporalPlayerFeatures>
+): boolean => {
+  const terrorists = players.filter((player) => player.team === 'T' && player.alive)
+  if (terrorists.length < 3 || terrorists.some((player) => !player.position)) return false
+  const runners = terrorists.filter(
+    (player) => (temporalFeatures.get(player.steamId)?.speed500 ?? 0) >= 80
+  )
+  if (runners.length !== terrorists.length) return false
+  const center = runners.reduce<[number, number, number]>(
+    (sum, player) => [
+      sum[0] + player.position![0],
+      sum[1] + player.position![1],
+      sum[2] + player.position![2]
+    ],
+    [0, 0, 0]
+  )
+  center[0] /= runners.length
+  center[1] /= runners.length
+  center[2] /= runners.length
+  return runners.every(
+    (player) =>
+      Math.hypot(
+        player.position![0] - center[0],
+        player.position![1] - center[1],
+        player.position![2] - center[2]
+      ) <= 900
+  )
 }
 
 const sanitizePreset = (input: unknown): AutoDirectorPreset => {
@@ -236,6 +355,7 @@ export class AutoDirectorService {
   private mlRanker: LightGbmRanker | null = null
   private mlModelMessage = 'Model not loaded'
   private roundStartedAt = 0
+  private roundLiveStartedAt = 0
   private lastRoundKey = ''
   private io: Server | null = null
   private settings: AutoDirectorSettings = { ...DEFAULT_AUTO_DIRECTOR_SETTINGS }
@@ -286,6 +406,7 @@ export class AutoDirectorService {
   private hlaeActivePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private hlaeActiveStartedAt = 0
   private hlaeActiveUntil = 0
+  private hlaeLastActionAt = 0
   private hlaeCooldownUntil = 0
   private hlaeLastProbeAt = 0
   private hlaeProbeInFlight = false
@@ -624,6 +745,8 @@ export class AutoDirectorService {
       }
       this.lastRoundKey = roundKey
       this.roundStartedAt = now
+      this.roundLiveStartedAt = 0
+      this.hlaeLastActionAt = 0
       const currentSteamId = this.engine.getCurrent()
       this.engine.reset()
       if (currentSteamId) this.engine.setCurrent(currentSteamId, now)
@@ -716,6 +839,10 @@ export class AutoDirectorService {
       geometryFeatures ?? undefined,
       topologyFeatures ?? undefined
     )
+    const hlaeActionDetected =
+      hasHlaeAction(this.decision.scores) ||
+      hasNewPlayerDeath(players, this.previousTopologyPlayers)
+    if (hlaeActionDetected) this.hlaeLastActionAt = now
     this.cameraDebug = computeCameraDebugStatus({
       mapName: payload.map?.name ? String(payload.map.name) : null,
       at: now,
@@ -735,6 +862,13 @@ export class AutoDirectorService {
 
     const aerialPhase = getAerialPresentationPhase(payload)
     if (aerialPhase !== this.aerialSequencePhase) {
+      if (aerialPhase === 'quiet-live' && this.aerialSequencePhase === 'freeze-time') {
+        this.roundLiveStartedAt = now
+      } else if (aerialPhase === 'quiet-live' && this.roundLiveStartedAt === 0) {
+        this.roundLiveStartedAt = now
+      } else if (aerialPhase === 'freeze-time') {
+        this.roundLiveStartedAt = 0
+      }
       this.aerialSequencePhase = aerialPhase
       this.aerialSequenceAnchorIds.clear()
     }
@@ -749,10 +883,24 @@ export class AutoDirectorService {
         excludedAnchorIds: this.aerialActiveAnchor ? undefined : this.aerialSequenceAnchorIds
       }
     )
-    const hlaeFirst = aerialPhase === 'freeze-time' || aerialPhase === 'post-round'
+    const hlaeFirst =
+      aerialPhase === 'freeze-time' ||
+      aerialPhase === 'post-round' ||
+      this.isHlaeOpeningRouteWindow(aerialPhase, now, players, temporalFeatures)
     const decisionScores = this.decision.scores
+    const hlaePhaseRemainingMs = getHlaePhaseRemainingMs(payload)
     const handleHlae = () =>
-      this.handleHlaePresentation(hlaeMap, aerialPhase, now, players, decisionScores, geometryMap)
+      this.handleHlaePresentation(
+        hlaeMap,
+        aerialPhase,
+        now,
+        players,
+        decisionScores,
+        geometryMap,
+        temporalFeatures,
+        hlaeActionDetected,
+        hlaePhaseRemainingMs
+      )
     const presentationControlsCamera = this.hlaeActivePath
       ? handleHlae()
       : this.aerialActiveAnchor
@@ -957,7 +1105,10 @@ export class AutoDirectorService {
     scores: PlayerScore[],
     geometry: GeometryMap | null,
     phase: ReturnType<typeof getAerialPresentationPhase>,
-    excludePathId?: string
+    now: number,
+    excludePathId: string | undefined,
+    temporalFeatures: Map<string, TemporalPlayerFeatures>,
+    phaseRemainingMs: number | null
   ): HlaeCameraPath | null {
     this.hlaePathCoverage.clear()
     const knownFreezeSpawnTeams = new Set(
@@ -989,12 +1140,18 @@ export class AutoDirectorService {
         startVisibleCount: evaluation.visibleSteamIds.length,
         startScore: evaluation.score
       })
-      return { pathEntry, evaluation }
+      return { pathEntry, evaluation, durationSeconds }
     })
     const eligible = evaluations
       .filter(
-        ({ pathEntry, evaluation }) =>
+        ({ pathEntry, evaluation, durationSeconds }) =>
           pathEntry.id !== excludePathId &&
+          (!isHlaeOpeningRoute(pathEntry) ||
+            this.isHlaeOpeningRouteWindow(phase, now, players, temporalFeatures)) &&
+          isHlaeSiteRelevant(pathEntry, evaluation.visibleSteamIds, players, scores) &&
+          ((phase !== 'freeze-time' && phase !== 'post-round') ||
+            (phaseRemainingMs !== null &&
+              durationSeconds * 1000 + HLAE_PHASE_START_BUFFER_MS <= phaseRemainingMs)) &&
           (phase === 'freeze-time' && pathEntry.kind === 'spawn'
             ? knownFreezeSpawnTeams.size === 0
               ? true
@@ -1009,11 +1166,36 @@ export class AutoDirectorService {
           left.pathEntry.id.localeCompare(right.pathEntry.id)
       )
     if (!eligible.length) return null
+    const openingRouteWindow = this.isHlaeOpeningRouteWindow(phase, now, players, temporalFeatures)
+    const candidates =
+      openingRouteWindow && eligible.some(({ pathEntry }) => isHlaeOpeningRoute(pathEntry))
+        ? eligible.filter(({ pathEntry }) => isHlaeOpeningRoute(pathEntry))
+        : eligible
     const preferred = this.hlae.next(map.mapName)
     return (
-      eligible.find(({ pathEntry }) => pathEntry.id === preferred?.id)?.pathEntry ??
-      eligible[0].pathEntry
+      candidates.find(({ pathEntry }) => pathEntry.id === preferred?.id)?.pathEntry ??
+      candidates[0].pathEntry
     )
+  }
+
+  private isHlaeOpeningRouteWindow(
+    phase: ReturnType<typeof getAerialPresentationPhase>,
+    now: number,
+    players: DirectorPlayer[],
+    temporalFeatures: Map<string, TemporalPlayerFeatures>
+  ): boolean {
+    return (
+      phase === 'quiet-live' &&
+      this.roundLiveStartedAt > 0 &&
+      now >= this.roundLiveStartedAt &&
+      now - this.roundLiveStartedAt <= HLAE_OPENING_ROUTE_WINDOW_MS &&
+      isTGroupRunning(players, temporalFeatures)
+    )
+  }
+
+  private isHlaeMidRoundCalm(now: number, scores: PlayerScore[]): boolean {
+    if (hasHlaeAction(scores) || this.roundLiveStartedAt === 0) return false
+    return now - Math.max(this.roundLiveStartedAt, this.hlaeLastActionAt) >= HLAE_MIDROUND_CALM_MS
   }
 
   private isHlaePhaseEnabled(phase: ReturnType<typeof getAerialPresentationPhase>): boolean {
@@ -1045,7 +1227,10 @@ export class AutoDirectorService {
     now: number,
     players: DirectorPlayer[],
     scores: PlayerScore[],
-    geometry: GeometryMap | null
+    geometry: GeometryMap | null,
+    temporalFeatures: Map<string, TemporalPlayerFeatures>,
+    hlaeActionDetected: boolean,
+    phaseRemainingMs: number | null
   ): boolean {
     if (!this.settings.hlaePresentationEnabled && !this.hlaeManualOverride) {
       if (this.hlaeActivePath && !this.commandInFlight)
@@ -1063,6 +1248,19 @@ export class AutoDirectorService {
       this.updateHlaeDebug(null, players, scores, geometry, now)
       return false
     }
+    const genericPhaseEnabled = this.isHlaePhaseEnabled(phase)
+    const openingRouteWindow = this.isHlaeOpeningRouteWindow(phase, now, players, temporalFeatures)
+    const openingRouteActive = Boolean(
+      this.hlaeActivePath && isHlaeOpeningRoute(this.hlaeActivePath)
+    )
+    const roundEndCarryover = Boolean(
+      this.hlaeActivePath && this.hlaeActivePhase === 'post-round' && phase === 'freeze-time'
+    )
+    const phaseEnabled =
+      (genericPhaseEnabled && (phase !== 'quiet-live' || this.isHlaeMidRoundCalm(now, scores))) ||
+      openingRouteWindow ||
+      (openingRouteActive && phase === 'quiet-live') ||
+      roundEndCarryover
     if (this.hlaeManualOverride && this.hlaeActivePath) {
       if (this.commandInFlight) return true
       const durationSeconds = this.getHlaeDuration(
@@ -1074,6 +1272,10 @@ export class AutoDirectorService {
       if (now >= this.hlaeActiveUntil) void this.exitHlae('Manual HLAE campath finished')
       return true
     }
+    if (phase === 'quiet-live' && hlaeActionDetected && this.hlaeActivePath) {
+      if (!this.commandInFlight) void this.exitHlae('Action detected; returning to player POV')
+      return true
+    }
     if (this.hlaeActivePath) {
       if (this.commandInFlight) return true
       const durationSeconds = this.getHlaeDuration(
@@ -1083,32 +1285,29 @@ export class AutoDirectorService {
       )
       this.updateHlaeDebug(this.hlaeActivePath, players, scores, geometry, now, durationSeconds)
       if (this.hlaeDebug.visibleSteamIds.length > 0) this.hlaeLastVisibleAt = now
-      const phaseChanged = !this.isSameHlaePhase(phase, this.hlaeActivePhase)
+      const phaseChanged = !roundEndCarryover && !this.isSameHlaePhase(phase, this.hlaeActivePhase)
       const freezeTimePresentation =
-        phase === 'freeze-time' &&
-        this.hlaeActivePhase === 'freeze-time' &&
-        this.isHlaePhaseEnabled(phase)
+        phase === 'freeze-time' && this.hlaeActivePhase === 'freeze-time' && genericPhaseEnabled
       const spawnCinematic = phase === 'freeze-time' && this.hlaeActivePath.kind === 'spawn'
       const pathFinished = now >= this.hlaeActiveUntil
       const visibilityLost =
         !spawnCinematic &&
+        !roundEndCarryover &&
         geometry !== null &&
         this.hlaeLastVisibleAt > 0 &&
         now - this.hlaeLastVisibleAt >= 1200
-      if (phaseChanged || pathFinished || !this.isHlaePhaseEnabled(phase) || visibilityLost) {
-        if (
-          pathFinished &&
-          !phaseChanged &&
-          this.isHlaePhaseEnabled(phase) &&
-          !this.hlaeManualOverride
-        ) {
+      if (phaseChanged || pathFinished || !phaseEnabled || visibilityLost) {
+        if (pathFinished && !phaseChanged && genericPhaseEnabled && !this.hlaeManualOverride) {
           const nextPath = this.selectHlaePath(
             map,
             players,
             scores,
             geometry,
             phase,
-            this.hlaeActivePath.id
+            now,
+            this.hlaeActivePath.id,
+            temporalFeatures,
+            phaseRemainingMs
           )
           if (nextPath) {
             void this.enterHlae(nextPath, map.mapName, phase, now)
@@ -1129,11 +1328,21 @@ export class AutoDirectorService {
       }
       return true
     }
-    if (!this.isHlaePhaseEnabled(phase) || now < this.hlaeCooldownUntil || this.commandInFlight) {
+    if (!phaseEnabled || now < this.hlaeCooldownUntil || this.commandInFlight) {
       this.updateHlaeDebug(null, players, scores, geometry, now)
       return false
     }
-    const pathEntry = this.selectHlaePath(map, players, scores, geometry, phase)
+    const pathEntry = this.selectHlaePath(
+      map,
+      players,
+      scores,
+      geometry,
+      phase,
+      now,
+      undefined,
+      temporalFeatures,
+      phaseRemainingMs
+    )
     this.updateHlaeDebug(null, players, scores, geometry, now)
     if (!pathEntry) {
       this.hlaeMessage = geometry

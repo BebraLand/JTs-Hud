@@ -53,7 +53,14 @@ const inferKind = (value: string): HlaeCameraKind => {
   if (name.includes('mid')) return 'mid'
   if (name.includes('site')) return 'site'
   if (name.includes('post')) return 'postplant'
-  if (name.includes('long') || name.includes('short') || name.includes('main')) return 'route'
+  if (
+    name.includes('long') ||
+    name.includes('short') ||
+    name.includes('main') ||
+    name.includes('route') ||
+    name.includes('running')
+  )
+    return 'route'
   return 'custom'
 }
 
