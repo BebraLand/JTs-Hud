@@ -4,6 +4,7 @@ import { API_URL } from '../../../index'
 import { useTeams } from '../../teams/composables/useTeams'
 import { usePlayers } from '../../players/composables/usePlayers'
 import { useMatches } from '../../matches/composables/useMatches'
+import { useSettings } from '../../settings/composables/useSettings'
 import { socket } from '../../../socket'
 
 export type PanelInput = {
@@ -31,13 +32,13 @@ export function useHudPanelView() {
   const { teams, fetchTeams } = useTeams()
   const { players, fetchPlayers } = usePlayers()
   const { matches, fetchMatches } = useMatches()
+  const { settings: appSettings, fetchSettings } = useSettings()
 
   const panel = ref<PanelSection[]>([])
   const config = ref<Record<string, Record<string, any>>>({})
   const sectionStatus = ref<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({})
   const activeTab = ref<string>('')
   const matEnabled = ref(false)
-  const developerTestingEnabled = ref(false)
   const debugMapEndActive = ref(false)
   const debugMapEndBusy = ref(false)
   const debugSeriesEndActive = ref(false)
@@ -84,16 +85,12 @@ export function useHudPanelView() {
   }
 
   const loadMatSettings = async () => {
-    const res = await fetch(`${API_URL}/settings`)
-    if (res.ok) {
-      const settings = await res.json()
-      matEnabled.value = settings.matEnabled === true
-      developerTestingEnabled.value = settings.developerTestingEnabled === true
-    }
+    await fetchSettings()
+    matEnabled.value = appSettings.value.matEnabled === true
   }
 
   const loadDebugPreviews = async () => {
-    if (!developerTestingEnabled.value) return
+    if (!appSettings.value.developerTestingEnabled) return
     const [mapEnd, seriesEnd] = await Promise.all([
       fetch(`${API_URL}/settings/debug/map-end`),
       fetch(`${API_URL}/settings/debug/series-end`)
@@ -256,7 +253,7 @@ export function useHudPanelView() {
     activeTab,
     activeSection,
     matEnabled,
-    developerTestingEnabled,
+    developerTestingEnabled: computed(() => appSettings.value.developerTestingEnabled),
     debugMapEndActive,
     debugMapEndBusy,
     debugSeriesEndActive,
