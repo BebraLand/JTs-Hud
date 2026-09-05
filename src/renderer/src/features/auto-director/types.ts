@@ -99,6 +99,7 @@ export interface AutoDirectorSettings {
     midRound: boolean
     roundEnd: boolean
   }
+  spectatorXrayDuringCinematics: boolean
   hlaeDurationOverrides: Record<string, number>
   minimumDwellOverrideMs: number | null
   switchMarginOverride: number | null

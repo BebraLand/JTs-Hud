@@ -110,6 +110,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
     midRound: true,
     roundEnd: true
   },
+  spectatorXrayDuringCinematics: false,
   hlaeDurationOverrides: {},
   minimumDwellOverrideMs: null,
   switchMarginOverride: null,

@@ -126,6 +126,25 @@ const main = async (): Promise<void> => {
     assert.equal((await playbackController.resumeDemo()).ok, true)
     assert.deepEqual(playbackCommands, ['demo_pause', 'demo_resume'])
 
+    const xrayCommands: string[] = []
+    const xrayController = new CameraController(
+      async () => ({ host: '127.0.0.1', port: address.port }),
+      async (commands) => {
+        xrayCommands.push(commands)
+        return {
+          response:
+            commands === 'spec_show_xray' ? '"spec_show_xray" = "1"' : 'fixture-ack',
+          acknowledged: true
+        }
+      },
+      async () => {
+        throw new Error('X-ray control must never use keyboard fallback')
+      }
+    )
+    assert.equal(await xrayController.readSpectatorXray(), true)
+    assert.equal((await xrayController.setSpectatorXray(false)).ok, true)
+    assert.deepEqual(xrayCommands, ['spec_show_xray', 'spec_show_xray 0'])
+
     console.log(
       'Camera transport fixture passed: acknowledgement, shared settings, Aerial pose safety, fallback opt-in and platform guard'
     )

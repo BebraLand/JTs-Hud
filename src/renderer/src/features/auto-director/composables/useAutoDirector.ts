@@ -26,6 +26,7 @@ const emptyStatus = (): AutoDirectorStatus => ({
       midRound: true,
       roundEnd: true
     },
+    spectatorXrayDuringCinematics: false,
     hlaeDurationOverrides: {},
     minimumDwellOverrideMs: null,
     switchMarginOverride: null,

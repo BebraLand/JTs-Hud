@@ -273,6 +273,9 @@ const sanitizeSettings = (
       hlaePresentationPhases
     )
   }
+  if (typeof input.spectatorXrayDuringCinematics === 'boolean') {
+    output.spectatorXrayDuringCinematics = input.spectatorXrayDuringCinematics
+  }
   if (input.hlaeDurationOverrides && typeof input.hlaeDurationOverrides === 'object') {
     output.hlaeDurationOverrides = Object.fromEntries(
       Object.entries(input.hlaeDurationOverrides)
@@ -428,6 +431,7 @@ export class AutoDirectorService {
   private hlaeLastProbeAt = 0
   private hlaeProbeInFlight = false
   private hlaeAvailable = false
+  private cinematicXrayOriginal: boolean | null = null
   private hlaeState: 'disabled' | 'missing' | 'checking' | 'ready' | 'unavailable' | 'error' =
     'disabled'
   private hlaeMessage = 'HLAE presentation disabled'
@@ -602,6 +606,7 @@ export class AutoDirectorService {
       next.manualOverrideSteamId = null
     }
     const previousOverride = this.settings.manualOverrideSteamId
+    const previousCinematicXray = this.settings.spectatorXrayDuringCinematics
     const aerialReturnTarget =
       (next.aerialPresentationEnabled === false || directorDisabled) && this.aerialActiveAnchor
         ? this.getAerialReturnTarget()
@@ -609,6 +614,14 @@ export class AutoDirectorService {
     this.settings = await persistSettingsCandidate(this.settings, next, (candidate) =>
       this.persistSettings(candidate)
     )
+    if (
+      next.spectatorXrayDuringCinematics !== undefined &&
+      next.spectatorXrayDuringCinematics !== previousCinematicXray &&
+      (this.hlaeActivePath || this.aerialActiveAnchor) &&
+      !this.commandInFlight
+    ) {
+      void this.syncCinematicXray()
+    }
     const activeMapName = this.hlae.getStatus().mapName
     const activeDuration =
       this.hlaeActivePath && activeMapName
@@ -641,6 +654,7 @@ export class AutoDirectorService {
             : 'Operator disabled Aerial presentation'
         )
       } else {
+        await this.restoreCinematicXray()
         this.clearAerialPresentation(
           Date.now(),
           directorDisabled
@@ -1552,6 +1566,7 @@ export class AutoDirectorService {
         }
         this.hlaeState = 'ready'
         this.hlaeMessage = `LIVE: ${pathEntry.label}`
+        await this.syncCinematicXray()
         this.addHistory({
           at: this.lastCommand.at,
           type: 'presentation',
@@ -1623,6 +1638,7 @@ export class AutoDirectorService {
           }
         }
       }
+      await this.restoreCinematicXray()
       this.addHistory({
         at: this.lastCommand.at,
         type: 'presentation',
@@ -1645,6 +1661,50 @@ export class AutoDirectorService {
     this.hlaeActiveUntil = 0
     this.hlaeCooldownUntil = now + HLAE_COOLDOWN_MS
     this.hlaeMessage = reason
+  }
+
+  private async syncCinematicXray(): Promise<void> {
+    if (this.cinematicXrayOriginal === null) {
+      try {
+        this.cinematicXrayOriginal = await this.camera.readSpectatorXray()
+      } catch (error) {
+        this.addHistory({
+          at: Date.now(),
+          type: 'transport-error',
+          message: `Could not read spectator X-ray state: ${error instanceof Error ? error.message : String(error)}`,
+          transport: 'telnet'
+        })
+        return
+      }
+    }
+    const result = await this.camera.setSpectatorXray(
+      this.settings.spectatorXrayDuringCinematics
+    )
+    this.updateTransportHealth(result)
+    if (!result.ok) {
+      this.addHistory({
+        at: result.at,
+        type: 'transport-error',
+        message: `Could not set cinematic spectator X-ray: ${result.message}`,
+        transport: result.transport
+      })
+    }
+  }
+
+  private async restoreCinematicXray(): Promise<void> {
+    if (this.cinematicXrayOriginal === null) return
+    const result = await this.camera.setSpectatorXray(this.cinematicXrayOriginal)
+    this.updateTransportHealth(result)
+    if (result.ok) {
+      this.cinematicXrayOriginal = null
+      return
+    }
+    this.addHistory({
+      at: result.at,
+      type: 'transport-error',
+      message: `Could not restore spectator X-ray: ${result.message}`,
+      transport: result.transport
+    })
   }
 
   /** Returns true while presentation owns the camera or a presentation command is in flight. */
@@ -1674,7 +1734,14 @@ export class AutoDirectorService {
       if (exitReason) {
         const target = this.getAerialReturnTarget()
         if (target && !this.commandInFlight) void this.exitAerial(target, exitReason)
-        else if (!target) this.clearAerialPresentation(now, exitReason)
+        else if (!target) {
+          this.commandInFlight = true
+          void this.restoreCinematicXray().finally(() => {
+            this.clearAerialPresentation(now, exitReason)
+            this.commandInFlight = false
+            this.emitStatus()
+          })
+        }
       }
       return true
     }
@@ -1732,6 +1799,7 @@ export class AutoDirectorService {
         this.aerialSequencePhase = decision.phase
         this.aerialReason = decision.reason
         this.aerialVisibleSteamIds = decision.visibleSteamIds
+        await this.syncCinematicXray()
         this.addHistory({
           at: this.lastCommand.at,
           type: 'presentation',
@@ -1817,6 +1885,7 @@ export class AutoDirectorService {
             this.pendingTargetAt = this.lastCommand.at
           }
         }
+        await this.restoreCinematicXray()
         this.addHistory({
           at: this.lastCommand.at,
           type: 'presentation',

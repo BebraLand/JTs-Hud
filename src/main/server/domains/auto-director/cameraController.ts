@@ -285,6 +285,47 @@ export class CameraController {
     return this.setDemoPlayback('demo_resume', 'Demo resumed')
   }
 
+  async readSpectatorXray(): Promise<boolean> {
+    const telnet = await this.readTelnetSettings()
+    const result = await this.sendTelnet('spec_show_xray', {
+      host: telnet.host,
+      port: telnet.port,
+      timeoutMs: 3000,
+      requireAck: true
+    })
+    const match = result.response.match(/spec_show_xray[^\r\n]*?(?:=|:)\s*"?([01])"?/i)
+    if (!match) throw new Error('Could not read spectator X-ray state')
+    return match[1] === '1'
+  }
+
+  async setSpectatorXray(enabled: boolean): Promise<CameraCommandResult> {
+    try {
+      const telnet = await this.readTelnetSettings()
+      await this.sendTelnet(`spec_show_xray ${enabled ? 1 : 0}`, {
+        host: telnet.host,
+        port: telnet.port,
+        timeoutMs: 3000,
+        requireAck: true
+      })
+      return {
+        ok: true,
+        transport: 'telnet',
+        message: `Spectator X-ray ${enabled ? 'enabled' : 'disabled'}`,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: true, message: 'Spectator X-ray updated' }]
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        transport: 'telnet',
+        message,
+        at: Date.now(),
+        attempts: [{ transport: 'telnet', ok: false, message }]
+      }
+    }
+  }
+
   private async setDemoPlayback(
     command: 'demo_pause' | 'demo_resume',
     message: string

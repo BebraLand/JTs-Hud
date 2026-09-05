@@ -229,6 +229,29 @@ const launchPath = async (pathId: string) => {
             </span>
           </label>
         </div>
+        <label
+          class="mt-3 flex items-start gap-2 rounded-lg border border-violet-500/15 bg-black/20 p-3 text-[10px] text-zinc-400"
+        >
+          <input
+            type="checkbox"
+            :checked="status.settings.spectatorXrayDuringCinematics"
+            :disabled="saving"
+            @change="
+              updateSettings({
+                spectatorXrayDuringCinematics: ($event.target as HTMLInputElement).checked
+              })
+            "
+            class="mt-0.5 accent-violet-400"
+          />
+          <span>
+            <span class="block font-semibold text-violet-200">
+              Enable spectator X-ray during cinematic cameras
+            </span>
+            <span class="mt-1 block text-zinc-600">
+              Disabled by default. The previous X-ray state is restored when HLAE or Aerial ends.
+            </span>
+          </span>
+        </label>
         <p class="mt-3 text-[10px] text-violet-300">
           {{ hlae.activePathLabel ? `LIVE: ${hlae.activePathLabel}` : 'No active campath' }}
         </p>
