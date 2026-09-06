@@ -135,6 +135,25 @@ const resetDuration = async (pathId: string, baseDuration: number) => {
   delete durationDraft.value[pathId]
 }
 
+const setPathEnabled = (pathId: string, enabled: boolean) => {
+  const disabledPathIds = status.value.settings.hlaeDisabledPathIds
+  void updateSettings({
+    hlaeDisabledPathIds: enabled
+      ? disabledPathIds.filter((id) => id !== pathId)
+      : [...new Set([...disabledPathIds, pathId])]
+  })
+}
+
+const setAllPathsEnabled = (enabled: boolean) => {
+  const currentPathIds = new Set(hlae.value.paths.map((path) => path.id))
+  const disabledPathIds = status.value.settings.hlaeDisabledPathIds
+  void updateSettings({
+    hlaeDisabledPathIds: enabled
+      ? disabledPathIds.filter((id) => !currentPathIds.has(id))
+      : [...new Set([...disabledPathIds, ...currentPathIds])]
+  })
+}
+
 const launchPath = async (pathId: string) => {
   launchingPathId.value = pathId
   try {
@@ -405,9 +424,24 @@ const launchPath = async (pathId: string) => {
                 {{ hlae.pathCount }} campath{{ hlae.pathCount === 1 ? '' : 's' }}
               </p>
             </div>
-            <span class="text-[10px] text-zinc-600"
-              >Freeze-time/round-end: HLAE first · mid-round: Aerial first</span
-            >
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                :disabled="saving || !hlae.paths.length"
+                @click="setAllPathsEnabled(false)"
+                class="rounded border border-zinc-700 px-2 py-1 text-[9px] font-semibold text-zinc-400 hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Disable all
+              </button>
+              <button
+                type="button"
+                :disabled="saving || !hlae.paths.length"
+                @click="setAllPathsEnabled(true)"
+                class="rounded border border-zinc-700 px-2 py-1 text-[9px] font-semibold text-zinc-400 hover:border-emerald-400/50 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Enable all
+              </button>
+            </div>
           </div>
           <div
             v-if="!hlae.paths.length"
@@ -422,17 +456,37 @@ const launchPath = async (pathId: string) => {
               :class="
                 path.id === hlae.activePathId
                   ? 'border-violet-400/60 bg-violet-400/10'
-                  : 'border-zinc-800 bg-black/20'
+                  : path.enabled
+                    ? 'border-zinc-800 bg-black/20'
+                    : 'border-red-400/20 bg-red-400/[0.03] opacity-60'
               "
               class="rounded-lg border p-3"
             >
               <div class="flex items-start justify-between gap-2">
                 <p class="truncate text-sm font-semibold text-zinc-200">{{ path.label }}</p>
-                <span
-                  class="shrink-0 rounded border border-zinc-700 px-1.5 py-0.5 text-[9px] uppercase text-zinc-500"
-                >
-                  {{ kindLabel(path.kind) }}
-                </span>
+                <div class="flex shrink-0 items-center gap-2">
+                  <span
+                    :class="
+                      path.enabled
+                        ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
+                        : 'border-red-400/40 bg-red-400/10 text-red-300'
+                    "
+                    class="rounded border px-1.5 py-1 text-[9px] font-bold uppercase"
+                  >
+                    {{ path.enabled ? 'ON' : 'OFF' }}
+                  </span>
+                  <button
+                    type="button"
+                    :disabled="saving"
+                    @click="setPathEnabled(path.id, !path.enabled)"
+                    class="rounded border border-zinc-700 px-2 py-1 text-[9px] font-semibold text-zinc-400 hover:border-violet-400/50 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {{ path.enabled ? 'Disable' : 'Enable' }}
+                  </button>
+                  <span class="rounded border border-zinc-700 px-1.5 py-0.5 text-[9px] uppercase text-zinc-500">
+                    {{ kindLabel(path.kind) }}
+                  </span>
+                </div>
               </div>
               <p class="mt-2 text-[10px] text-zinc-500">
                 Duration {{ path.durationSeconds.toFixed(1) }}s

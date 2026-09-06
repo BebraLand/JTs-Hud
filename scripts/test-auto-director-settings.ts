@@ -15,6 +15,7 @@ import {
 const main = async (): Promise<void> => {
   assert.equal(DEFAULT_AUTO_DIRECTOR_SETTINGS.autoFallback, false)
   assert.equal(DEFAULT_AUTO_DIRECTOR_SETTINGS.hlaePresentationEnabled, false)
+  assert.deepEqual(DEFAULT_AUTO_DIRECTOR_SETTINGS.hlaeDisabledPathIds, [])
   assert.deepEqual(DEFAULT_AUTO_DIRECTOR_SETTINGS.customPresets, [])
   assert.equal(
     getProfile({ ...DEFAULT_AUTO_DIRECTOR_SETTINGS, mode: 'balanced' }).switchMargin,

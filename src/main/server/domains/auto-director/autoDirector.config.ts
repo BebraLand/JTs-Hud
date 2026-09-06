@@ -112,6 +112,7 @@ export const DEFAULT_AUTO_DIRECTOR_SETTINGS: AutoDirectorSettings = {
   },
   spectatorXrayDuringCinematics: false,
   hlaeDurationOverrides: {},
+  hlaeDisabledPathIds: [],
   minimumDwellOverrideMs: null,
   switchMarginOverride: null,
   postDeathHoldMs: 1000,

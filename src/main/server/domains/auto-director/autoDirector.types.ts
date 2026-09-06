@@ -180,6 +180,7 @@ export interface AutoDirectorSettings {
   }
   spectatorXrayDuringCinematics: boolean
   hlaeDurationOverrides: Record<string, number>
+  hlaeDisabledPathIds: string[]
   minimumDwellOverrideMs: number | null
   switchMarginOverride: number | null
   postDeathHoldMs: number

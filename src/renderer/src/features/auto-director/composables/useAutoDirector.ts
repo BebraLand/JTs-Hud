@@ -28,6 +28,7 @@ const emptyStatus = (): AutoDirectorStatus => ({
     },
     spectatorXrayDuringCinematics: false,
     hlaeDurationOverrides: {},
+    hlaeDisabledPathIds: [],
     minimumDwellOverrideMs: null,
     switchMarginOverride: null,
     postDeathHoldMs: 1000,

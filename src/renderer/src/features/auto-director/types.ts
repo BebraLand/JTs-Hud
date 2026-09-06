@@ -101,6 +101,7 @@ export interface AutoDirectorSettings {
   }
   spectatorXrayDuringCinematics: boolean
   hlaeDurationOverrides: Record<string, number>
+  hlaeDisabledPathIds: string[]
   minimumDwellOverrideMs: number | null
   switchMarginOverride: number | null
   postDeathHoldMs: number
@@ -238,6 +239,7 @@ export interface AutoDirectorStatus {
       kind: string
       durationSeconds: number
       baseDurationSeconds: number
+      enabled: boolean
       startVisibleCount: number
       startScore: number
     }>

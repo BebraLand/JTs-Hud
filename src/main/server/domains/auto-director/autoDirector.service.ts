@@ -285,6 +285,15 @@ const sanitizeSettings = (
         .map(([key, value]) => [key, Math.round(value * 10) / 10] as const)
     )
   }
+  if (Array.isArray(input.hlaeDisabledPathIds)) {
+    const disabledPathIds = [...new Set(
+      input.hlaeDisabledPathIds
+        .map((value) => String(value).trim().toLowerCase())
+        .filter((value) => /^[a-z0-9_-]+$/.test(value))
+    )]
+    if (disabledPathIds.length > 500) throw new Error('Too many disabled HLAE campaths')
+    output.hlaeDisabledPathIds = disabledPathIds
+  }
   if (input.minimumDwellOverrideMs !== undefined) {
     if (input.minimumDwellOverrideMs === null) {
       output.minimumDwellOverrideMs = null
@@ -575,6 +584,7 @@ export class AutoDirectorService {
         ...this.hlaeDebug,
         paths: hlaeStatus.paths.map((pathEntry) => ({
           ...pathEntry,
+          enabled: !this.settings.hlaeDisabledPathIds.includes(pathEntry.id),
           durationSeconds: this.getHlaeDuration(
             hlaeStatus.mapName,
             pathEntry.id,
@@ -627,6 +637,9 @@ export class AutoDirectorService {
       this.hlaeActivePath && activeMapName
         ? next.hlaeDurationOverrides?.[`${activeMapName}/${this.hlaeActivePath.id}`]
         : undefined
+    const activeHlaePathDisabled = Boolean(
+      this.hlaeActivePath && this.settings.hlaeDisabledPathIds.includes(this.hlaeActivePath.id)
+    )
     if (
       this.settings.hlaePresentationEnabled &&
       this.hlaeActivePath &&
@@ -665,9 +678,11 @@ export class AutoDirectorService {
     } else if (directorDisabled) {
       this.clearAerialPresentation(Date.now(), 'Operator disabled Auto Director')
     }
-    if (next.hlaePresentationEnabled === false || directorDisabled) {
+    if (next.hlaePresentationEnabled === false || directorDisabled || activeHlaePathDisabled) {
       if (this.hlaeActivePath && !this.commandInFlight)
-        void this.exitHlae('HLAE presentation disabled')
+        void this.exitHlae(
+          activeHlaePathDisabled ? 'HLAE campath disabled' : 'HLAE presentation disabled'
+        )
       else if (directorDisabled) this.clearHlaePresentation(Date.now(), 'Auto Director disabled')
     } else if (next.hlaePresentationEnabled === true) {
       this.hlaeState = 'checking'
@@ -1269,6 +1284,7 @@ export class AutoDirectorService {
     const eligible = evaluations
       .filter(
         ({ pathEntry, evaluation, durationSeconds }) =>
+          !this.settings.hlaeDisabledPathIds.includes(pathEntry.id) &&
           pathEntry.id !== excludePathId &&
           (!isHlaeOpeningRoute(pathEntry) ||
             this.isHlaeOpeningRouteWindow(phase, now, players, temporalFeatures)) &&
