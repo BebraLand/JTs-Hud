@@ -50,6 +50,18 @@ const quiet = getHlaeSafety({
 assert.equal(quiet.allowed, false)
 assert.equal(quiet.actionBlocked, true)
 
+const paused = getHlaeSafety({
+  phase: 'match-paused',
+  now: 10_000,
+  roundLiveStartedAt: 1,
+  lastActionAt: 9_500,
+  scores: [],
+  rawActionDetected: true,
+  povLockActive: true
+})
+assert.equal(paused.allowed, true)
+assert.equal(paused.actionBlocked, false)
+
 const postPlant = getHlaeSafety({
   phase: 'post-plant',
   now: 20_000,

@@ -8,7 +8,12 @@ import { computeCameraVisibility, type CameraVisibilityResult } from '../geometr
 import type { GeometryMap } from '../geometry/geometryMap'
 import type { AerialCameraAnchor, AerialCameraMap } from './aerialCameraRegistry'
 
-export type AerialPresentationPhase = 'freeze-time' | 'post-round' | 'quiet-live' | 'post-plant'
+export type AerialPresentationPhase =
+  | 'freeze-time'
+  | 'post-round'
+  | 'quiet-live'
+  | 'post-plant'
+  | 'match-paused'
 
 export interface AerialPresentationDecision {
   eligible: boolean
@@ -54,7 +59,15 @@ export const getAerialPresentationPhase = (
     payload.round?.phase ?? payload.phase_countdowns?.phase ?? ''
   ).toLowerCase()
   const mapPhase = String(payload.map?.phase ?? '').toLowerCase()
+  const countdownPhase = String(payload.phase_countdowns?.phase ?? '').toLowerCase()
   const bombState = String(payload.bomb?.state ?? '').toLowerCase()
+  if (
+    [mapPhase, roundPhase, countdownPhase].some((phase) =>
+      /^(paused?|timeout|technical[_ -]?timeout)$/.test(phase)
+    )
+  ) {
+    return 'match-paused'
+  }
   if (roundPhase === 'freezetime' || roundPhase === 'freeze' || mapPhase === 'warmup') {
     return 'freeze-time'
   }
@@ -67,6 +80,7 @@ export const getAerialPresentationPhase = (
 }
 
 const anchorAffinity = (anchor: AerialCameraAnchor, phase: AerialPresentationPhase): number => {
+  if (phase === 'match-paused') return 20
   if (phase === 'freeze-time') return anchor.kind === 'spawn' ? 60 : 0
   if (phase === 'post-plant')
     return anchor.kind === 'postplant' ? 60 : anchor.kind === 'site' ? 45 : 0
@@ -108,6 +122,7 @@ const spawnTeamForAnchor = (anchor: AerialCameraAnchor): 'CT' | 'T' | null =>
         : null
 
 const phaseEnabled = (phase: AerialPresentationPhase, settings: AutoDirectorSettings): boolean => {
+  if (phase === 'match-paused') return true
   const phases = settings.aerialPresentationPhases
   if (phase === 'freeze-time') return phases.freezeTime
   if (phase === 'post-round') return phases.roundEnd
@@ -159,16 +174,21 @@ export const decideAerialPresentation = (
   if (settings.manualOverrideSteamId) return emptyDecision('Manual observer override is active')
   if (!map) return emptyDecision('No calibrated Aerial anchors for this map')
   if (!geometry) return emptyDecision('Geometry is unavailable for Aerial visibility')
+  const phase = getAerialPresentationPhase(payload)
   const bombState = String(payload.bomb?.state ?? '').toLowerCase()
-  if (bombState.includes('planting') || bombState.includes('defus')) {
+  if (
+    phase !== 'match-paused' &&
+    (bombState.includes('planting') || bombState.includes('defus'))
+  ) {
     return emptyDecision('Active plant or defuse has priority over Aerial presentation', true)
   }
-  if (directorDecision.shouldSwitch) return emptyDecision('First-person switch has priority')
-  if (directorDecision.lockKind !== 'none') {
+  if (phase !== 'match-paused' && directorDecision.shouldSwitch) {
+    return emptyDecision('First-person switch has priority')
+  }
+  if (phase !== 'match-paused' && directorDecision.lockKind !== 'none') {
     return emptyDecision(`First-person ${directorDecision.lockKind} lock has priority`, true)
   }
 
-  const phase = getAerialPresentationPhase(payload)
   if (!phase) return emptyDecision('Round phase is not presentation-safe')
   if (!phaseEnabled(phase, settings)) {
     return emptyDecision(`Aerial presentation disabled for ${phase}`)
@@ -180,7 +200,7 @@ export const decideAerialPresentation = (
         (PREDICTIVE_ACTION_FACTOR_KEYS.has(factor.key) && factor.value >= 3)
     )
   )
-  if (actionBlocked)
+  if (phase !== 'match-paused' && actionBlocked)
     return emptyDecision('Immediate combat, kill, damage or objective action has priority', true)
 
   const alivePlayers = players.filter((player) => player.alive && player.position)
@@ -230,7 +250,9 @@ export const decideAerialPresentation = (
     const totalVisible = visibility.steamIds.length
     const crossTeam = visibility.ct > 0 && visibility.t > 0
     const eligible =
-      phase === 'freeze-time'
+      phase === 'match-paused'
+        ? true
+        : phase === 'freeze-time'
         ? spawnTeam !== null
         : phase === 'post-round'
           ? totalVisible >= 2

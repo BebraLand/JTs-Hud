@@ -9,7 +9,10 @@ import type {
   GsiLikePayload
 } from '../src/main/server/domains/auto-director/autoDirector.types'
 import { AerialCameraRegistry } from '../src/main/server/domains/auto-director/aerial/aerialCameraRegistry'
-import { decideAerialPresentation } from '../src/main/server/domains/auto-director/aerial/aerialPresentation'
+import {
+  decideAerialPresentation,
+  getAerialPresentationPhase
+} from '../src/main/server/domains/auto-director/aerial/aerialPresentation'
 import {
   GeometryMap,
   type GeometryArtifact
@@ -136,6 +139,25 @@ const quietPayload: GsiLikePayload = {
   map: { name: 'de_ancient', phase: 'live' },
   round: { phase: 'live' }
 }
+const pausedPayload: GsiLikePayload = {
+  ...quietPayload,
+  phase_countdowns: { phase: 'paused' }
+}
+assert.equal(getAerialPresentationPhase(pausedPayload), 'match-paused')
+const paused = decideAerialPresentation(
+  pausedPayload,
+  {
+    ...settings,
+    aerialPresentationPhases: { freezeTime: false, midRound: false, roundEnd: false }
+  },
+  players,
+  decision({ shouldSwitch: true, lockKind: 'combat' }),
+  aerialMap,
+  geometry
+)
+assert.equal(paused.eligible, true)
+assert.equal(paused.phase, 'match-paused')
+
 const quiet = decideAerialPresentation(
   quietPayload,
   settings,

@@ -11,6 +11,7 @@ export type HlaePresentationPhase =
   | 'post-round'
   | 'quiet-live'
   | 'post-plant'
+  | 'match-paused'
   | null
 
 const HARD_ACTION_FACTORS = new Set<ScoreFactorKey>([

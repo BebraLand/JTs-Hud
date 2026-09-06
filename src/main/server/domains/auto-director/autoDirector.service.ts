@@ -66,13 +66,14 @@ const SETTINGS_KEY = 'autoDirectorSettings'
 const MAX_HISTORY = 200
 const AERIAL_MIN_CONFIRMATIONS = 2
 const AERIAL_MAX_HOLD_MS = 6000
-const AERIAL_SEQUENCE_GAP_MS = 250
 const AERIAL_COOLDOWN_MS = 15000
 const HLAE_PROBE_INTERVAL_MS = 5000
 const HLAE_COOLDOWN_MS = 10000
 const HLAE_OPENING_ROUTE_WINDOW_MS = 10000
 const HLAE_PHASE_START_BUFFER_MS = 1000
 const HLAE_FREEZE_CARRYOVER_MS = 2000
+const CINEMATIC_POV_GAP_MS = 2500
+const HLAE_CINEMATIC_PRIORITY_WEIGHT = 4
 const MAX_CUSTOM_PRESETS = 20
 const MAX_PRESET_NAME_LENGTH = 40
 type HlaeSpawnTeam = 'CT' | 'T'
@@ -435,6 +436,9 @@ export class AutoDirectorService {
   private hlaeActivePhase: ReturnType<typeof getAerialPresentationPhase> = null
   private hlaeActiveStartedAt = 0
   private hlaeActiveUntil = 0
+  private hlaeLastPausePathId: string | null = null
+  private cinematicPreference: 'hlae' | 'aerial' | null = null
+  private cinematicNextAt = 0
   private hlaeLastActionAt = 0
   private hlaeCooldownUntil = 0
   private hlaeLastProbeAt = 0
@@ -989,6 +993,18 @@ export class AutoDirectorService {
       }
       this.aerialSequencePhase = aerialPhase
       this.aerialSequenceAnchorIds.clear()
+      this.cinematicPreference = null
+      this.cinematicNextAt = 0
+      if (aerialPhase === 'freeze-time' || aerialPhase === 'match-paused') {
+        this.hlaeCooldownUntil = 0
+      }
+    }
+    if (
+      aerialPhase === 'match-paused' &&
+      aerialMap?.anchors.length &&
+      this.aerialSequenceAnchorIds.size >= aerialMap.anchors.length
+    ) {
+      this.aerialSequenceAnchorIds.clear()
     }
     const aerialDecision = decideAerialPresentation(
       payload,
@@ -998,11 +1014,44 @@ export class AutoDirectorService {
       aerialMap,
       geometryMap,
       {
-        excludedAnchorIds: this.aerialActiveAnchor ? undefined : this.aerialSequenceAnchorIds
+        excludedAnchorIds:
+          this.aerialActiveAnchor && aerialPhase !== 'match-paused'
+            ? undefined
+            : this.aerialSequenceAnchorIds
       }
     )
+    const cinematicPhase = aerialPhase === 'freeze-time' || aerialPhase === 'match-paused'
+    const hlaeCinematicAvailable = Boolean(
+      this.settings.hlaePresentationEnabled &&
+        this.hlaeAvailable &&
+        hlaeMap?.paths.some((pathEntry) => !this.settings.hlaeDisabledPathIds.includes(pathEntry.id))
+    )
+    const hlaeCinematicChecking = Boolean(
+      this.settings.hlaePresentationEnabled &&
+        hlaeMap?.paths.some((pathEntry) => !this.settings.hlaeDisabledPathIds.includes(pathEntry.id)) &&
+        (this.hlaeState === 'checking' || this.hlaeProbeInFlight)
+    )
+    const aerialCinematicAvailable = Boolean(
+      this.settings.aerialPresentationEnabled && aerialDecision.eligible && aerialDecision.anchor
+    )
+    if (
+      cinematicPhase &&
+      !this.cinematicPreference &&
+      now >= this.cinematicNextAt &&
+      !hlaeCinematicChecking
+    ) {
+      this.cinematicPreference =
+        hlaeCinematicAvailable && aerialCinematicAvailable
+          ? randomInt(HLAE_CINEMATIC_PRIORITY_WEIGHT + 1) === 0
+            ? 'aerial'
+            : 'hlae'
+          : hlaeCinematicAvailable
+            ? 'hlae'
+            : aerialCinematicAvailable
+              ? 'aerial'
+              : null
+    }
     const hlaeFirst =
-      aerialPhase === 'freeze-time' ||
       aerialPhase === 'post-round' ||
       this.isHlaeOpeningRouteWindow(aerialPhase, now, players, temporalFeatures)
     const decisionScores = this.decision.scores
@@ -1020,10 +1069,30 @@ export class AutoDirectorService {
         hlaePhaseRemainingMs,
         Boolean(this.decision && (this.decision.shouldSwitch || this.decision.lockKind !== 'none'))
       )
+    const handleCinematic = () => {
+      if (now < this.cinematicNextAt || hlaeCinematicChecking) return true
+      if (this.cinematicPreference === 'hlae') {
+        const controlsCamera = handleHlae()
+        if (controlsCamera || now < this.hlaeCooldownUntil) return true
+        this.cinematicPreference = aerialCinematicAvailable ? 'aerial' : null
+        return this.cinematicPreference === 'aerial'
+          ? this.handleAerialPresentation(aerialDecision, now)
+          : false
+      }
+      if (this.cinematicPreference === 'aerial') {
+        const controlsCamera = this.handleAerialPresentation(aerialDecision, now)
+        if (controlsCamera || aerialCinematicAvailable) return true
+        this.cinematicPreference = hlaeCinematicAvailable ? 'hlae' : null
+        return this.cinematicPreference === 'hlae' ? handleHlae() : false
+      }
+      return false
+    }
     const presentationControlsCamera = this.hlaeActivePath
       ? handleHlae()
       : this.aerialActiveAnchor
         ? this.handleAerialPresentation(aerialDecision, now)
+        : cinematicPhase
+          ? handleCinematic()
         : hlaeFirst
           ? handleHlae() || this.handleAerialPresentation(aerialDecision, now)
           : this.handleAerialPresentation(aerialDecision, now) || handleHlae()
@@ -1268,6 +1337,19 @@ export class AutoDirectorService {
       phase === 'freeze-time'
         ? (this.hlaeFreezeSpawnOrder.find((team) => !this.hlaeFreezeSpawnTeams.has(team)) ?? null)
         : null
+    if (phase === 'match-paused') {
+      const available = map.paths.filter(
+        (pathEntry) =>
+          !this.settings.hlaeDisabledPathIds.includes(pathEntry.id) && pathEntry.id !== excludePathId
+      )
+      const candidates = available.filter((pathEntry) => pathEntry.id !== this.hlaeLastPausePathId)
+      const choices = candidates.length ? candidates : available
+      if (!choices.length) return null
+      const preferred = this.hlae.next(map.mapName)
+      return (
+        choices.find(({ id }) => id === preferred?.id) ?? choices[randomInt(choices.length)]
+      )
+    }
     const evaluations = map.paths.map((pathEntry) => {
       const durationSeconds = this.getHlaeDuration(
         map.mapName,
@@ -1349,6 +1431,7 @@ export class AutoDirectorService {
   }
 
   private isHlaePhaseEnabled(phase: ReturnType<typeof getAerialPresentationPhase>): boolean {
+    if (phase === 'match-paused') return true
     if (phase === 'freeze-time') return this.settings.hlaePresentationPhases.freezeTime
     if (phase === 'post-round') return this.settings.hlaePresentationPhases.roundEnd
     if (phase) return this.settings.hlaePresentationPhases.midRound
@@ -1362,6 +1445,8 @@ export class AutoDirectorService {
     const bucket = (phase: ReturnType<typeof getAerialPresentationPhase>) =>
       phase === 'freeze-time'
         ? 'freeze-time'
+        : phase === 'match-paused'
+          ? 'match-paused'
         : phase === 'post-round'
           ? 'post-round'
           : phase
@@ -1477,6 +1562,19 @@ export class AutoDirectorService {
       const pathFinished = now >= this.hlaeActiveUntil
       const finalFrameNotVisible =
         pathFinished && (geometry === null || this.hlaeDebug.visibleSteamIds.length === 0)
+      if (
+        pathFinished &&
+        this.hlaeActivePhase === phase &&
+        (phase === 'freeze-time' || phase === 'match-paused')
+      ) {
+        this.cinematicPreference = null
+        this.cinematicNextAt = now + CINEMATIC_POV_GAP_MS
+        void this.exitHlae(
+          `HLAE campath finished: ${this.hlaeActivePath.label}`,
+          CINEMATIC_POV_GAP_MS
+        )
+        return true
+      }
       if (phaseChanged || pathFinished || !phaseEnabled) {
         if (
           pathFinished &&
@@ -1575,6 +1673,7 @@ export class AutoDirectorService {
         this.hlaeActivePhase = phase
         this.hlaeActiveStartedAt = this.lastCommand.at || now
         this.hlaeActiveUntil = this.hlaeActiveStartedAt + durationSeconds * 1000
+        if (phase === 'match-paused') this.hlaeLastPausePathId = pathEntry.id
         const spawnTeam = phase === 'freeze-time' ? getHlaeSpawnTeam(pathEntry) : null
         if (spawnTeam) {
           this.hlaeFreezeSpawnTeams.add(spawnTeam)
@@ -1623,9 +1722,15 @@ export class AutoDirectorService {
     }
   }
 
-  private async exitHlae(reason: string): Promise<void> {
+  private async exitHlae(reason: string, cooldownMs = HLAE_COOLDOWN_MS): Promise<void> {
     const pathLabel = this.hlaeActivePath?.label ?? 'HLAE campath'
-    const target = this.getAerialReturnTarget()
+    const spawnTeam =
+      this.hlaeActivePhase === 'freeze-time' && this.hlaeActivePath
+        ? getHlaeSpawnTeam(this.hlaeActivePath)
+        : null
+    const target = this.getAerialReturnTarget(
+      spawnTeam === 'CT' ? 'T' : spawnTeam === 'T' ? 'CT' : null
+    )
     const shouldConfirmSwitch = Boolean(this.decision?.shouldSwitch)
     this.commandInFlight = true
     try {
@@ -1662,20 +1767,24 @@ export class AutoDirectorService {
         toSteamId: target?.steamId,
         transport: this.lastCommand.transport
       })
-      this.clearHlaePresentation(this.lastCommand.at, reason)
+      this.clearHlaePresentation(this.lastCommand.at, reason, cooldownMs)
     } finally {
       this.commandInFlight = false
       this.emitStatus()
     }
   }
 
-  private clearHlaePresentation(now: number, reason: string): void {
+  private clearHlaePresentation(
+    now: number,
+    reason: string,
+    cooldownMs = HLAE_COOLDOWN_MS
+  ): void {
     this.hlaeActivePath = null
     this.hlaeManualOverride = false
     this.hlaeActivePhase = null
     this.hlaeActiveStartedAt = 0
     this.hlaeActiveUntil = 0
-    this.hlaeCooldownUntil = now + HLAE_COOLDOWN_MS
+    this.hlaeCooldownUntil = now + cooldownMs
     this.hlaeMessage = reason
   }
 
@@ -1731,9 +1840,16 @@ export class AutoDirectorService {
 
     if (this.aerialActiveAnchor) {
       if (this.commandInFlight) return true
+      const cinematicPhase =
+        decision.phase === 'freeze-time' || decision.phase === 'match-paused'
+      const activeCinematicPhase =
+        this.aerialActivePhase === 'freeze-time' || this.aerialActivePhase === 'match-paused'
       const phaseChanged =
-        decision.eligible && decision.phase !== this.aerialActivePhase && decision.anchor !== null
-      if (phaseChanged && decision.anchor) {
+        decision.eligible &&
+        decision.phase !== this.aerialActivePhase &&
+        decision.anchor !== null &&
+        !(cinematicPhase && activeCinematicPhase)
+      if (decision.anchor && phaseChanged) {
         void this.transitionAerial(
           decision.anchor,
           decision,
@@ -1742,18 +1858,28 @@ export class AutoDirectorService {
         )
         return true
       }
+      const cinematicShotFinished = cinematicPhase && now >= this.aerialActiveUntil
       const exitReason = !decision.eligible
         ? decision.reason
         : now >= this.aerialActiveUntil
           ? `Aerial hold limit reached for ${this.aerialActiveAnchor.label}`
           : null
       if (exitReason) {
+        const cooldownMs = cinematicShotFinished
+          ? CINEMATIC_POV_GAP_MS
+          : AERIAL_COOLDOWN_MS
+        if (cinematicShotFinished) {
+          this.cinematicPreference = null
+          this.cinematicNextAt = now + CINEMATIC_POV_GAP_MS
+        }
         const target = this.getAerialReturnTarget()
-        if (target && !this.commandInFlight) void this.exitAerial(target, exitReason)
+        if (target && !this.commandInFlight) {
+          void this.exitAerial(target, exitReason, cooldownMs, cinematicShotFinished)
+        }
         else if (!target) {
           this.commandInFlight = true
           void this.restoreCinematicXray().finally(() => {
-            this.clearAerialPresentation(now, exitReason)
+            this.clearAerialPresentation(now, exitReason, cooldownMs, cinematicShotFinished)
             this.commandInFlight = false
             this.emitStatus()
           })
@@ -1785,10 +1911,18 @@ export class AutoDirectorService {
     return true
   }
 
-  private getAerialReturnTarget():
+  private getAerialReturnTarget(
+    preferredTeam: HlaeSpawnTeam | null = null
+  ):
     | NonNullable<AutoDirectorStatus['decision']>['scores'][number]
     | null {
     if (!this.decision) return null
+    const teamTarget = preferredTeam
+      ? this.decision.scores.find(
+          (score) => score.alive && score.team.toUpperCase() === preferredTeam
+        )
+      : null
+    if (teamTarget) return teamTarget
     const preferredSteamId = this.decision.shouldSwitch
       ? this.decision.candidateSteamId
       : this.decision.currentSteamId
@@ -1883,12 +2017,12 @@ export class AutoDirectorService {
 
   private async exitAerial(
     target: NonNullable<AutoDirectorStatus['decision']>['scores'][number],
-    reason: string
+    reason: string,
+    cooldownMs = AERIAL_COOLDOWN_MS,
+    retainSequence = false
   ): Promise<void> {
     const anchorLabel = this.aerialActiveAnchor?.label ?? 'Aerial camera'
     const shouldConfirmSwitch = Boolean(this.decision?.shouldSwitch)
-    const continueSequence =
-      this.aerialSequencePhase === 'freeze-time' && reason.startsWith('Aerial hold limit reached')
     this.commandInFlight = true
     try {
       this.lastCommand = await this.camera.switchTo(target, this.settings)
@@ -1909,7 +2043,7 @@ export class AutoDirectorService {
           toSteamId: target.steamId,
           transport: this.lastCommand.transport
         })
-        this.clearAerialPresentation(this.lastCommand.at, reason, continueSequence)
+        this.clearAerialPresentation(this.lastCommand.at, reason, cooldownMs, retainSequence)
       } else {
         this.aerialReason = `Could not exit Aerial camera: ${this.lastCommand.message}`
         this.addHistory({
@@ -1926,15 +2060,19 @@ export class AutoDirectorService {
     }
   }
 
-  private clearAerialPresentation(now: number, reason: string, continueSequence = false): void {
+  private clearAerialPresentation(
+    now: number,
+    reason: string,
+    cooldownMs = AERIAL_COOLDOWN_MS,
+    retainSequence = false
+  ): void {
     this.aerialActiveAnchor = null
     this.aerialActiveUntil = 0
     this.aerialActivePhase = null
     this.aerialCandidateId = null
     this.aerialCandidateConfirmations = 0
-    this.aerialCooldownUntil =
-      now + (continueSequence ? AERIAL_SEQUENCE_GAP_MS : AERIAL_COOLDOWN_MS)
-    if (!continueSequence) this.resetAerialSequence()
+    this.aerialCooldownUntil = now + cooldownMs
+    if (!retainSequence) this.resetAerialSequence()
     this.aerialReason = reason
     this.aerialVisibleSteamIds = []
   }
