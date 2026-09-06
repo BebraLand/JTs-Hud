@@ -9,7 +9,7 @@ const registry = new HlaeCameraRegistry(path.resolve(process.cwd(), 'resources/a
 const map = registry.load('de_ancient')
 
 assert.ok(map)
-assert.equal(map.paths.length, 8)
+assert.equal(map.paths.length, 9)
 assert.ok(map.paths.every((entry) => entry.durationSeconds > 0))
 const spawnPath = map.paths.find((entry) => entry.kind === 'spawn')
 assert.ok(spawnPath)
