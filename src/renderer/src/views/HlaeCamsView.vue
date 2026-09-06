@@ -199,7 +199,7 @@ const launchPath = async (pathId: string) => {
             <input
               type="checkbox"
               :checked="status.settings.hlaePresentationEnabled"
-              :disabled="saving || !status.settings.enabled || hlae.pathCount === 0"
+              :disabled="saving"
               @change="
                 updateSettings({
                   hlaePresentationEnabled: ($event.target as HTMLInputElement).checked

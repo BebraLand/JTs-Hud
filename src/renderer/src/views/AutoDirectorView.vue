@@ -926,7 +926,6 @@ const healthClass = (state: string) =>
                 <input
                   type="checkbox"
                   :checked="status.settings.hlaePresentationEnabled"
-                  :disabled="!status.settings.enabled || status.hlae.pathCount === 0"
                   @change="
                     updateSettings({
                       hlaePresentationEnabled: ($event.target as HTMLInputElement).checked
