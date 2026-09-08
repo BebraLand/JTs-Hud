@@ -57,5 +57,14 @@ export const setupSockets = (io: Server) => {
         }
       }
     )
+
+    socket.on('registerAsHUD', (uuid: unknown) => {
+      if (typeof uuid === 'string') matIntegrationService.registerCameraHud(uuid)
+    })
+    socket.on('offerFromHUD', (uuid: unknown, signal: unknown, steamid: unknown) => {
+      if (typeof uuid === 'string' && typeof steamid === 'string') {
+        matIntegrationService.forwardCameraOffer(uuid, signal, steamid)
+      }
+    })
   })
 }

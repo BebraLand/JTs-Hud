@@ -8,6 +8,13 @@ export interface MatHudPlayer {
   photoUrl: string | null
   countryCode: string | null
   teamId: string
+  webcamEnabled?: boolean
+}
+
+export interface MatHudWebcams {
+  enabled: boolean
+  delaySeconds: number
+  players: string[]
 }
 
 export interface MatHudTeam {
@@ -89,6 +96,7 @@ export interface MatHudProjectionV1 {
     simulation: boolean
     confirmedWinnerTeamId: string | null
   } | null
+  webcams: MatHudWebcams
 }
 
 export interface MatIntegrationPublicSettings {

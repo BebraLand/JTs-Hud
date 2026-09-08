@@ -82,6 +82,9 @@ app.get('/api/gsi/phase', (req, res) => {
   const unsubscribe = subscribeHudPhase(send)
   req.on('close', unsubscribe)
 })
+app.get('/api/camera', (_req, res) => {
+  res.json(matIntegrationService.getCameraInfo())
+})
 app.get('/api/system/stats', (_req, res) => {
   res.json(getSystemStats())
 })

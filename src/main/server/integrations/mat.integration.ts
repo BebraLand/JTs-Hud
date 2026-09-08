@@ -75,6 +75,17 @@ class MatIntegrationService {
   private teamAssetVersion = 0
   private liveMatchId: string | null = null
   private liveMapSides = new Map<string, boolean>()
+  private cameraHudUuid: string | null = null
+
+  getCameraInfo(): { uuid: string; availablePlayers: Array<{ steamid: string }>; delaySeconds: number } {
+    const webcams = this.projection?.webcams
+    const players = webcams?.players ?? []
+    return {
+      uuid: 'jts-hud-camera',
+      availablePlayers: players.map((steamid) => ({ steamid })),
+      delaySeconds: webcams?.delaySeconds ?? 0
+    }
+  }
 
   private async readStoredSettings(): Promise<StoredSettings> {
     const rows = (await dbAll('SELECT key, value FROM settings')) as Array<{
@@ -340,11 +351,19 @@ class MatIntegrationService {
       transports: ['websocket'],
       reconnection: true
     })
+    this.matSocket.on('connect', () => {
+      if (this.cameraHudUuid) this.matSocket?.emit('registerAsHUD', this.cameraHudUuid)
+    })
     this.matSocket.on('hud:projection-invalidated', () => {
       if (generation !== this.refreshGeneration) return
       this.forceLocalUpdate = true
       void this.refreshNow()
     })
+    this.matSocket.on('offerFromPlayer', (uuid: string, signal: unknown, steamid: string) => {
+      this.localIo?.emit('offerFromPlayer', uuid, signal, steamid)
+    })
+    this.matSocket.on('webcam:revoked', (payload: unknown) => this.localIo?.emit('webcam:revoked', payload))
+    this.matSocket.on('webcam:settings', (payload: unknown) => this.localIo?.emit('webcam:settings', payload))
     this.matSocket.on('connect_error', () => {
       if (generation !== this.refreshGeneration) return
       if (this.projection && this.status.state !== 'stale') {
@@ -362,6 +381,15 @@ class MatIntegrationService {
   async refreshNow(): Promise<void> {
     await this.settingsUpdateQueue
     return this.refreshNowUnfenced()
+  }
+
+  registerCameraHud(uuid: string): void {
+    this.cameraHudUuid = uuid
+    this.matSocket?.emit('registerAsHUD', uuid)
+  }
+
+  forwardCameraOffer(uuid: string, signal: unknown, steamid: string): void {
+    this.matSocket?.emit('offerFromHUD', uuid, signal, steamid)
   }
 
   setObservedSteamIds(steamIds: string[]): void {
