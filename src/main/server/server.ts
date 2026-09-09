@@ -85,6 +85,11 @@ app.get('/api/gsi/phase', (req, res) => {
 app.get('/api/system/stats', (_req, res) => {
   res.json(getSystemStats())
 })
+// Compatibility response keeps the bundled HUD's abandoned camera client inert.
+// Player cameras use the maintained bridge loaded by the HUD page.
+app.get('/api/camera', (_req, res) => {
+  res.json({ uuid: 'mat-player-cameras', availablePlayers: [] })
+})
 
 setupSockets(io)
 

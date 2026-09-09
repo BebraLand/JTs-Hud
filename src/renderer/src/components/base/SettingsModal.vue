@@ -298,6 +298,23 @@ const installGsiCfg = async () => {
                 />
               </div>
 
+              <label class="flex items-center justify-between gap-4">
+                <span>
+                  <span class="block text-sm font-medium text-zinc-200">Player camera delay</span>
+                  <span class="block text-xs text-zinc-500">0-120 seconds; applies inside HUD</span>
+                </span>
+                <input
+                  v-model.number="settings.playerCameraDelaySeconds"
+                  type="number"
+                  min="0"
+                  max="120"
+                  class="w-24 bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2"
+                  @change="
+                    saveSettings({ playerCameraDelaySeconds: settings.playerCameraDelaySeconds })
+                  "
+                />
+              </label>
+
               <div
                 v-if="matStatus"
                 class="text-xs rounded-lg px-3 py-2 border"

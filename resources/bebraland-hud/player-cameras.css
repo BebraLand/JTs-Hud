@@ -1,0 +1,26 @@
+#mat-player-camera {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #050505;
+}
+
+#mat-player-camera.active {
+  display: block;
+}
+
+#mat-player-camera-debug-host {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100000;
+  width: 320px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #111;
+  border: 2px solid #00d4ff;
+}

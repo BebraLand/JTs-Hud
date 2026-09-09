@@ -20,6 +20,7 @@ export interface AppSettings {
   matTokenConfigured: boolean
   matPollIntervalSeconds: number
   matUseSteamAvatars: boolean
+  playerCameraDelaySeconds: number
   challongeEnabled: boolean
   challongeTournament: string
   challongeSourceConfigured: boolean
@@ -38,6 +39,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   matTokenConfigured: false,
   matPollIntervalSeconds: 5,
   matUseSteamAvatars: false,
+  playerCameraDelaySeconds: 0,
   challongeEnabled: false,
   challongeTournament: '',
   challongeSourceConfigured: false,
@@ -70,6 +72,7 @@ export const getSettings = async (): Promise<AppSettings> => {
     matTokenConfigured: Boolean(map.matTokenEncrypted || process.env.MAT_HUD_TOKEN),
     matPollIntervalSeconds: Number(map.matPollIntervalSeconds || 5),
     matUseSteamAvatars: map.matUseSteamAvatars === 'true',
+    playerCameraDelaySeconds: Math.min(120, Math.max(0, Number(map.playerCameraDelaySeconds || 0))),
     challongeEnabled: map.challongeEnabled === 'true',
     challongeTournament: map.challongeTournament || '',
     challongeSourceConfigured: Boolean(map.challongeTournament),
@@ -191,6 +194,7 @@ router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
       'developerTestingEnabled',
       'telnetHost',
       'telnetPort',
+      'playerCameraDelaySeconds',
       'tournamentIntegrationPriority'
     ])
     if (
@@ -209,6 +213,12 @@ router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
       const port = Number(updates.telnetPort)
       if (!Number.isInteger(port) || port < 1 || port > 65535) {
         return res.status(400).json({ error: 'Telnet port must be 1-65535' })
+      }
+    }
+    if (updates.playerCameraDelaySeconds !== undefined) {
+      const delay = Number(updates.playerCameraDelaySeconds)
+      if (!Number.isInteger(delay) || delay < 0 || delay > 120) {
+        return res.status(400).json({ error: 'Player camera delay must be 0-120 seconds' })
       }
     }
     for (const [key, value] of Object.entries(updates).filter(([key]) => localKeys.has(key))) {

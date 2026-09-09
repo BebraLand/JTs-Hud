@@ -42,6 +42,13 @@ export type MatHudLabels = {
   revision: string | null
 }
 
+export type PlayerCameraState = {
+  enabled: boolean
+  transport: 'p2p' | 'relay'
+  iceServers?: RTCIceServer[]
+  availablePlayers: string[]
+}
+
 function normalizeMatUrl(value: string): string {
   const parsed = new URL(value.trim())
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -75,6 +82,12 @@ class MatIntegrationService {
   private teamAssetVersion = 0
   private liveMatchId: string | null = null
   private liveMapSides = new Map<string, boolean>()
+  private playerCameraState: PlayerCameraState = {
+    enabled: false,
+    transport: 'p2p',
+    availablePlayers: []
+  }
+  private playerCameraWatchers = new Map<string, string>()
 
   private async readStoredSettings(): Promise<StoredSettings> {
     const rows = (await dbAll('SELECT key, value FROM settings')) as Array<{
@@ -165,6 +178,32 @@ class MatIntegrationService {
 
   getProjection(): MatHudProjectionV1 | null {
     return this.projection ? structuredClone(this.projection) : null
+  }
+
+  watchPlayerCamera(viewerId: string, steamId: string | null): void {
+    if (steamId) this.playerCameraWatchers.set(viewerId, steamId)
+    else this.playerCameraWatchers.delete(viewerId)
+    this.matSocket?.emit('camera:hud-watch', { viewerId, steamId })
+  }
+
+  getPlayerCameraState(): PlayerCameraState {
+    return structuredClone(this.playerCameraState)
+  }
+
+  answerPlayerCamera(payload: {
+    viewerId: string
+    steamId: string
+    description: RTCSessionDescriptionInit
+  }): void {
+    this.matSocket?.emit('camera:answer', payload)
+  }
+
+  sendPlayerCameraIce(payload: {
+    viewerId: string
+    steamId: string
+    candidate: RTCIceCandidateInit
+  }): void {
+    this.matSocket?.emit('camera:ice-from-hud', payload)
   }
 
   getHudLabels(): MatHudLabels {
@@ -288,6 +327,8 @@ class MatIntegrationService {
     this.pollTimer = null
     this.matSocket?.disconnect()
     this.matSocket = null
+    this.playerCameraState = { enabled: false, transport: 'p2p', availablePlayers: [] }
+    this.localIo?.emit('player-camera:state', this.playerCameraState)
   }
 
   private async restart(): Promise<void> {
@@ -340,10 +381,31 @@ class MatIntegrationService {
       transports: ['websocket'],
       reconnection: true
     })
+    this.matSocket.on('connect', () => {
+      for (const [viewerId, steamId] of this.playerCameraWatchers) {
+        this.matSocket?.emit('camera:hud-watch', { viewerId, steamId })
+      }
+    })
     this.matSocket.on('hud:projection-invalidated', () => {
       if (generation !== this.refreshGeneration) return
       this.forceLocalUpdate = true
       void this.refreshNow()
+    })
+    this.matSocket.on('camera:state', (state: PlayerCameraState) => {
+      this.playerCameraState = state
+      this.localIo?.emit('player-camera:state', state)
+    })
+    this.matSocket.on('camera:offer', (payload: { viewerId: string }) => {
+      this.localIo?.to(payload.viewerId).emit('player-camera:offer', payload)
+    })
+    this.matSocket.on('camera:ice-from-player', (payload: { viewerId: string }) => {
+      this.localIo?.to(payload.viewerId).emit('player-camera:ice-from-player', payload)
+    })
+    this.matSocket.on('camera:relay-chunk', (payload: { viewerId: string }) => {
+      this.localIo?.to(payload.viewerId).emit('player-camera:relay-chunk', payload)
+    })
+    this.matSocket.on('camera:player-stopped', (payload) => {
+      this.localIo?.emit('player-camera:player-stopped', payload)
     })
     this.matSocket.on('connect_error', () => {
       if (generation !== this.refreshGeneration) return
@@ -376,10 +438,7 @@ class MatIntegrationService {
     if (this.enabled) void this.refreshNow()
   }
 
-  syncLiveMapSide(
-    mapName: string,
-    players: Array<{ steamid: string; side?: 'CT' | 'T' }>
-  ): void {
+  syncLiveMapSide(mapName: string, players: Array<{ steamid: string; side?: 'CT' | 'T' }>): void {
     const source = this.projection?.match
     if (!this.isActive() || !source || !this.match) return
     if (this.liveMatchId !== source.id) {
@@ -416,7 +475,9 @@ class MatIntegrationService {
       const projection = response.projection
       if (generation !== this.refreshGeneration) return
       const previousMatch = this.projection?.match
-      const keepPostMatchProjection = !projection.match && previousMatch?.maps?.some((map) => Boolean(map.score && map.playerStats))
+      const keepPostMatchProjection =
+        !projection.match &&
+        previousMatch?.maps?.some((map) => Boolean(map.score && map.playerStats))
       const nextProjection = keepPostMatchProjection ? this.projection! : projection
       const changed = this.forceLocalUpdate || nextProjection.revision !== this.projection?.revision
       const assetsChanged =
@@ -439,8 +500,8 @@ class MatIntegrationService {
           ]
         : []
       this.players = nextProjection.match
-        ? [...nextProjection.match!.team1.players, ...nextProjection.match!.team2.players].map((player) =>
-            mapPlayer(player, settings.url, settings.useSteamAvatars)
+        ? [...nextProjection.match!.team1.players, ...nextProjection.match!.team2.players].map(
+            (player) => mapPlayer(player, settings.url, settings.useSteamAvatars)
           )
         : []
       this.status = {

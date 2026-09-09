@@ -19,6 +19,7 @@ export const setupSockets = (io: Server) => {
   io.on('connection', (socket: Socket) => {
     socket.emit('hud:refresh-state', getHudRefreshState())
     socket.emit('mat:status', matIntegrationService.getStatus())
+    socket.emit('player-camera:state', matIntegrationService.getPlayerCameraState())
     socket.emit('challonge:status', challongeIntegrationService.getStatus())
     void getResolvedTournamentLabels().then((labels) => {
       socket.emit('tournament:labels', labels)
@@ -28,6 +29,17 @@ export const setupSockets = (io: Server) => {
     socket.on('request-hud-refresh', () => {
       refreshAllHuds(io)
     })
+
+    socket.on('player-camera:watch', (steamId?: string | null) => {
+      matIntegrationService.watchPlayerCamera(socket.id, steamId?.trim() || null)
+    })
+    socket.on('player-camera:answer', (payload) => {
+      if (payload?.viewerId === socket.id) matIntegrationService.answerPlayerCamera(payload)
+    })
+    socket.on('player-camera:ice-from-hud', (payload) => {
+      if (payload?.viewerId === socket.id) matIntegrationService.sendPlayerCameraIce(payload)
+    })
+    socket.on('disconnect', () => matIntegrationService.watchPlayerCamera(socket.id, null))
 
     // HUD registration:
     socket.on('started', () => {

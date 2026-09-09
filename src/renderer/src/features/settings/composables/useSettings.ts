@@ -12,6 +12,7 @@ export interface AppSettings {
   matTokenConfigured: boolean
   matPollIntervalSeconds: number
   matUseSteamAvatars: boolean
+  playerCameraDelaySeconds: number
   challongeEnabled: boolean
   challongeTournament: string
   challongeSourceConfigured: boolean
@@ -49,6 +50,7 @@ const settings = ref<AppSettings>({
   matTokenConfigured: false,
   matPollIntervalSeconds: 5,
   matUseSteamAvatars: false,
+  playerCameraDelaySeconds: 0,
   challongeEnabled: false,
   challongeTournament: '',
   challongeSourceConfigured: false,
