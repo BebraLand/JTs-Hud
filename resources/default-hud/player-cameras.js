@@ -9,19 +9,22 @@
   video.autoplay = true
   video.muted = true
   video.playsInline = true
+
   let socket
-  let policy = { enabled: false, transport: 'p2p' }
+  let policy = { enabled: false, transport: 'p2p', prewarmEnabled: true, availablePlayers: [] }
   let watchedSteamId = null
-  let peer = null
+  let watchedSteamIds = []
+  let activeSteamId = null
+  let delayMs = 0
   let delayedRecorder = null
   let mediaSource = null
   let mediaSourceUrl = null
   let sourceBuffer = null
   let appendQueue = []
-  let delayMs = 0
   let playbackGeneration = 0
-  let activeSteamId = null
-  let pendingPlayerIce = []
+  const peers = new Map()
+  const pendingIce = new Map()
+  const streams = new Map()
 
   const debug = (...values) => console.debug('[MAT player camera]', ...values)
 
@@ -39,23 +42,125 @@
     if (host && video.parentElement !== host) host.appendChild(video)
   }
 
-  function clearPlayback() {
-    playbackGeneration += 1
+  function cameraAvailable(steamId) {
+    return Boolean(
+      policy.enabled &&
+        steamId &&
+        Array.isArray(policy.availablePlayers) &&
+        policy.availablePlayers.includes(steamId)
+    )
+  }
+
+  function hideVideo() {
     activeSteamId = null
+    video.pause()
     video.srcObject = null
     video.removeAttribute('src')
     video.load()
+    video.classList.remove('pending', 'active')
+  }
+
+  function showPending(steamId = watchedSteamId) {
+    if (!cameraAvailable(steamId)) {
+      hideVideo()
+      return false
+    }
+    activeSteamId = null
+    video.pause()
+    video.srcObject = null
+    video.removeAttribute('src')
+    video.load()
+    video.classList.add('pending')
+    video.classList.remove('active')
+    mountVideo()
+    return true
+  }
+
+  function bindStream(steamId, stream) {
+    if (steamId !== watchedSteamId || !stream) return
+    mountVideo()
+    if (
+      video.srcObject === stream &&
+      activeSteamId === steamId &&
+      video.classList.contains('active') &&
+      !video.paused
+    ) return
+    video.srcObject = stream
+    video.classList.add('pending')
+    video.classList.remove('active')
+    video.play().catch(() => undefined)
+  }
+
+  function clearRelayPlayback() {
+    playbackGeneration += 1
     delayedRecorder?.stop()
     delayedRecorder = null
-    peer?.close()
-    peer = null
-    pendingPlayerIce = []
     mediaSource = null
     sourceBuffer = null
     appendQueue = []
     if (mediaSourceUrl) URL.revokeObjectURL(mediaSourceUrl)
     mediaSourceUrl = null
-    video.classList.remove('active')
+  }
+
+  function closePeer(steamId, keepStream = false) {
+    peers.get(steamId)?.close()
+    peers.delete(steamId)
+    pendingIce.delete(steamId)
+    if (!keepStream) streams.delete(steamId)
+  }
+
+  function syncPeerList(ids) {
+    const wanted = new Set(ids)
+    for (const steamId of peers.keys()) {
+      if (!wanted.has(steamId)) closePeer(steamId)
+    }
+  }
+
+  function emitWatches() {
+    if (!socket) return
+    const ids = policy.transport === 'p2p' && policy.prewarmEnabled !== false
+      ? watchedSteamIds
+      : watchedSteamId
+        ? [watchedSteamId]
+        : []
+    socket.emit('player-camera:watch-list', {
+      viewerId: socket.id,
+      steamIds: ids,
+      selectedSteamId: watchedSteamId
+    })
+  }
+
+  function setWatches(selectedSteamId, roster) {
+    const next = Array.from(new Set([selectedSteamId, ...roster].filter(Boolean))).slice(0, 10)
+    const changed =
+      selectedSteamId !== watchedSteamId ||
+      next.length !== watchedSteamIds.length ||
+      next.some((steamId, index) => steamId !== watchedSteamIds[index])
+
+    watchedSteamId = selectedSteamId
+    watchedSteamIds = next
+    if (policy.transport === 'p2p') syncPeerList(next)
+    else if (selectedSteamId !== activeSteamId) clearRelayPlayback()
+
+    if (selectedSteamId && streams.has(selectedSteamId) && policy.transport === 'p2p') {
+      bindStream(selectedSteamId, streams.get(selectedSteamId))
+    } else if (selectedSteamId && cameraAvailable(selectedSteamId)) {
+      showPending(selectedSteamId)
+    } else {
+      hideVideo()
+    }
+    if (changed) emitWatches()
+  }
+
+  function digestGsi(state) {
+    const selectedSteamId = forcedSteamId || state?.player?.steamid || null
+    const allPlayers =
+      state?.allplayers && typeof state.allplayers === 'object'
+        ? Object.keys(state.allplayers)
+        : Array.isArray(state?.players)
+          ? state.players.map((player) => player?.steamid).filter(Boolean)
+          : []
+    setWatches(policy.enabled && (forceLive || selectedSteamId) ? selectedSteamId : null, allPlayers)
   }
 
   function appendNext() {
@@ -71,7 +176,7 @@
   function ensureMediaSource(mimeType, generation) {
     if (mediaSource) return
     if (!window.MediaSource || !MediaSource.isTypeSupported(mimeType)) {
-      throw new Error('Browser cannot play delayed/relay ' + mimeType)
+      throw new Error('Browser cannot play relay ' + mimeType)
     }
     mediaSource = new MediaSource()
     mediaSourceUrl = URL.createObjectURL(mediaSource)
@@ -106,107 +211,102 @@
     }, delayMs)
   }
 
-  function playStream(stream, steamId, generation) {
-    if (generation !== playbackGeneration || steamId !== watchedSteamId) return
-    mountVideo()
-    if (delayMs === 0) {
-      video.srcObject = stream
-      video.play().catch(() => undefined)
-      stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-        if (generation === playbackGeneration) clearPlayback()
-      })
-      return
-    }
-    const mimeType = ['video/webm;codecs=vp8', 'video/webm'].find((type) =>
-      MediaRecorder.isTypeSupported(type)
-    )
-    delayedRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-    delayedRecorder.ondataavailable = async (event) => {
-      if (event.data.size && generation === playbackGeneration) {
-        queueChunk(await event.data.arrayBuffer(), delayedRecorder.mimeType, generation)
-      }
-    }
-    delayedRecorder.start(250)
-  }
-
-  function setWatch(steamId) {
-    if (steamId === watchedSteamId) return
-    clearPlayback()
-    watchedSteamId = steamId
-    socket.emit('player-camera:watch', steamId)
-    debug('watch', steamId)
-  }
-
-  function digestGsi(state) {
-    const isLive =
-      forceLive || Boolean(state?.player?.steamid)
-    const steamId = forcedSteamId || state?.player?.steamid || null
-    setWatch(policy.enabled && isLive ? steamId : null)
-  }
-
   function connect() {
     socket = window.io()
-    socket.on('connect', () => {
-      if (watchedSteamId) socket.emit('player-camera:watch', watchedSteamId)
-    })
+    socket.on('connect', emitWatches)
     socket.on('update', digestGsi)
     socket.on('player-camera:state', (state) => {
       const transportChanged = policy.transport !== state.transport
       policy = state
-      if (!state.enabled || transportChanged) clearPlayback()
-      if (forcedSteamId && forceLive) setWatch(state.enabled ? forcedSteamId : null)
+      if (!state.enabled || transportChanged) {
+        for (const steamId of peers.keys()) closePeer(steamId)
+        clearRelayPlayback()
+      }
+      if (forcedSteamId && forceLive) {
+        setWatches(state.enabled ? forcedSteamId : null, [forcedSteamId])
+      } else {
+        setWatches(state.enabled ? watchedSteamId : null, state.enabled ? watchedSteamIds : [])
+      }
+      emitWatches()
       debug('state', state)
     })
+
     socket.on('player-camera:offer', async (payload) => {
-      if (payload.steamId !== watchedSteamId || policy.transport !== 'p2p') return
-      clearPlayback()
-      const generation = playbackGeneration
-      const nextPeer = new RTCPeerConnection({ iceServers: policy.iceServers || [] })
-      peer = nextPeer
-      nextPeer.ontrack = (event) => {
-        if (peer === nextPeer && event.streams[0]) {
-          playStream(event.streams[0], payload.steamId, generation)
-        }
+      const steamId = payload?.steamId
+      if (!steamId || !watchedSteamIds.includes(steamId) || policy.transport !== 'p2p') return
+      closePeer(steamId, true)
+      const peer = new RTCPeerConnection({ iceServers: policy.iceServers || [] })
+      peers.set(steamId, peer)
+      pendingIce.set(steamId, [])
+      const generation = ++playbackGeneration
+      if (steamId === watchedSteamId && !streams.has(steamId)) showPending(steamId)
+      peer.ontrack = (event) => {
+        if (peers.get(steamId) !== peer || !event.streams[0]) return
+        streams.set(steamId, event.streams[0])
+        if (steamId === watchedSteamId) bindStream(steamId, event.streams[0])
       }
-      nextPeer.onicecandidate = (event) => {
+      peer.onicecandidate = (event) => {
         if (event.candidate) {
           socket.emit('player-camera:ice-from-hud', {
             viewerId: socket.id,
-            steamId: payload.steamId,
+            steamId,
             candidate: event.candidate
           })
         }
       }
-      nextPeer.onconnectionstatechange = () => debug('peer state', nextPeer.connectionState)
-      await nextPeer.setRemoteDescription(payload.description)
-      if (peer !== nextPeer || generation !== playbackGeneration) return
-      const queuedIce = pendingPlayerIce
-      pendingPlayerIce = []
-      for (const candidate of queuedIce) {
-        await nextPeer.addIceCandidate(candidate).catch(() => undefined)
+      peer.onconnectionstatechange = () => {
+        debug('peer state', steamId, peer.connectionState)
+        if (['failed', 'closed'].includes(peer.connectionState) && peers.get(steamId) === peer) {
+          closePeer(steamId)
+          if (steamId === watchedSteamId && generation === playbackGeneration) showPending(steamId)
+        }
       }
-      const answer = await nextPeer.createAnswer()
-      await nextPeer.setLocalDescription(answer)
-      if (peer !== nextPeer || generation !== playbackGeneration) return
-      socket.emit('player-camera:answer', {
-        viewerId: socket.id,
-        steamId: payload.steamId,
-        description: nextPeer.localDescription
-      })
+      try {
+        await peer.setRemoteDescription(payload.description)
+        if (peers.get(steamId) !== peer) return
+        const queuedIce = pendingIce.get(steamId) || []
+        pendingIce.set(steamId, [])
+        for (const candidate of queuedIce) {
+          await peer.addIceCandidate(candidate).catch(() => undefined)
+        }
+        const answer = await peer.createAnswer()
+        await peer.setLocalDescription(answer)
+        if (peers.get(steamId) !== peer) return
+        socket.emit('player-camera:answer', {
+          viewerId: socket.id,
+          steamId,
+          description: peer.localDescription
+        })
+      } catch (error) {
+        debug('peer negotiation failed', steamId, error)
+      }
     })
+
     socket.on('player-camera:ice-from-player', (payload) => {
-      if (payload.steamId !== watchedSteamId || !peer) return
+      const steamId = payload?.steamId
+      const peer = steamId ? peers.get(steamId) : null
+      if (!peer || !payload.candidate) return
       if (peer.remoteDescription) peer.addIceCandidate(payload.candidate).catch(() => undefined)
-      else pendingPlayerIce.push(payload.candidate)
+      else pendingIce.get(steamId)?.push(payload.candidate)
     })
+
     socket.on('player-camera:relay-chunk', (payload) => {
-      if (payload.steamId === watchedSteamId && policy.transport === 'relay') {
-        if (payload.sequence === 0) clearPlayback()
+      if (payload?.steamId === watchedSteamId && policy.transport === 'relay') {
+        if (payload.sequence === 0) {
+          clearRelayPlayback()
+          showPending(payload.steamId)
+        }
         queueChunk(payload.chunk, payload.mimeType)
       }
     })
+
     socket.on('player-camera:player-stopped', ({ steamId }) => {
-      if (steamId === watchedSteamId) clearPlayback()
+      if (!steamId) return
+      closePeer(steamId)
+      if (steamId === watchedSteamId) {
+        clearRelayPlayback()
+        hideVideo()
+      }
     })
   }
 
@@ -227,7 +327,9 @@
         subtree: true
       })
       video.addEventListener('playing', () => {
+        if (!watchedSteamId || !video.srcObject && !video.src) return
         activeSteamId = watchedSteamId
+        video.classList.remove('pending')
         video.classList.add('active')
       })
       mountVideo()
@@ -239,11 +341,12 @@
     state: () => ({
       policy,
       watchedSteamId,
+      watchedSteamIds,
       activeSteamId,
+      peerStates: Array.from(peers, ([steamId, peer]) => [steamId, peer.connectionState]),
       delayMs,
-      peerState: peer?.connectionState || null,
       relayQueue: appendQueue.length
     }),
-    watch: (steamId) => setWatch(steamId || null)
+    watch: (steamId) => setWatches(steamId || null, watchedSteamIds)
   }
 })()

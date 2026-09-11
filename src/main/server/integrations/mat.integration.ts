@@ -42,9 +42,12 @@ export type MatHudLabels = {
   revision: string | null
 }
 
+export type PlayerCameraQuality = 'preview' | 'full'
+
 export type PlayerCameraState = {
   enabled: boolean
   transport: 'p2p' | 'relay'
+  prewarmEnabled: boolean
   iceServers?: RTCIceServer[]
   availablePlayers: string[]
 }
@@ -85,9 +88,10 @@ class MatIntegrationService {
   private playerCameraState: PlayerCameraState = {
     enabled: false,
     transport: 'p2p',
+    prewarmEnabled: true,
     availablePlayers: []
   }
-  private playerCameraWatchers = new Map<string, string>()
+  private playerCameraWatchers = new Map<string, { steamIds: string[]; selectedSteamId: string | null }>()
 
   private async readStoredSettings(): Promise<StoredSettings> {
     const rows = (await dbAll('SELECT key, value FROM settings')) as Array<{
@@ -180,10 +184,19 @@ class MatIntegrationService {
     return this.projection ? structuredClone(this.projection) : null
   }
 
-  watchPlayerCamera(viewerId: string, steamId: string | null): void {
-    if (steamId) this.playerCameraWatchers.set(viewerId, steamId)
+  watchPlayerCameras(viewerId: string, steamIds: string[], selectedSteamId: string | null): void {
+    const ids = Array.from(new Set(steamIds.filter(Boolean))).slice(0, 10)
+    if (ids.length) this.playerCameraWatchers.set(viewerId, { steamIds: ids, selectedSteamId })
     else this.playerCameraWatchers.delete(viewerId)
-    this.matSocket?.emit('camera:hud-watch', { viewerId, steamId })
+    this.matSocket?.emit('camera:hud-watch-list', { viewerId, steamIds: ids, selectedSteamId })
+  }
+
+  watchPlayerCamera(viewerId: string, steamId: string | null): void {
+    this.watchPlayerCameras(viewerId, steamId ? [steamId] : [], steamId)
+  }
+
+  setPlayerCameraQuality(viewerId: string, steamId: string, quality: PlayerCameraQuality): void {
+    this.matSocket?.emit('camera:set-quality', { viewerId, steamId, quality })
   }
 
   getPlayerCameraState(): PlayerCameraState {
@@ -327,7 +340,7 @@ class MatIntegrationService {
     this.pollTimer = null
     this.matSocket?.disconnect()
     this.matSocket = null
-    this.playerCameraState = { enabled: false, transport: 'p2p', availablePlayers: [] }
+    this.playerCameraState = { enabled: false, transport: 'p2p', prewarmEnabled: true, availablePlayers: [] }
     this.localIo?.emit('player-camera:state', this.playerCameraState)
   }
 
@@ -382,8 +395,8 @@ class MatIntegrationService {
       reconnection: true
     })
     this.matSocket.on('connect', () => {
-      for (const [viewerId, steamId] of this.playerCameraWatchers) {
-        this.matSocket?.emit('camera:hud-watch', { viewerId, steamId })
+      for (const [viewerId, watch] of this.playerCameraWatchers) {
+        this.matSocket?.emit('camera:hud-watch-list', { viewerId, ...watch })
       }
     })
     this.matSocket.on('hud:projection-invalidated', () => {

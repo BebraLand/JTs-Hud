@@ -33,12 +33,23 @@ export const setupSockets = (io: Server) => {
     socket.on('player-camera:watch', (steamId?: string | null) => {
       matIntegrationService.watchPlayerCamera(socket.id, steamId?.trim() || null)
     })
+    socket.on(
+      'player-camera:watch-list',
+      (payload: { steamIds?: string[]; selectedSteamId?: string | null }) => {
+        matIntegrationService.watchPlayerCameras(
+          socket.id,
+          Array.isArray(payload?.steamIds) ? payload.steamIds : [],
+          payload?.selectedSteamId?.trim() || null
+        )
+      }
+    )
     socket.on('player-camera:answer', (payload) => {
       if (payload?.viewerId === socket.id) matIntegrationService.answerPlayerCamera(payload)
     })
     socket.on('player-camera:ice-from-hud', (payload) => {
       if (payload?.viewerId === socket.id) matIntegrationService.sendPlayerCameraIce(payload)
     })
+
     socket.on('disconnect', () => matIntegrationService.watchPlayerCamera(socket.id, null))
 
     // HUD registration:

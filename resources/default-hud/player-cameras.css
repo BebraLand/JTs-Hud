@@ -9,6 +9,7 @@
   background: #050505;
 }
 
+#mat-player-camera.pending,
 #mat-player-camera.active {
   display: block;
 }
