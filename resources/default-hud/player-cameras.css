@@ -9,6 +9,18 @@
   background: #050505;
 }
 
+
+.avatar.mat-player-camera-wide {
+  overflow: visible;
+}
+
+.avatar #mat-player-camera.camera-wide {
+  left: 50%;
+  right: auto;
+  width: 177.7778%;
+  transform: translateX(-50%);
+}
+
 #mat-player-camera.pending,
 #mat-player-camera.active {
   display: block;

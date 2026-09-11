@@ -16,6 +16,7 @@
   let watchedSteamIds = []
   let activeSteamId = null
   let delayMs = 0
+  let aspectRatio = '1:1'
   let delayedRecorder = null
   let mediaSource = null
   let mediaSourceUrl = null
@@ -39,7 +40,16 @@
         document.body.appendChild(host)
       }
     }
-    if (host && video.parentElement !== host) host.appendChild(video)
+    if (host && video.parentElement !== host) {
+      video.parentElement?.classList.remove('mat-player-camera-wide')
+      host.appendChild(video)
+    }
+    if (host) {
+      host.classList.toggle(
+        'mat-player-camera-wide',
+        aspectRatio === '16:9' && host.classList.contains('avatar')
+      )
+    }
   }
 
   function cameraAvailable(steamId) {
@@ -319,6 +329,8 @@
   ])
     .then(([settings]) => {
       delayMs = Math.max(0, Math.min(120, Number(settings.playerCameraDelaySeconds || 0))) * 1000
+      aspectRatio = settings.playerCameraAspectRatio === '16:9' ? '16:9' : '1:1'
+      video.classList.toggle('camera-wide', aspectRatio === '16:9')
       connect()
       new MutationObserver(mountVideo).observe(document.body, {
         attributes: true,
@@ -333,7 +345,7 @@
         video.classList.add('active')
       })
       mountVideo()
-      debug('ready', { delayMs, forcedSteamId, forceLive })
+      debug('ready', { delayMs, aspectRatio, forcedSteamId, forceLive })
     })
     .catch((error) => debug('startup failed', error))
 
@@ -345,6 +357,7 @@
       activeSteamId,
       peerStates: Array.from(peers, ([steamId, peer]) => [steamId, peer.connectionState]),
       delayMs,
+      aspectRatio,
       relayQueue: appendQueue.length
     }),
     watch: (steamId) => setWatches(steamId || null, watchedSteamIds)

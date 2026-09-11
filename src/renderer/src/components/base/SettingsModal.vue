@@ -314,6 +314,23 @@ const installGsiCfg = async () => {
                   "
                 />
               </label>
+              <label class="flex items-center justify-between gap-4">
+                <span>
+                  <span class="block text-sm font-medium text-zinc-200">Player camera format</span>
+                  <span class="block text-xs text-zinc-500">Controls webcam shape in the HUD</span>
+                </span>
+                <select
+                  v-model="settings.playerCameraAspectRatio"
+                  class="w-32 bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2"
+                  :disabled="isSaving"
+                  @change="
+                    saveSettings({ playerCameraAspectRatio: settings.playerCameraAspectRatio })
+                  "
+                >
+                  <option value="1:1">1:1 Square</option>
+                  <option value="16:9">16:9 Wide</option>
+                </select>
+              </label>
 
               <div
                 v-if="matStatus"

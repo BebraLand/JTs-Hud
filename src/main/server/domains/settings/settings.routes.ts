@@ -21,6 +21,7 @@ export interface AppSettings {
   matPollIntervalSeconds: number
   matUseSteamAvatars: boolean
   playerCameraDelaySeconds: number
+  playerCameraAspectRatio: '1:1' | '16:9'
   challongeEnabled: boolean
   challongeTournament: string
   challongeSourceConfigured: boolean
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   matPollIntervalSeconds: 5,
   matUseSteamAvatars: false,
   playerCameraDelaySeconds: 0,
+  playerCameraAspectRatio: '1:1',
   challongeEnabled: false,
   challongeTournament: '',
   challongeSourceConfigured: false,
@@ -73,6 +75,7 @@ export const getSettings = async (): Promise<AppSettings> => {
     matPollIntervalSeconds: Number(map.matPollIntervalSeconds || 5),
     matUseSteamAvatars: map.matUseSteamAvatars === 'true',
     playerCameraDelaySeconds: Math.min(120, Math.max(0, Number(map.playerCameraDelaySeconds || 0))),
+    playerCameraAspectRatio: map.playerCameraAspectRatio === '16:9' ? '16:9' : '1:1',
     challongeEnabled: map.challongeEnabled === 'true',
     challongeTournament: map.challongeTournament || '',
     challongeSourceConfigured: Boolean(map.challongeTournament),
@@ -195,6 +198,7 @@ router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
       'telnetHost',
       'telnetPort',
       'playerCameraDelaySeconds',
+      'playerCameraAspectRatio',
       'tournamentIntegrationPriority'
     ])
     if (
@@ -220,6 +224,13 @@ router.put('/', requireLocalOrigin, async (req: Request, res: Response) => {
       if (!Number.isInteger(delay) || delay < 0 || delay > 120) {
         return res.status(400).json({ error: 'Player camera delay must be 0-120 seconds' })
       }
+    }
+    if (
+      updates.playerCameraAspectRatio !== undefined &&
+      updates.playerCameraAspectRatio !== '1:1' &&
+      updates.playerCameraAspectRatio !== '16:9'
+    ) {
+      return res.status(400).json({ error: 'Player camera aspect ratio must be 1:1 or 16:9' })
     }
     for (const [key, value] of Object.entries(updates).filter(([key]) => localKeys.has(key))) {
       if (key === 'tournamentIntegrationPriority' && value !== 'mat' && value !== 'challonge') {
