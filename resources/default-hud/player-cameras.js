@@ -16,7 +16,7 @@
   let watchedSteamIds = []
   let activeSteamId = null
   let delayMs = 0
-  let aspectRatio = '1:1'
+  let aspectRatio = '16:9'
   let delayedRecorder = null
   let mediaSource = null
   let mediaSourceUrl = null
@@ -329,7 +329,7 @@
   ])
     .then(([settings]) => {
       delayMs = Math.max(0, Math.min(120, Number(settings.playerCameraDelaySeconds || 0))) * 1000
-      aspectRatio = settings.playerCameraAspectRatio === '16:9' ? '16:9' : '1:1'
+      aspectRatio = settings.playerCameraAspectRatio === '1:1' ? '1:1' : '16:9'
       video.classList.toggle('camera-wide', aspectRatio === '16:9')
       connect()
       new MutationObserver(mountVideo).observe(document.body, {

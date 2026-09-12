@@ -52,7 +52,7 @@ const settings = ref<AppSettings>({
   matPollIntervalSeconds: 5,
   matUseSteamAvatars: false,
   playerCameraDelaySeconds: 0,
-  playerCameraAspectRatio: '1:1',
+  playerCameraAspectRatio: '16:9',
   challongeEnabled: false,
   challongeTournament: '',
   challongeSourceConfigured: false,
